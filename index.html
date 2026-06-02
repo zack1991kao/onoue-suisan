@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>尾上水産 養殖管理システム</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Hiragino Kaku Gothic Pro', 'Yu Gothic', sans-serif;
+  background: #0f2437;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== HEADER ===== */
+.site-header {
+  background: #1b3a5c;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 2px solid #2d5a8a;
+}
+.site-logo {
+  width: 48px; height: 48px;
+  background: #2d5a8a;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+}
+.site-title { color: #fff; }
+.site-title h1 { font-size: 20px; font-weight: 700; }
+.site-title p { font-size: 13px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+
+/* ===== AUTH OVERLAY ===== */
+.auth-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10,20,35,0.92);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.auth-box {
+  background: #fff;
+  border-radius: 16px;
+  padding: 36px 32px;
+  width: 100%; max-width: 360px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.auth-box h2 {
+  font-size: 18px; font-weight: 700;
+  color: #0f172a;
+  text-align: center; margin-bottom: 6px;
+}
+.auth-box p {
+  font-size: 13px; color: #64748b;
+  text-align: center; margin-bottom: 24px;
+}
+.auth-fish { text-align: center; font-size: 40px; margin-bottom: 16px; }
+.auth-field { margin-bottom: 14px; }
+.auth-field label {
+  display: block; font-size: 12px; font-weight: 700;
+  color: #475569; margin-bottom: 6px; letter-spacing: 0.05em;
+}
+.auth-field input {
+  width: 100%; padding: 12px 14px;
+  border: 1.5px solid #cbd5e1; border-radius: 8px;
+  font-size: 15px; font-family: inherit;
+  outline: none; transition: border-color 0.15s;
+  background: #f8fafc;
+}
+.auth-field input:focus { border-color: #1d4ed8; background: #fff; }
+.auth-btn {
+  width: 100%; padding: 14px;
+  background: #1b3a5c; color: #fff;
+  border: none; border-radius: 8px;
+  font-size: 16px; font-weight: 700; font-family: inherit;
+  cursor: pointer; margin-top: 8px;
+  transition: background 0.15s;
+}
+.auth-btn:hover { background: #2d5a8a; }
+.auth-err {
+  color: #b91c1c; font-size: 13px;
+  text-align: center; margin-top: 10px;
+  display: none;
+}
+
+/* ===== MAIN CONTENT ===== */
+.main-content { flex: 1; padding: 32px 20px; max-width: 860px; margin: 0 auto; width: 100%; }
+.welcome-msg {
+  color: rgba(255,255,255,0.7);
+  font-size: 14px; margin-bottom: 28px;
+}
+.welcome-msg b { color: #fff; }
+
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 540px) { .cards { grid-template-columns: 1fr; } }
+
+.card {
+  background: #1b3a5c;
+  border-radius: 16px;
+  padding: 28px 24px;
+  text-decoration: none;
+  display: flex; flex-direction: column; gap: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+  cursor: pointer;
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  background: #214a72;
+}
+.card-icon { font-size: 40px; }
+.card-label {
+  font-size: 11px; font-weight: 700;
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.card-title { font-size: 20px; font-weight: 700; color: #fff; }
+.card-desc { font-size: 13px; color: rgba(255,255,255,0.55); line-height: 1.6; }
+.card-badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+  font-size: 12px; padding: 4px 10px;
+  border-radius: 20px; margin-top: 4px;
+  width: fit-content;
+}
+.card.sp-card .card-badge { background: rgba(29,78,216,0.3); color: #93c5fd; }
+.card.pc-card .card-badge { background: rgba(5,150,105,0.3); color: #6ee7b7; }
+
+.staff-link-box {
+  margin-top: 28px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+}
+.staff-link-label { font-size: 13px; color: rgba(255,255,255,0.55); }
+.staff-link-url {
+  font-size: 13px; color: #93c5fd;
+  background: rgba(147,197,253,0.1);
+  padding: 6px 12px; border-radius: 6px;
+  font-family: monospace; word-break: break-all;
+}
+
+.site-footer {
+  text-align: center; padding: 20px;
+  font-size: 12px; color: rgba(255,255,255,0.2);
+}
+</style>
+</head>
+<body>
+
+<!-- 認証オーバーレイ -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-box">
+    <div class="auth-fish">🐟</div>
+    <h2>尾上水産 管理システム</h2>
+    <p>アクセスにはパスワードが必要です</p>
+    <div class="auth-field">
+      <label>ユーザー名</label>
+      <input type="text" id="authUser" placeholder="onoue" autocomplete="username">
+    </div>
+    <div class="auth-field">
+      <label>パスワード</label>
+      <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')doAuth()">
+    </div>
+    <button class="auth-btn" onclick="doAuth()">ログイン</button>
+    <div class="auth-err" id="authErr">ユーザー名またはパスワードが違います</div>
+  </div>
+</div>
+
+<!-- ヘッダー -->
+<header class="site-header">
+  <div class="site-logo">🐠</div>
+  <div class="site-title">
+    <h1>尾上水産 養殖管理システム</h1>
+    <p>Onoue Suisan Aquaculture Management</p>
+  </div>
+</header>
+
+<!-- メインコンテンツ -->
+<main class="main-content" id="mainContent" style="display:none;">
+  <p class="welcome-msg">ようこそ、<b>尾上水産</b> の管理システムです。用途に合わせてアプリを選んでください。</p>
+
+  <div class="cards">
+    <!-- スマホ版 -->
+    <a class="card sp-card" href="app.html">
+      <div class="card-icon">📱</div>
+      <div class="card-label">スタッフ・現場用</div>
+      <div class="card-title">スマホアプリ</div>
+      <div class="card-desc">給餌記録・漁場図・カレンダー・移動記録。現場での日常作業はこちら。</div>
+      <span class="card-badge">スマートフォン向け</span>
+    </a>
+
+    <!-- PC版 -->
+    <a class="card pc-card" href="admin.html">
+      <div class="card-icon">💻</div>
+      <div class="card-label">管理者・事務所用</div>
+      <div class="card-title">管理ダッシュボード</div>
+      <div class="card-desc">注文管理・在庫一覧・養殖日誌・ロット管理・AI機能。PCでの管理作業はこちら。</div>
+      <span class="card-badge">PC・タブレット向け</span>
+    </a>
+  </div>
+
+  <div class="staff-link-box">
+    <div class="staff-link-label">📎 スタッフ共有用リンク（スマホ版のみ）</div>
+    <div class="staff-link-url" id="staffUrl">読み込み中...</div>
+  </div>
+</main>
+
+<footer class="site-footer">© 2026 尾上水産 / Powered by 株式会社顔入り</footer>
+
+<script>
+var AUTH_KEY = 'onoue_auth_v1';
+var CORRECT_USER = 'onoue';
+var CORRECT_PASS = 'onoue2026';
+
+function checkAuth() {
+  return sessionStorage.getItem(AUTH_KEY) === 'ok';
+}
+function doAuth() {
+  var u = document.getElementById('authUser').value.trim();
+  var p = document.getElementById('authPass').value;
+  if (u === CORRECT_USER && p === CORRECT_PASS) {
+    sessionStorage.setItem(AUTH_KEY, 'ok');
+    document.getElementById('authOverlay').style.display = 'none';
+    document.getElementById('mainContent').style.display = 'block';
+    document.getElementById('authErr').style.display = 'none';
+  } else {
+    document.getElementById('authErr').style.display = 'block';
+    document.getElementById('authPass').value = '';
+    document.getElementById('authPass').focus();
+  }
+}
+if (checkAuth()) {
+  document.getElementById('authOverlay').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'block';
+}
+// スタッフ共有URL
+var base = location.origin + location.pathname.replace('index.html','').replace(/\/$/, '');
+document.getElementById('staffUrl').textContent = base + '/staff.html';
+</script>
+</body>
+</html>

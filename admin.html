@@ -1,0 +1,1839 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>尾上水産 養殖管理システム</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'游ゴシック','Yu Gothic','メイリオ',Meiryo,'ヒラギノ角ゴ Pro W3',sans-serif;background:#f8fafc;color:#0f172a;font-size:14px;line-height:1.6;overflow:hidden}
+:root{
+  --white:#ffffff;--bg:#f8fafc;--text:#0f172a;--sub:#64748b;
+  --border:#e2e8f0;--blue:#2563eb;--blue-bg:#eff6ff;--blue-dk:#1e3a5f;
+  --red:#dc2626;--red-bg:#fee2e2;--orange:#d97706;--orange-bg:#fef3c7;
+  --green:#16a34a;--green-bg:#dcfce7;--gray:#94a3b8;--gray-bg:#f1f5f9;
+  --sidebar:220px;
+}
+
+/* ─── Layout ─── */
+.app{display:flex;flex-direction:column;height:100vh;min-width:1024px}
+header{background:var(--blue-dk);height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:10}
+header h1{font-size:15px;font-weight:700;color:#fff;letter-spacing:.03em}
+header .hdate{font-size:12px;color:rgba(255,255,255,.7)}
+.body{display:flex;flex:1;overflow:hidden}
+
+/* ─── Sidebar ─── */
+.sidebar{width:var(--sidebar);background:var(--white);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;z-index:5}
+.sidebar nav{padding:12px 10px;flex:1}
+.nav-btn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:9px 12px;border:none;background:none;cursor:pointer;border-radius:6px;font-size:13px;font-family:inherit;color:var(--sub);margin-bottom:2px;font-weight:500;transition:background .12s,color .12s}
+.nav-btn:hover{background:#f4f6f9;color:var(--text)}
+.nav-btn.active{background:#eef3fb;color:var(--blue-dk);font-weight:700}
+.nav-icon{font-size:15px;width:18px;text-align:center}
+.sidebar-footer{padding:12px 14px;border-top:1px solid var(--border)}
+.sidebar-footer p{font-size:11px;color:var(--gray);line-height:1.8}
+.sidebar-footer .credit{font-weight:700;color:var(--sub)}
+
+/* ─── Main panel ─── */
+.main{flex:1;overflow:hidden;position:relative;display:flex}
+.screen{position:absolute;inset:0;overflow-y:auto;padding:20px 24px;display:none;flex-direction:column}
+.screen.active{display:flex}
+
+/* ─── Today banner ─── */
+.today-banner{display:flex;align-items:center;gap:0;background:var(--blue-dk);border-radius:6px;height:44px;padding:0 16px;margin-bottom:16px;flex-shrink:0;overflow:hidden}
+.tb-item{display:flex;align-items:center;gap:8px;padding:0 14px;height:100%;cursor:pointer;color:rgba(255,255,255,.85);font-size:13px;font-weight:600;border-right:1px solid rgba(255,255,255,.15);transition:background .12s}
+.tb-item:first-child{padding-left:0}
+.tb-item:last-child{border-right:none}
+.tb-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.tb-label{font-size:11px;font-weight:400;color:rgba(255,255,255,.55);margin-right:2px}
+.tb-val{font-size:15px;font-weight:700;color:#fff}
+.tb-val.warn{color:#fbbf24}
+.tb-val.alert{color:#f87171}
+
+/* ─── Page header ─── */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-shrink:0}
+.page-header h2{font-size:18px;font-weight:700}
+.page-header .phsub{font-size:12px;color:var(--sub);margin-top:2px}
+
+/* ─── Summary cards ─── */
+.summary-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.scard{background:var(--white);border:1px solid var(--border);border-radius:6px;padding:14px 16px;position:relative;transition:border-color .15s}
+.scard:hover{border-color:#cbd5e1}
+.scard .slabel{font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.scard .sval{font-size:26px;font-weight:700;color:var(--text);line-height:1}
+.scard .ssub{font-size:12px;color:var(--sub);margin-top:5px}
+.scard.red .sval{color:var(--red)}
+.scard.orange .sval{color:var(--orange)}
+.eye-btn{position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;color:var(--gray);font-size:14px;padding:2px}
+
+/* ─── Two-col dashboard layout ─── */
+.dash-grid{display:grid;grid-template-columns:1fr 320px;gap:14px;flex:1}
+.dash-left{display:flex;flex-direction:column;gap:14px}
+.dash-right{display:flex;flex-direction:column;gap:14px}
+
+/* ─── Cards ─── */
+.card{background:var(--white);border:1px solid var(--border);border-radius:6px;padding:14px 16px;transition:border-color .15s}
+.card:hover{border-color:#cbd5e1}
+.card-title{font-size:12px;font-weight:700;color:var(--sub);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;text-transform:uppercase;letter-spacing:.04em}
+.card-title span{font-weight:400;color:var(--gray);font-size:11px;text-transform:none;letter-spacing:0}
+
+/* ─── SVG Charts ─── */
+.chart-wrap{width:100%;overflow:hidden}
+.chart-svg{width:100%;display:block}
+
+/* ─── Area tabs ─── */
+.area-tabs{display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap}
+.atab{padding:4px 12px;border:1px solid var(--border);border-radius:4px;background:var(--white);cursor:pointer;font-size:12px;color:var(--sub);font-family:inherit;font-weight:600;transition:all .12s}
+.atab:hover{background:#f4f6f9;color:var(--text)}
+.atab.active{border-color:var(--blue);background:var(--blue-bg);color:var(--blue)}
+
+/* ─── Tank grid ─── */
+.tank-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+@media(max-width:1200px){.tank-grid{grid-template-columns:repeat(4,1fr)}}
+.tcard{background:var(--white);border:1px solid var(--border);border-radius:6px;padding:10px 12px;cursor:pointer;transition:border-color .15s}
+.tcard:hover{border-color:var(--blue)}
+.tcard.st-alert{border-color:var(--red);background:#fff8f8}
+.tcard.st-warn{border-color:var(--orange)}
+.tcard.st-pending{border-color:var(--orange);background:#fffbf0}
+.tcard .tid{font-size:11px;font-weight:700;color:var(--sub)}
+.tcard .tsp{font-size:11px;color:var(--gray);margin-top:1px}
+.tcard .tcnt{font-size:17px;font-weight:700;color:var(--text);margin:3px 0 2px}
+.tcard .tcnt small{font-size:10px;font-weight:400;color:var(--sub)}
+.tcard .tfeed{font-size:11px;color:var(--sub)}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-top:4px}
+.b-ok{background:var(--green-bg);color:var(--green)}
+.b-warn{background:var(--orange-bg);color:var(--orange)}
+.b-alert{background:var(--red-bg);color:var(--red)}
+.b-pending{background:var(--orange-bg);color:var(--orange)}
+.b-blue{background:var(--blue-bg);color:var(--blue)}
+.b-gray{background:var(--gray-bg);color:var(--sub)}
+.b-green{background:var(--green-bg);color:var(--green)}
+
+/* ─── Alert list ─── */
+.alert-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.alert-item:last-child{border-bottom:none}
+.alert-item .aleft{display:flex;align-items:center;gap:9px}
+.alert-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-red{background:var(--red)}
+.dot-orange{background:var(--orange)}
+.alert-id{font-size:13px;font-weight:700}
+.alert-desc{font-size:12px;color:var(--sub)}
+.alert-time{font-size:11px;color:var(--gray)}
+
+/* ─── Pending scroll bar ─── */
+.pending-bar{background:#fffbeb;border:1px solid var(--orange);border-radius:6px;padding:10px 14px;margin-bottom:14px;flex-shrink:0}
+.pending-bar .plabel{font-size:11px;font-weight:700;color:var(--orange);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em}
+.pending-scroll{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px}
+.pcard{background:var(--white);border:1px solid var(--orange);border-radius:6px;padding:8px 12px;min-width:108px;cursor:pointer;flex-shrink:0}
+.pcard .pid{font-size:11px;font-weight:700;color:var(--orange)}
+.pcard .psp{font-size:10px;color:var(--sub)}
+.pcard .pct{font-size:14px;font-weight:700}
+
+/* ─── Tabs ─── */
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:18px;flex-shrink:0}
+.tab-btn{padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-family:inherit;color:var(--sub);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .12s}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:700}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* ─── Tables ─── */
+.tbl-wrap{border:1px solid var(--border);border-radius:6px;overflow:hidden;overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{background:#f8fafc;padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--sub);border-bottom:1px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.03em}
+td{padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text)}
+tr:last-child td{border-bottom:none}
+tr.clickable{cursor:pointer}
+tr.clickable:hover td{background:#f8fafc}
+.action-link{color:var(--blue);cursor:pointer;font-size:12px;text-decoration:underline;margin-right:8px}
+
+/* ─── Buttons ─── */
+.btn{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 14px;border-radius:6px;border:1px solid transparent;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600;transition:opacity .12s}
+.btn:hover{opacity:.85}
+.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn-secondary{background:var(--white);color:var(--text);border-color:var(--border)}
+.btn-sm{height:28px;padding:0 11px;font-size:12px}
+.btn-danger{background:var(--red);color:#fff;border-color:var(--red)}
+
+/* ─── Filter row ─── */
+.filter-row{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;flex-shrink:0}
+.filter-row select,.filter-row input[type=date],.filter-row input[type=text]{
+  height:32px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--white);color:var(--text)}
+.filter-label{font-size:13px;font-weight:700;color:var(--sub)}
+
+/* ─── Calendar ─── */
+.cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.cal-nav h3{font-size:14px;font-weight:700;min-width:110px;text-align:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-day-hd{text-align:center;padding:5px 4px;font-size:11px;font-weight:700;color:var(--sub)}
+.cal-cell{border:1px solid var(--border);border-radius:4px;min-height:76px;padding:4px 5px;cursor:pointer;background:var(--white);transition:background .1s}
+.cal-cell:hover{background:var(--blue-bg)}
+.cal-cell.today{border-color:var(--blue);border-width:2px}
+.cal-num{font-size:11px;font-weight:700;color:var(--sub);margin-bottom:3px}
+.cal-cell.today .cal-num{color:var(--blue)}
+.cal-entry{font-size:10px;padding:2px 4px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ce-confirmed{background:var(--green-bg);color:var(--green)}
+.ce-tentative{background:var(--orange-bg);color:var(--orange)}
+.ce-cancel{background:var(--red-bg);color:var(--red)}
+.cal-other{opacity:.25}
+
+/* ─── Lot bar chart ─── */
+.lot-bar-row{margin-bottom:11px}
+.lot-bar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}
+.lot-bar-track{height:10px;background:var(--border);border-radius:5px;overflow:hidden}
+.lot-bar-fill{height:100%;border-radius:5px;background:var(--blue);transition:width .6s}
+.lot-bar-fill.loss{background:var(--red)}
+
+/* ─── Shipment form ─── */
+.ship-form-table td{vertical-align:middle}
+.ipt{padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;width:100%;height:28px}
+.ipt:focus{outline:none;border-color:var(--blue)}
+.ipt-num{text-align:right;width:70px}
+.ship-total-row td{font-weight:700;background:var(--bg)}
+.print-preview{background:var(--white);border:1px solid var(--border);border-radius:6px;padding:24px;max-width:580px;margin:0 auto}
+.print-preview h4{text-align:center;font-size:15px;margin-bottom:4px}
+.print-preview .pdate{text-align:center;font-size:12px;color:var(--sub);margin-bottom:16px}
+
+/* ─── Ledger ─── */
+.ledger-layout{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;flex:1}
+.ledger-sidebar{width:140px;border-right:1px solid var(--border);background:var(--bg);flex-shrink:0;overflow-y:auto}
+.ledger-item{padding:9px 12px;cursor:pointer;font-size:13px;color:var(--sub);border-bottom:1px solid var(--border);font-weight:500}
+.ledger-item.active{background:var(--blue-bg);color:var(--blue);font-weight:700}
+.ledger-main{flex:1;padding:16px;overflow:auto}
+.ledger-note{background:var(--blue-bg);border:1px solid var(--blue);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--blue);margin-bottom:12px}
+
+/* ─── Tank detail view ─── */
+.tank-detail-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px}
+.td-stat{background:var(--bg);border-radius:6px;padding:12px 14px;text-align:center}
+.td-stat .tds-label{font-size:11px;font-weight:700;color:var(--sub);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.td-stat .tds-val{font-size:22px;font-weight:700;color:var(--text)}
+.td-stat .tds-unit{font-size:11px;color:var(--sub)}
+
+/* ─── Timeline ─── */
+.timeline{position:relative;padding-left:18px}
+.timeline::before{content:'';position:absolute;left:5px;top:0;bottom:0;width:2px;background:var(--border)}
+.tl-item{position:relative;margin-bottom:12px}
+.tl-dot{position:absolute;left:-15px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--blue);border:2px solid var(--white);box-shadow:0 0 0 2px var(--blue)}
+.tl-dot.red{background:var(--red);box-shadow:0 0 0 2px var(--red)}
+.tl-dot.green{background:var(--green);box-shadow:0 0 0 2px var(--green)}
+.tl-content{background:var(--bg);border-radius:4px;padding:7px 10px}
+.tl-date{font-size:11px;color:var(--gray);margin-bottom:2px}
+.tl-text{font-size:13px;font-weight:500}
+
+/* ─── Lot detail ─── */
+.lot-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.lot-stat{background:var(--bg);border-radius:6px;padding:12px;text-align:center}
+.lot-stat .ls-l{font-size:11px;color:var(--sub);margin-bottom:4px}
+.lot-stat .ls-v{font-size:20px;font-weight:700}
+.lot-stat .ls-u{font-size:11px;color:var(--sub)}
+
+/* ─── Modals ─── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center;animation:fadein .15s ease}
+.overlay.open{display:flex}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.modal{background:var(--white);border-radius:8px;border:1px solid var(--border);width:90%;max-width:560px;max-height:90vh;overflow-y:auto;position:relative}
+.modal-lg{max-width:780px}
+.modal-xl{max-width:960px}
+.mhd{padding:16px 24px;border-bottom:2px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--white);z-index:1}
+.mhd h3{font-size:15px;font-weight:700}
+.mclose{background:none;border:none;cursor:pointer;font-size:18px;color:var(--sub);line-height:1;padding:4px}
+.mbody{padding:20px 24px}
+.mfoot{padding:12px 24px;border-top:2px solid var(--border);display:flex;gap:10px;justify-content:flex-end;position:sticky;bottom:0;background:var(--white)}
+
+/* ─── Form ─── */
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:12px;font-weight:700;color:var(--sub);margin-bottom:4px}
+.fc{width:100%;height:34px;padding:0 12px;border:2px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;color:var(--text);background:var(--white)}
+.fc:focus{outline:none;border-color:var(--blue)}
+textarea.fc{height:auto;padding:8px 12px;resize:vertical}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+/* ─── Toggle ─── */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.tgl{position:relative;display:inline-block;width:40px;height:20px}
+.tgl input{opacity:0;width:0;height:0}
+.tgl-slider{position:absolute;inset:0;background:var(--gray-bg);border-radius:20px;cursor:pointer;transition:.2s}
+.tgl-slider:before{content:'';position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:var(--white);border-radius:50%;transition:.2s}
+input:checked+.tgl-slider{background:var(--blue)}
+input:checked+.tgl-slider:before{transform:translateX(20px)}
+
+/* ─── Status tags ─── */
+.stag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.stag-pending{background:var(--orange-bg);color:var(--orange)}
+.stag-shipped{background:var(--green-bg);color:var(--green)}
+.stag-breeding{background:var(--blue-bg);color:var(--blue)}
+.stag-done{background:var(--gray-bg);color:var(--sub)}
+
+/* ─── Progress bar ─── */
+.progress-wrap{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;border-radius:3px;background:var(--blue)}
+.progress-fill.red{background:var(--red)}
+
+/* ─── Heatmap ─── */
+.heatmap-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;margin-top:8px}
+.hm-cell{aspect-ratio:1;border-radius:3px;cursor:pointer;position:relative}
+.hm-cell:hover::after{content:attr(data-tip);position:absolute;bottom:110%;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;font-size:10px;padding:3px 6px;border-radius:4px;white-space:nowrap;z-index:5;pointer-events:none}
+.hm-ok{background:#bbf7d0}
+.hm-warn{background:#fed7aa}
+.hm-alert{background:#fee2e2}
+.hm-pending{background:#fef3c7}
+
+/* ─── Inventory summary table ─── */
+.inv-summary{margin-bottom:14px}
+.inv-summary-table th{font-size:11px}
+.inv-summary-table td{font-size:13px;text-align:right}
+.inv-summary-table td:first-child{text-align:left;font-weight:700}
+.inv-summary-total{font-weight:700;background:var(--bg)}
+
+/* Settings grid */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.settings-section h3{font-size:13px;font-weight:700;margin-bottom:12px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--gray)}
+
+/* Divider */
+.divider{height:1px;background:var(--border);margin:16px 0}
+
+/* Chip */
+.chip{display:inline-block;font-size:11px;padding:2px 7px;border-radius:10px;font-weight:700}
+.chip-blue{background:var(--blue-bg);color:var(--blue)}
+.chip-orange{background:var(--orange-bg);color:var(--orange)}
+.chip-green{background:var(--green-bg);color:var(--green)}
+.chip-gray{background:var(--gray-bg);color:var(--sub)}
+
+/* Detail modal specific */
+#mDetail .mbody{padding:20px 24px;max-height:calc(90vh - 110px);overflow-y:auto}
+
+/* ═══ MATRIX TABLE ═══ */
+.matrix-table{border-collapse:collapse;white-space:nowrap}
+.matrix-table th{background:#1e6fa8;color:#fff;padding:5px 8px;font-size:11px;font-weight:700;position:sticky;top:0;z-index:3;border-right:1px solid rgba(255,255,255,.2)}
+.matrix-table th.row-head{position:sticky;left:0;z-index:4;background:#1b3a5c;min-width:90px;text-align:left;font-size:11px}
+.matrix-table td{padding:0;border:1px solid var(--border);font-size:11px;min-width:60px;height:36px;text-align:center;position:relative;vertical-align:middle}
+.matrix-table td.row-label{position:sticky;left:0;background:#fff;z-index:2;text-align:left;padding:4px 8px;font-weight:700;font-size:11px;border-right:2px solid #2b91d6;min-width:90px;max-width:90px}
+.matrix-table td.unfilled{background:#fde68a}
+.matrix-table td.filled{background:#fff}
+.matrix-table td input{width:100%;height:100%;border:none;background:transparent;text-align:center;font-size:11px;font-family:inherit;padding:2px 4px;outline:none}
+.matrix-table td input:focus{background:#e4eff9}
+.matrix-table .m-area-sep td{background:#1e6fa8!important;color:#fff!important;font-weight:700;font-size:10px;padding:3px 8px}
+.matrix-wrap{flex:1;overflow:auto}
+
+/* ─── AI Mode Toggle (PC) ─── */
+.ai-toggle-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.65);border-radius:20px;padding:4px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;margin-left:12px}
+.ai-toggle-btn:hover{background:rgba(255,255,255,0.18);color:#fff}
+.ai-toggle-btn.on{background:#7c3aed;border-color:#7c3aed;color:#fff}
+.ai-dashboard-card{background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:6px;padding:14px 16px;margin-bottom:14px}
+.ai-dashboard-card-title{font-size:11px;font-weight:700;color:#7c3aed;letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.ai-dashboard-row{display:flex;flex-direction:column;gap:6px}
+.ai-dashboard-item{font-size:13px;color:#5b21b6;line-height:1.5}
+.ai-dashboard-divider{border:none;border-top:1px solid #ddd6fe;margin:8px 0}
+.ai-dashboard-alert{font-size:12px;color:#dc2626;background:#fff;border:1px solid #fca5a5;border-radius:4px;padding:6px 10px;font-weight:600}
+.ai-monthly-summary{background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:6px;padding:12px 16px;margin-top:16px;font-size:13px;color:#5b21b6;line-height:1.7}
+.ai-monthly-summary-label{font-size:11px;font-weight:700;color:#7c3aed;letter-spacing:.05em;margin-bottom:6px}
+.ai-element{display:none}
+body.ai-mode-on .ai-element{display:block}
+body.ai-mode-on .ai-element-flex{display:flex}
+.ai-hint{display:flex;align-items:flex-start;gap:8px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:8px 12px;font-size:12px;color:#5b21b6;line-height:1.6}
+.ai-hint-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+.ai-hint-val{font-size:16px;font-weight:700;color:#7c3aed}
+.ai-hint-reason{color:#6d28d9;margin-top:1px}
+/* ─── AI Section ─── */
+.ai-banner{background:#7c3aed;color:#fff;padding:8px 16px;font-size:12px;font-weight:700;text-align:center;border-radius:6px;margin-bottom:20px;letter-spacing:.03em;position:sticky;top:-20px;z-index:2}
+.ai-prog-wrap{background:#f1f5f9;border-radius:99px;height:14px;overflow:hidden;margin:8px 0 6px}
+.ai-prog-fill{height:100%;background:linear-gradient(90deg,#8b5cf6,#7c3aed);border-radius:99px;width:0%;transition:width 1.2s cubic-bezier(0.4,0,0.2,1)}
+.ai-count{font-size:22px;font-weight:700;color:#7c3aed}
+.ai-section2-hd{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:4px}
+.ai-badge{padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;display:inline-block}
+.ai-badge-ai{background:#7c3aed}
+.ai-badge-pres{background:#16a34a}
+.th-ai{background:#f5f3ff;color:#7c3aed}
+.td-ai{background:#f5f3ff;color:#7c3aed;font-weight:700;white-space:nowrap}
+.ai-verd-a{color:#16a34a;font-weight:700;font-size:15px}
+.ai-verd-b{color:#2563eb;font-weight:700;font-size:15px}
+.ai-verd-c{color:#d97706;font-weight:700;font-size:15px}
+.ai-tbl-note{font-size:11px;color:var(--gray);margin-top:8px;text-align:right}
+.ai-temp-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px}
+.ai-temp-card{border-radius:8px;padding:18px}
+.ai-temp-normal{background:#f0fdf4;border:1.5px solid #86efac}
+.ai-temp-alert{background:#fff7f7;border:1.5px solid #fca5a5}
+.ai-temp-val{font-size:32px;font-weight:700;line-height:1;margin:4px 0 2px}
+.ai-temp-lbl{font-size:11px;font-weight:700;letter-spacing:.04em;margin-bottom:2px}
+.ai-temp-time{font-size:11px;color:var(--sub);margin-bottom:8px}
+.ai-temp-status{font-size:13px;font-weight:700;margin-bottom:8px}
+.ai-temp-comment{font-size:12px;color:#475569;line-height:1.7}
+.ai-sim-note{font-size:11px;color:var(--gray);margin-top:8px;font-style:italic}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <h1>🐟 尾上水産 養殖管理システム</h1>
+  <span class="hdate" id="hdate"></span>
+  <button id="aiToggleBtn" class="ai-toggle-btn" onclick="toggleAiMode()">🔘 AI OFF</button>
+</header>
+
+<div class="body">
+<aside class="sidebar">
+  <nav>
+    <button class="nav-btn active" onclick="nav('dashboard',this)"><span class="nav-icon">📊</span>ダッシュボード</button>
+    <button class="nav-btn" onclick="nav('orders',this)"><span class="nav-icon">📋</span>注文管理</button>
+    <button class="nav-btn" onclick="nav('inventory',this)"><span class="nav-icon">📦</span>在庫一覧</button>
+    <button class="nav-btn" onclick="navDiary('diary',this)"><span class="nav-icon">📒</span>養殖日誌</button>
+    <button class="nav-btn" onclick="nav('lots',this)"><span class="nav-icon">🐟</span>ロット管理</button>
+    <button class="nav-btn" onclick="nav('settings',this)"><span class="nav-icon">⚙️</span>設定</button>
+    <button class="nav-btn" onclick="navAi('ai',this)"><span class="nav-icon">🤖</span>AI機能</button>
+  </nav>
+  <div class="sidebar-footer">
+    <p>最終更新: 2026/05/20 17:00</p>
+    <p class="credit">kaoiri</p>
+  </div>
+</aside>
+
+<div class="main">
+
+<!-- ══ SCREEN 1: DASHBOARD ══ -->
+<div class="screen active" id="s-dashboard">
+  <div class="today-banner">
+    <div class="tb-item" onclick="nav('inventory',document.querySelectorAll('.nav-btn')[2])">
+      <span class="tb-label">本日の未記録</span>
+      <span class="tb-val warn">15</span>
+      <span class="tb-label" style="margin-left:2px">基</span>
+    </div>
+    <div class="tb-item" onclick="nav('orders',document.querySelectorAll('.nav-btn')[1])">
+      <span class="tb-label">出荷予定</span>
+      <span class="tb-val">4</span>
+      <span class="tb-label" style="margin-left:2px">社</span>
+    </div>
+    <div class="tb-item" onclick="nav('inventory',document.querySelectorAll('.nav-btn')[2])">
+      <span class="tb-label">要確認アラート</span>
+      <span class="tb-val alert">3</span>
+      <span class="tb-label" style="margin-left:2px">件</span>
+    </div>
+    <div style="flex:1"></div>
+    <div style="font-size:11px;color:rgba(255,255,255,.5);padding-right:4px">クリックで各画面へ</div>
+  </div>
+
+  <div class="page-header">
+    <div><h2>ダッシュボード</h2><div class="phsub">2026年5月20日（水）朝の確認</div></div>
+  </div>
+
+  <div class="summary-row">
+    <div class="scard">
+      <div class="slabel">総在庫尾数</div>
+      <div class="sval">284,500</div>
+      <div class="ssub">尾（65基合計）</div>
+      <div class="progress-wrap"><div class="progress-fill" style="width:71%"></div></div>
+    </div>
+    <div class="scard">
+      <div class="slabel">本日の給餌記録</div>
+      <div class="sval">85<span style="font-size:15px;font-weight:400"> / 100</span></div>
+      <div class="ssub">記録済 / 全基</div>
+      <div class="progress-wrap"><div class="progress-fill" style="width:85%"></div></div>
+    </div>
+    <div class="scard red">
+      <div class="slabel">要対応のいけす</div>
+      <div class="sval">3</div>
+      <div class="ssub" style="color:var(--red)">葛崎-12 / 楠森-08 / 横島-19</div>
+    </div>
+    <div class="scard" id="costCard">
+      <button class="eye-btn" onclick="toggleCost()" title="表示切替">👁</button>
+      <div class="slabel">今月の餌代</div>
+      <div class="sval" id="costVal" style="font-size:20px">¥4,820,000</div>
+      <div class="ssub">2026年5月</div>
+    </div>
+  </div>
+
+  <div class="pending-bar" id="pendingBar"></div>
+
+  <div class="dash-grid">
+    <div class="dash-left">
+      <div class="card" style="padding:14px 16px">
+        <div class="card-title">いけす状況 <span>クリックで詳細</span></div>
+        <div class="area-tabs" id="areaTabs">
+          <button class="atab active" onclick="filterArea('all',this)">すべて</button>
+          <button class="atab" onclick="filterArea('団地',this)">団地</button>
+          <button class="atab" onclick="filterArea('楠森',this)">楠森</button>
+          <button class="atab" onclick="filterArea('葛崎',this)">葛崎</button>
+          <button class="atab" onclick="filterArea('横島',this)">横島</button>
+        </div>
+        <div class="tank-grid" id="tankGrid"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">直近14日の給餌量推移（全体合計） <span>kg/日</span></div>
+        <div class="chart-wrap">
+          <svg id="feedChart" class="chart-svg" height="130" viewBox="0 0 700 130"></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-right">
+      <!-- AI：今日のひとこと -->
+      <div class="ai-element ai-dashboard-card">
+        <div class="ai-dashboard-card-title">🟣 今日のAIからのひとこと</div>
+        <div class="ai-dashboard-row">
+          <div class="ai-dashboard-item">🌊 水温 18.5℃ ― 正常範囲内<br>本日は通常量での給餌を推奨します。</div>
+          <hr class="ai-dashboard-divider">
+          <div class="ai-dashboard-alert">⚠️ 楠森-08 マダイ ― 直近3回で食い渋り傾向。本日確認を推奨。</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">いけす状態ヒートマップ <span></span></div>
+        <div style="display:flex;gap:10px;font-size:11px;color:var(--sub);margin-bottom:5px">
+          <span><span style="display:inline-block;width:9px;height:9px;background:#bbf7d0;border-radius:2px;margin-right:3px"></span>OK</span>
+          <span><span style="display:inline-block;width:9px;height:9px;background:#fef3c7;border-radius:2px;margin-right:3px"></span>記録待ち</span>
+          <span><span style="display:inline-block;width:9px;height:9px;background:#fed7aa;border-radius:2px;margin-right:3px"></span>要確認</span>
+          <span><span style="display:inline-block;width:9px;height:9px;background:#fee2e2;border-radius:2px;margin-right:3px"></span>要対応</span>
+        </div>
+        <div class="heatmap-grid" id="heatmap"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">要対応・要確認</div>
+        <div id="alertList"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">直近30日の死亡数推移 <span>尾/日</span></div>
+        <div class="chart-wrap">
+          <svg id="mortChart" class="chart-svg" height="110" viewBox="0 0 300 110"></svg>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">ロット生残率サマリー</div>
+        <div id="lotMini"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 2: ORDERS ══ -->
+<div class="screen" id="s-orders">
+  <div class="page-header">
+    <div><h2>注文管理</h2></div>
+    <button class="btn btn-primary" onclick="openM('mNewOrder')">＋ 新規注文</button>
+  </div>
+  <div class="tabs" id="orderTabs">
+    <button class="tab-btn active" onclick="swTab('orders','cal',this)">📅 カレンダー</button>
+    <button class="tab-btn" onclick="swTab('orders','list',this)">📋 受注一覧</button>
+    <button class="tab-btn" onclick="swTab('orders','ship',this)">📄 出荷入力</button>
+    <button class="tab-btn" onclick="swTab('orders','preview',this)">🖨 仕切書プレビュー</button>
+    <button class="tab-btn" onclick="swTab('orders','ledger',this)">💴 入金元帳 🔒</button>
+  </div>
+
+  <div class="tab-pane active" id="orders-tp-cal">
+    <div class="cal-nav">
+      <button class="btn btn-secondary btn-sm" onclick="chMonth(-1)">◀ 前月</button>
+      <h3 id="calLabel">2026年5月</h3>
+      <button class="btn btn-secondary btn-sm" onclick="chMonth(1)">翌月 ▶</button>
+      <span style="flex:1"></span>
+      <div style="font-size:12px;color:var(--sub);display:flex;gap:10px;align-items:center">
+        <span><span class="ce-confirmed" style="padding:2px 5px;border-radius:3px;margin-right:3px">●</span>確定</span>
+        <span><span class="ce-tentative" style="padding:2px 5px;border-radius:3px;margin-right:3px">△</span>仮</span>
+        <span><span class="ce-cancel" style="padding:2px 5px;border-radius:3px;margin-right:3px">×</span>キャンセル</span>
+      </div>
+    </div>
+    <div class="cal-grid" id="calGrid">
+      <div class="cal-day-hd" style="color:var(--red)">日</div>
+      <div class="cal-day-hd">月</div><div class="cal-day-hd">火</div>
+      <div class="cal-day-hd">水</div><div class="cal-day-hd">木</div>
+      <div class="cal-day-hd">金</div>
+      <div class="cal-day-hd" style="color:var(--blue)">土</div>
+    </div>
+  </div>
+
+  <div class="tab-pane" id="orders-tp-list">
+    <div class="filter-row">
+      <select id="oStatusF" onchange="renderOrderList()">
+        <option value="all">全ステータス</option><option value="pending">未出荷</option><option value="shipped">出荷済</option>
+      </select>
+      <select id="oBuyerF" onchange="renderOrderList()">
+        <option value="all">全取引先</option>
+        <option>ニチモウ</option><option>信源</option><option>オーシャン</option>
+        <option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option>
+      </select>
+      <select id="oSpeciesF" onchange="renderOrderList()">
+        <option value="all">全魚種</option><option>マダイ</option><option>カンパチ</option><option>シマアジ</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr>
+        <th>日付</th><th>取引先</th><th>魚種</th><th>尾数</th><th>サイズ区分</th><th>出荷予定日</th><th>経路</th><th>状態</th><th></th>
+      </tr></thead>
+      <tbody id="orderListBody"></tbody></table>
+    </div>
+  </div>
+
+  <div class="tab-pane" id="orders-tp-ship">
+    <div class="filter-row">
+      <span class="filter-label">出荷日：</span>
+      <input type="date" id="shipDate" value="2026-04-30">
+      <select id="shipBuyerSel">
+        <option>ニチモウ</option><option>信源</option><option>オーシャン</option>
+        <option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option>
+      </select>
+      <button class="btn btn-secondary btn-sm" onclick="openM('mShipPreview')">👁 仕切書プレビュー</button>
+      <button class="btn btn-secondary btn-sm" onclick="alert('PDF印刷へ')">🖨 印刷</button>
+    </div>
+    <div class="tbl-wrap">
+      <table id="shipTable">
+        <thead><tr>
+          <th>No</th><th>魚種</th><th>総尾数</th><th>総キロ</th>
+          <th>フタ重</th><th>水引</th><th>正味キロ</th><th>単価(円)</th><th>金額(円)</th><th>ロット</th><th></th>
+        </tr></thead>
+        <tbody id="shipBody"></tbody>
+        <tfoot><tr class="ship-total-row">
+          <td colspan="6" style="font-weight:700">合計</td>
+          <td id="shipTotalNet" style="font-weight:700;text-align:right"></td>
+          <td></td>
+          <td id="shipTotalAmt" style="font-weight:700;text-align:right;color:var(--blue)"></td>
+          <td colspan="2"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn btn-secondary btn-sm" onclick="addShipRow()">＋ 明細を追加</button>
+    </div>
+  </div>
+
+  <div class="tab-pane" id="orders-tp-preview">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button class="btn btn-primary btn-sm" onclick="alert('PDF印刷へ')">🖨 印刷</button>
+    </div>
+    <div class="print-preview">
+      <h4>仕切り書</h4>
+      <div class="pdate">2026年4月30日</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:16px">
+        <div><strong>大海水産</strong> 様</div>
+        <div style="text-align:right;color:var(--sub)">尾上水産<br>天草市牛深町</div>
+      </div>
+      <div class="tbl-wrap"><table style="font-size:12px">
+        <thead><tr><th>No</th><th>魚種</th><th>尾数</th><th>総キロ</th><th>フタ重</th><th>水引</th><th>正味</th><th>単価</th><th>金額</th><th>ロット</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>鯛</td><td>6</td><td>18.9</td><td>0.5</td><td>0.9</td><td>17.5</td><td>1,650</td><td>28,875</td><td>Lot.43,5,1〜2</td></tr>
+          <tr><td>2</td><td>鯛</td><td>8</td><td>20.0</td><td>0.6</td><td>1.2</td><td>18.2</td><td>1,600</td><td>29,120</td><td></td></tr>
+          <tr><td>3</td><td>鯛</td><td>10</td><td>24.5</td><td>0.7</td><td>1.4</td><td>22.4</td><td>1,700</td><td>38,080</td><td></td></tr>
+          <tr style="font-weight:700;background:var(--bg)"><td colspan="6">合計</td><td>58.1</td><td>—</td><td>96,075</td><td></td></tr>
+        </tbody>
+      </table></div>
+      <div style="text-align:right;font-size:14px;font-weight:700;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        ご請求金額：<span style="font-size:20px;color:var(--blue)">¥96,075</span>
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--sub);margin-top:10px;text-align:center">📠 仕切り書本体は引き続き手書きFAXで取引先へ送付。こちらは社内参照・数字確認用です。</p>
+  </div>
+
+  <div class="tab-pane" id="orders-tp-ledger" style="display:flex;flex-direction:column;flex:1">
+    <div id="ledgerLock" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">🔒</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:8px">社長・お母様のみ閲覧できます</div>
+      <div style="font-size:13px;color:var(--sub);margin-bottom:20px">売上金額・入金情報は権限のある方のみが確認できます</div>
+      <button class="btn btn-primary" onclick="document.getElementById('ledgerLock').style.display='none';document.getElementById('ledgerContent').style.display='flex'">確認する（デモ用）</button>
+    </div>
+    <div id="ledgerContent" style="display:none;flex-direction:column;flex:1">
+      <div class="ledger-note">📝 お母様の手書き売上帳と同じ形式です。当面は紙と並行運用してください。</div>
+      <div class="ledger-layout">
+        <div class="ledger-sidebar" id="ledgerNav"></div>
+        <div class="ledger-main">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:14px;font-weight:700" id="ledgerTitle">— 元帳</div>
+            <button class="btn btn-primary btn-sm" onclick="openM('mAddPayment')">＋ 入金登録</button>
+          </div>
+          <div class="tbl-wrap">
+            <table><thead><tr>
+              <th>月日</th><th>品名</th><th>数量</th><th>単価</th>
+              <th style="text-align:right">売上金額</th><th style="text-align:right">受入金額</th><th style="text-align:right">差引残高</th><th></th>
+            </tr></thead>
+            <tbody id="ledgerBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 3: INVENTORY ══ -->
+<div class="screen" id="s-inventory">
+  <div class="page-header">
+    <div><h2>在庫一覧</h2><div class="phsub">総在庫 284,500尾 ／ 65基</div></div>
+  </div>
+  <div class="inv-summary">
+    <div class="tbl-wrap">
+      <table class="inv-summary-table">
+        <thead><tr>
+          <th>エリア</th><th>正常</th><th>未記録</th><th>要確認</th><th>要対応</th><th>合計</th>
+        </tr></thead>
+        <tbody id="invSummaryBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="filter-row">
+    <select id="invArea" onchange="renderInv()">
+      <option value="all">全エリア</option>
+      <option value="団地">団地</option><option value="楠森">楠森</option>
+      <option value="葛崎">葛崎</option><option value="横島">横島</option>
+    </select>
+    <select id="invSp" onchange="renderInv()">
+      <option value="all">全魚種</option><option>マダイ</option><option>カンパチ</option><option>シマアジ</option>
+    </select>
+    <select id="invSt" onchange="renderInv()">
+      <option value="all">全状態</option><option value="ok">OK</option><option value="warn">要確認</option><option value="alert">要対応</option><option value="pending">記録待ち</option>
+    </select>
+  </div>
+  <div class="tbl-wrap">
+    <table><thead><tr>
+      <th>いけす</th><th>形状</th><th>魚種</th><th style="text-align:right">在庫尾数</th>
+      <th>推計サイズ</th><th>最終給餌</th><th>状態</th><th>ロット</th><th></th>
+    </tr></thead>
+    <tbody id="invBody"></tbody></table>
+  </div>
+</div>
+
+<!-- ══ SCREEN 4: DIARY（養殖日誌） ══ -->
+<div class="screen" id="s-diary">
+  <div class="page-header">
+    <div><h2>📒 養殖日誌</h2></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary" onclick="alert('Excelエクスポート')">📥 Excel出力</button>
+      <button class="btn btn-primary" onclick="showToast('保存しました ✓')">💾 保存</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="swTabDiary('diary','daily',this)">📝 日別マトリクス（今日の記録）</button>
+    <button class="tab-btn" onclick="swTabDiary('diary','monthly',this)">📅 月別マトリクス（月次集計）</button>
+    <button class="tab-btn" onclick="swTabDiary('diary','cards',this)">🗂 いけすカード</button>
+  </div>
+
+  <!-- 日別マトリクス -->
+  <div class="tab-pane active" id="diary-tp-daily" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+    <div class="filter-row" style="margin-bottom:8px">
+      <span class="filter-label">記録日：</span>
+      <input type="date" id="diaryDate" value="2026-05-20">
+      <span style="font-size:11px;color:var(--sub);margin-left:8px">
+        <span style="display:inline-block;width:12px;height:12px;background:#fde68a;border-radius:2px;vertical-align:middle;margin-right:3px"></span>未入力
+        <span style="display:inline-block;width:12px;height:12px;background:#fff;border:1px solid var(--border);border-radius:2px;vertical-align:middle;margin-left:8px;margin-right:3px"></span>入力済
+      </span>
+      <span style="flex:1"></span>
+      <button class="btn btn-secondary btn-sm" onclick="markAllFilled()">一括入力済みにする</button>
+    </div>
+    <div class="matrix-wrap">
+      <table class="matrix-table" id="dailyMatrix"></table>
+    </div>
+  </div>
+
+  <!-- 月別マトリクス -->
+  <div class="tab-pane" id="diary-tp-monthly" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+    <div class="filter-row">
+      <span class="filter-label">月：</span>
+      <select id="monthlyMonthSel" onchange="renderMonthlyMatrix()">
+        <option value="5" selected>2026年5月</option>
+        <option value="4">2026年4月</option>
+        <option value="3">2026年3月</option>
+      </select>
+      <span class="filter-label">データ：</span>
+      <select id="monthlyDataSel" onchange="renderMonthlyMatrix()">
+        <option value="feed">給餌量(kg)</option>
+        <option value="mort">斃死数(尾)</option>
+        <option value="bgrade">B品数(尾)</option>
+      </select>
+      <span style="flex:1"></span>
+      <button class="btn btn-secondary btn-sm" onclick="alert('Excelエクスポート')">📥 Excel出力</button>
+    </div>
+    <div class="matrix-wrap">
+      <table class="matrix-table" id="monthlyMatrix"></table>
+    </div>
+    <!-- AI：月次サマリー -->
+    <div class="ai-element ai-monthly-summary">
+      <div class="ai-monthly-summary-label">🟣 AIからの月次サマリー</div>
+      5月の団地エリアは前月比 +12% の給餌量で推移しており、成長が順調です。
+      一方、楠森-08・横島-04 では消費量の減少傾向が見られます。次の給餌時に状態を確認することを推奨します。
+    </div>
+  </div>
+
+  <!-- いけすカード -->
+  <div class="tab-pane" id="diary-tp-cards" style="flex:1;overflow:auto">
+    <div class="area-tabs" id="cardAreaTabs">
+      <button class="atab active" onclick="filterCardArea('all',this)">すべて</button>
+      <button class="atab" onclick="filterCardArea('団地',this)">団地</button>
+      <button class="atab" onclick="filterCardArea('楠森',this)">楠森</button>
+      <button class="atab" onclick="filterCardArea('葛崎',this)">葛崎</button>
+      <button class="atab" onclick="filterCardArea('横島',this)">横島</button>
+    </div>
+    <div id="tankCardGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:4px"></div>
+  </div>
+</div><!-- /s-diary -->
+
+<!-- ══ SCREEN 5: LOTS ══ -->
+<div class="screen" id="s-lots">
+  <div class="page-header">
+    <div><h2>ロット管理</h2></div>
+    <button class="btn btn-primary" onclick="openM('mNewLot')">＋ 新規ロット登録</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px" id="lotSummary"></div>
+  <div class="tbl-wrap">
+    <table><thead><tr>
+      <th>ロットID</th><th>導入日</th><th>種苗業者</th><th>魚種</th>
+      <th style="text-align:right">導入尾数</th><th style="text-align:right">現在尾数</th>
+      <th style="text-align:right">ロス率</th><th>ステータス</th><th></th>
+    </tr></thead>
+    <tbody id="lotBody"></tbody></table>
+  </div>
+</div>
+
+<!-- ══ SCREEN 6: SETTINGS ══ -->
+<div class="screen" id="s-settings">
+  <div class="page-header"><h2>設定</h2></div>
+  <div class="settings-grid">
+    <div>
+      <div class="settings-section">
+        <h3>🐠 魚種・単価マスタ</h3>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>魚種</th><th>標準単価(円/kg)</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>マダイ</td><td>1,000</td><td><span class="action-link" onclick="openM('mEditSpecies')">編集</span></td></tr>
+            <tr><td>カンパチ</td><td>2,000</td><td><span class="action-link" onclick="openM('mEditSpecies')">編集</span></td></tr>
+            <tr><td>シマアジ</td><td>1,800</td><td><span class="action-link" onclick="openM('mEditSpecies')">編集</span></td></tr>
+          </tbody>
+        </table></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px">＋ 追加</button>
+      </div>
+
+      <div class="settings-section" style="margin-top:22px">
+        <h3>🏢 取引先マスタ</h3>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>取引先名</th><th>区分</th><th>連絡先</th><th></th></tr></thead>
+          <tbody id="buyerMasterBody"></tbody>
+        </table></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openM('mNewOrder')">＋ 追加</button>
+      </div>
+    </div>
+    <div>
+      <div class="settings-section">
+        <h3>🔔 アラート閾値設定</h3>
+        <div class="toggle-row"><div><div style="font-size:13px;font-weight:600">給餌未記録アラート</div><div style="font-size:12px;color:var(--sub)">24時間以上未記録で通知</div></div><label class="tgl"><input type="checkbox" checked><span class="tgl-slider"></span></label></div>
+        <div class="toggle-row"><div><div style="font-size:13px;font-weight:600">斃死数急増アラート</div><div style="font-size:12px;color:var(--sub)">前日比200%以上で通知</div></div><label class="tgl"><input type="checkbox" checked><span class="tgl-slider"></span></label></div>
+        <div class="toggle-row"><div><div style="font-size:13px;font-weight:600">水温異常アラート</div><div style="font-size:12px;color:var(--sub)">27℃以上または15℃以下で通知</div></div><label class="tgl"><input type="checkbox" checked><span class="tgl-slider"></span></label></div>
+      </div>
+      <div class="settings-section" style="margin-top:22px">
+        <h3>📥 データ取込（フェーズ2）</h3>
+        <div style="border:1px solid var(--border);border-radius:6px;padding:14px">
+          <p style="font-size:13px;color:var(--sub);margin-bottom:12px">AI給餌器からのCSVインポート（実装予定）</p>
+          <button class="btn btn-secondary" onclick="alert('フェーズ2で対応予定です')">📂 CSVをインポート</button>
+          <p style="font-size:11px;color:var(--gray);margin-top:8px">対応フォーマット：給餌記録CSV・水温ログCSV</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ AI機能 フェーズ1.5 ═══ -->
+<div class="screen" id="s-ai">
+
+  <div class="ai-banner">📊 フェーズ1.5 プレビュー ― データ蓄積後に稼働予定の機能です</div>
+
+  <!-- Section 1: データ蓄積インジケーター -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:4px">🤖 AI学習の進捗状況</div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:14px;line-height:1.5">給餌データが蓄積されるほど、AIの推奨精度が上がります</div>
+
+    <div style="font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.04em">累積記録件数</div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin:4px 0 6px">
+      <span class="ai-count">135件</span>
+      <span style="font-size:13px;color:var(--gray)">目標：300件</span>
+    </div>
+    <div class="ai-prog-wrap"><div class="ai-prog-fill" id="aiProgBar"></div></div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:20px">あと165件でAIが給餌推奨を開始します（現在 45%）</div>
+
+    <div style="font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.04em;margin-bottom:10px">月別記録件数</div>
+    <div style="overflow-x:auto">
+      <svg viewBox="0 0 500 175" width="100%" style="max-width:500px;display:block;margin:0 auto">
+        <line x1="54" y1="130" x2="480" y2="130" stroke="#e2e8f0" stroke-width="1"/>
+        <line x1="54" y1="90"  x2="480" y2="90"  stroke="#f1f5f9" stroke-width="1"/>
+        <line x1="54" y1="48"  x2="480" y2="48"  stroke="#f1f5f9" stroke-width="1"/>
+        <line x1="54" y1="18" x2="480" y2="18" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <text x="484" y="22" font-size="10" fill="#94a3b8" font-style="italic">目標</text>
+        <line x1="54" y1="18" x2="54" y2="130" stroke="#e2e8f0" stroke-width="1"/>
+        <text x="48" y="134" text-anchor="end" font-size="10" fill="#94a3b8">0</text>
+        <text x="48" y="94"  text-anchor="end" font-size="10" fill="#94a3b8">50</text>
+        <text x="48" y="52"  text-anchor="end" font-size="10" fill="#94a3b8">100</text>
+        <rect x="75"  y="117" width="55" height="13" fill="#c4b5fd" rx="3"/>
+        <text x="102" y="110" text-anchor="middle" font-size="10" fill="#7c3aed" font-weight="700">12</text>
+        <text x="102" y="150" text-anchor="middle" font-size="11" fill="#64748b">3月</text>
+        <rect x="185" y="84"  width="55" height="46" fill="#a78bfa" rx="3"/>
+        <text x="212" y="77"  text-anchor="middle" font-size="10" fill="#7c3aed" font-weight="700">38</text>
+        <text x="212" y="150" text-anchor="middle" font-size="11" fill="#64748b">4月</text>
+        <rect x="295" y="28"  width="55" height="102" fill="#7c3aed" rx="3"/>
+        <text x="322" y="21"  text-anchor="middle" font-size="10" fill="#7c3aed" font-weight="700">85</text>
+        <text x="322" y="150" text-anchor="middle" font-size="11" fill="#64748b">5月</text>
+        <rect x="405" y="120" width="55" height="10" fill="#e9d5ff" rx="3" stroke="#c4b5fd" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="432" y="112" text-anchor="middle" font-size="10" fill="#c4b5fd">蓄積中</text>
+        <text x="432" y="150" text-anchor="middle" font-size="11" fill="#94a3b8">6月〜</text>
+        <line x1="54" y1="130" x2="480" y2="130" stroke="#cbd5e1" stroke-width="1.5"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Section 2: 社長判断 vs AI比較 -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="ai-section2-hd">
+      <div class="card-title">📊 社長判断 vs AI推奨 比較ビュー</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="ai-badge ai-badge-ai">AI的中率 73%</span>
+        <span class="ai-badge ai-badge-pres">社長的中率 89%</span>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--sub);margin:4px 0 12px;line-height:1.5">AIはまだ学習中です。記録が積み上がるほど精度が向上します。</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>いけす名</th>
+            <th class="th-ai">AI推奨量 🟣</th>
+            <th>社長の判断</th>
+            <th>実績</th>
+            <th>判定</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>団地-01 マダイ</td>  <td class="td-ai">195kg</td><td>200kg</td><td>198kg</td><td class="ai-verd-a">◎</td></tr>
+          <tr><td>団地-03 カンパチ</td><td class="td-ai">220kg</td><td>230kg</td><td>225kg</td><td class="ai-verd-b">○</td></tr>
+          <tr><td>楠森-02 マダイ</td>  <td class="td-ai">180kg</td><td>180kg</td><td>182kg</td><td class="ai-verd-a">◎</td></tr>
+          <tr><td>楠森-08 マダイ</td>  <td class="td-ai">160kg</td><td>190kg</td><td>170kg</td><td class="ai-verd-c">△</td></tr>
+          <tr><td>葛崎-05 シマアジ</td><td class="td-ai">95kg</td> <td>100kg</td><td>98kg</td> <td class="ai-verd-a">◎</td></tr>
+          <tr><td>葛崎-12 マダイ</td>  <td class="td-ai">200kg</td><td>210kg</td><td>205kg</td><td class="ai-verd-b">○</td></tr>
+          <tr><td>横島-04 カンパチ</td><td class="td-ai">240kg</td><td>220kg</td><td>215kg</td><td class="ai-verd-c">△</td></tr>
+          <tr><td>横島-07 マダイ</td>  <td class="td-ai">175kg</td><td>175kg</td><td>180kg</td><td class="ai-verd-b">○</td></tr>
+          <tr><td>団地-09 マダイ</td>  <td class="td-ai">185kg</td><td>200kg</td><td>195kg</td><td class="ai-verd-b">○</td></tr>
+          <tr><td>楠森-11 シマアジ</td><td class="td-ai">88kg</td> <td>90kg</td> <td>89kg</td> <td class="ai-verd-a">◎</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="ai-tbl-note">◎ ±5kg以内 &nbsp;/&nbsp; ○ ±15kg以内 &nbsp;/&nbsp; △ 15kg超の差異</div>
+  </div>
+
+  <!-- Section 3: 水温アラート概念表示 -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:4px">🌊 水温アラートの概念表示</div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:14px">水温に応じたAIアドバイスのイメージです</div>
+    <div class="ai-temp-row">
+      <div class="ai-temp-card ai-temp-normal">
+        <div class="ai-temp-lbl" style="color:#16a34a">現在の水温状況</div>
+        <div class="ai-temp-val" style="color:#16a34a">18.5℃</div>
+        <div class="ai-temp-time">07:30 テレメーター取得</div>
+        <div class="ai-temp-status" style="color:#16a34a">✅ 正常範囲内</div>
+        <div class="ai-temp-comment">本日は通常量での給餌を推奨します。</div>
+        <div class="ai-temp-comment" style="margin-top:6px">🕗 推奨給餌時間：午前8時〜10時が最適です</div>
+      </div>
+      <div class="ai-temp-card ai-temp-alert">
+        <div class="ai-temp-lbl" style="color:#dc2626">⚠️ 高水温アラート（シミュレーション）</div>
+        <div class="ai-temp-val" style="color:#dc2626">27.3℃</div>
+        <div class="ai-temp-time">シミュレーション値</div>
+        <div class="ai-temp-status" style="color:#dc2626">🔴 要対応</div>
+        <div class="ai-temp-comment">マダイ・シマアジの給餌量を<strong>15〜20%削減</strong>を推奨します。</div>
+        <div class="ai-temp-comment" style="margin-top:6px">この水温では消化機能が低下します。朝夕の涼しい時間帯に分散させることを検討してください。</div>
+        <div class="ai-sim-note">※ これはシミュレーション表示です</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /s-ai -->
+
+</div><!-- .main -->
+</div><!-- .body -->
+</div><!-- .app -->
+
+<!-- ══ MODALS ══ -->
+
+<div class="overlay" id="mDetail">
+  <div class="modal modal-lg">
+    <div class="mhd">
+      <h3 id="mDetailTitle">詳細</h3>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="mDetailActions"></div>
+        <button class="mclose" onclick="closeM('mDetail')">✕</button>
+      </div>
+    </div>
+    <div id="mDetailBody" style="padding:20px 24px;max-height:calc(90vh - 60px);overflow-y:auto"></div>
+  </div>
+</div>
+
+<div class="overlay" id="mNewOrder">
+  <div class="modal">
+    <div class="mhd"><h3>新規注文登録</h3><button class="mclose" onclick="closeM('mNewOrder')">✕</button></div>
+    <div class="mbody">
+      <div class="fr2">
+        <div class="fg"><label>受注日</label><input type="date" class="fc" value="2026-05-20"></div>
+        <div class="fg"><label>出荷予定日</label><input type="date" class="fc" value="2026-05-23"></div>
+      </div>
+      <div class="fr2">
+        <div class="fg"><label>業者名</label>
+          <select class="fc"><option>ニチモウ</option><option>信源</option><option>オーシャン</option><option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option></select>
+        </div>
+        <div class="fg"><label>魚種</label><select class="fc"><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select></div>
+      </div>
+      <div class="fr2">
+        <div class="fg"><label>サイズ</label>
+          <select class="fc"><option>〜1.0kg</option><option>1.0〜1.5kg</option><option>1.5〜2.0kg</option><option>2.0kg〜</option></select>
+        </div>
+        <div class="fg"><label>数量（尾）</label><input type="number" class="fc" placeholder="例：50"></div>
+      </div>
+      <div class="fr2">
+        <div class="fg"><label>受付経路</label>
+          <select class="fc"><option>電話</option><option>LINE</option><option>FAX</option><option>直接</option></select>
+        </div>
+        <div class="fg"><label>ロット指定</label><input type="text" class="fc" placeholder="例：Lot.43,5,1〜2"></div>
+      </div>
+      <div class="fg"><label>備考</label><textarea class="fc" rows="2"></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeM('mNewOrder')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeM('mNewOrder');showToast('注文を登録しました')">登録</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="mCalCell">
+  <div class="modal">
+    <div class="mhd"><h3 id="mCalCellTitle">注文編集</h3><button class="mclose" onclick="closeM('mCalCell')">✕</button></div>
+    <div class="mbody">
+      <div class="fr2">
+        <div class="fg"><label>業者名</label>
+          <select class="fc"><option>ニチモウ</option><option>信源</option><option>オーシャン</option><option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option></select>
+        </div>
+        <div class="fg"><label>数量（尾）</label><input type="number" class="fc"></div>
+      </div>
+      <div class="fr2">
+        <div class="fg"><label>魚種</label><select class="fc"><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select></div>
+        <div class="fg"><label>状態</label><select class="fc"><option>確定</option><option>仮</option><option>キャンセル</option></select></div>
+      </div>
+      <div class="fg"><label>備考</label><input type="text" class="fc" placeholder="例：サイズ指定1.5〜2.0kg"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-danger btn-sm" onclick="closeM('mCalCell')">削除</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-secondary" onclick="closeM('mCalCell')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeM('mCalCell');showToast('保存しました')">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="mShipPreview">
+  <div class="modal modal-lg">
+    <div class="mhd"><h3>仕切り書プレビュー</h3><button class="mclose" onclick="closeM('mShipPreview')">✕</button></div>
+    <div class="mbody">
+      <div class="print-preview">
+        <h4>仕切り書</h4>
+        <div class="pdate">2026年4月30日</div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:16px">
+          <div><strong>大海水産</strong> 様</div>
+          <div style="text-align:right;color:var(--sub)">尾上水産<br>天草市牛深町</div>
+        </div>
+        <div class="tbl-wrap"><table style="font-size:12px">
+          <thead><tr><th>No</th><th>魚種</th><th>尾数</th><th>総キロ</th><th>フタ重</th><th>水引</th><th>正味</th><th>単価</th><th>金額</th><th>ロット</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>鯛</td><td>6</td><td>18.9</td><td>0.5</td><td>0.9</td><td>17.5</td><td>1,650</td><td>28,875</td><td>Lot.43,5,1〜2</td></tr>
+            <tr><td>2</td><td>鯛</td><td>8</td><td>20.0</td><td>0.6</td><td>1.2</td><td>18.2</td><td>1,600</td><td>29,120</td><td></td></tr>
+            <tr style="font-weight:700;background:var(--bg)"><td colspan="6">合計</td><td>58.1</td><td>—</td><td>96,075</td><td></td></tr>
+          </tbody>
+        </table></div>
+        <div style="text-align:right;font-size:14px;font-weight:700;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          ご請求金額：<span style="font-size:20px;color:var(--blue)">¥96,075</span>
+        </div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeM('mShipPreview')">閉じる</button>
+      <button class="btn btn-primary" onclick="alert('PDF印刷へ')">🖨 印刷</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="mAddPayment">
+  <div class="modal">
+    <div class="mhd"><h3>入金登録</h3><button class="mclose" onclick="closeM('mAddPayment')">✕</button></div>
+    <div class="mbody">
+      <div class="fr2">
+        <div class="fg"><label>入金日</label><input type="date" class="fc" value="2026-05-20"></div>
+        <div class="fg"><label>金額（円）</label><input type="number" class="fc" placeholder="例：242568"></div>
+      </div>
+      <div class="fg"><label>摘要</label><input type="text" class="fc" placeholder="例：5月分まとめ入金"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeM('mAddPayment')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeM('mAddPayment');showToast('入金を記録しました')">登録</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="mNewLot">
+  <div class="modal">
+    <div class="mhd"><h3>新規ロット登録</h3><button class="mclose" onclick="closeM('mNewLot')">✕</button></div>
+    <div class="mbody">
+      <div class="fr2">
+        <div class="fg"><label>導入日</label><input type="date" class="fc" value="2026-05-20"></div>
+        <div class="fg"><label>種苗業者</label><input type="text" class="fc" placeholder="例：XX種苗"></div>
+      </div>
+      <div class="fr2">
+        <div class="fg"><label>魚種</label><select class="fc"><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select></div>
+        <div class="fg"><label>導入尾数</label><input type="number" class="fc" placeholder="例：100000"></div>
+      </div>
+      <div class="fg"><label>配置先いけす（カンマ区切り）</label><input type="text" class="fc" placeholder="例：団地-01, 団地-02, 楠森-03"></div>
+      <div class="fg"><label>備考</label><textarea class="fc" rows="2"></textarea></div>
+      <div style="background:var(--blue-bg);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--blue)">
+        ロットIDは保存時に自動発行されます（例：2026-05-A）
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeM('mNewLot')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeM('mNewLot');showToast('ロット 2026-05-B を登録しました')">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="mEditSpecies">
+  <div class="modal">
+    <div class="mhd"><h3>魚種・単価を編集</h3><button class="mclose" onclick="closeM('mEditSpecies')">✕</button></div>
+    <div class="mbody">
+      <div class="fg"><label>魚種名</label><input type="text" class="fc" value="マダイ"></div>
+      <div class="fg"><label>標準単価（円/kg）</label><input type="number" class="fc" value="1000"></div>
+      <div class="fg"><label>備考</label><input type="text" class="fc" placeholder="サイズ・取引先による変動など"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeM('mEditSpecies')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeM('mEditSpecies');showToast('更新しました')">更新</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="mInvEdit">
+  <div class="modal">
+    <div class="mhd"><h3 id="mInvEditTitle">在庫修正</h3><button class="mclose" onclick="closeM('mInvEdit')">✕</button></div>
+    <div class="mbody">
+      <div class="fg"><label>在庫尾数</label><input type="number" class="fc" id="mInvEditCount"></div>
+      <div class="fg"><label>修正理由</label>
+        <select class="fc"><option>棚卸</option><option>間引き反映</option><option>死亡更新</option><option>その他</option></select>
+      </div>
+      <div class="fg"><label>備考</label><textarea class="fc" rows="2"></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-secondary" onclick="closeM('mInvEdit')">キャンセル</button>
+      <button class="btn btn-primary" onclick="closeM('mInvEdit');showToast('在庫を更新しました')">更新</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" style="position:fixed;bottom:20px;right:20px;background:var(--text);color:#fff;padding:10px 18px;border-radius:6px;font-size:13px;font-weight:700;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none"></div>
+
+<script>
+// ══════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════
+const BUYERS=['ニチモウ','信源','オーシャン','龍ヶ岳','和潮','紀勝','大海水産'];
+const AREA_CNT={団地:18,楠森:14,葛崎:16,横島:17};
+const PENDING_IDS=['団地-03','団地-11','楠森-07','楠森-12','葛崎-04','葛崎-09','横島-08','横島-15','団地-17','楠森-02','葛崎-13','横島-01','団地-05','楠森-10','葛崎-16'];
+const ALERT_IDS=['葛崎-12','楠森-08','横島-19'];
+const pendingSet=new Set(PENDING_IDS);
+
+// Generate tanks with full properties including feed/mort/bgrade for diary
+const tanks=[];
+Object.entries(AREA_CNT).forEach(function([area,cnt]){
+  for(var i=1;i<=cnt;i++){
+    var id=area+'-'+String(i).padStart(2,'0');
+    var spIdx=i%10;
+    var species=spIdx<=6?'マダイ':spIdx<=8?'カンパチ':'シマアジ';
+    var shape=i%3===0?'円':'四角';
+    var count=Math.floor(Math.random()*26000)+2000;
+    var feedHours=Math.floor(Math.random()*7)+1;
+    var status='ok';
+    if(pendingSet.has(id))status='pending';
+    else if(ALERT_IDS.includes(id))status='alert';
+    else if(i%11===0)status='alert';
+    else if(i%7===0)status='warn';
+    var lotId=['2024-04-A','2024-05-A','2024-06-A'][i%3];
+    var sizes=['〜1.0kg','1.0〜1.5kg','1.5〜2.0kg','2.0kg〜'];
+    var sizeEst=sizes[i%4];
+    // feed/mort/bgrade for diary matrix
+    var feedBase=(status==='pending')?0:Math.floor(Math.random()*80)+20;
+    var mort=Math.floor(Math.random()*3);
+    var bgrade=Math.floor(Math.random()*2);
+    tanks.push({id,area,species,shape,count,feedHours,status,lot:'Lot.'+lotId,sizeEst,feed:feedBase,mort,bgrade});
+  }
+});
+
+// Alias for diary compatibility
+var TANKS=tanks;
+
+const orders=[
+  {date:'5/20',buyer:'ニチモウ',species:'マダイ',size:'1.0〜1.5kg',qty:50,shipDate:'5/22',route:'LINE',status:'pending'},
+  {date:'5/20',buyer:'信源',species:'カンパチ',size:'1.5〜2.0kg',qty:80,shipDate:'5/23',route:'電話',status:'pending'},
+  {date:'5/19',buyer:'オーシャン',species:'マダイ',size:'〜1.0kg',qty:120,shipDate:'5/21',route:'FAX',status:'shipped'},
+  {date:'5/19',buyer:'龍ヶ岳',species:'シマアジ',size:'1.0〜1.5kg',qty:30,shipDate:'5/22',route:'LINE',status:'pending'},
+  {date:'5/18',buyer:'和潮',species:'マダイ',size:'〜1.0kg',qty:60,shipDate:'5/20',route:'電話',status:'shipped'},
+  {date:'5/17',buyer:'紀勝',species:'マダイ',size:'1.5〜2.0kg',qty:40,shipDate:'5/19',route:'LINE',status:'shipped'},
+  {date:'5/16',buyer:'大海水産',species:'カンパチ',size:'2.0kg〜',qty:25,shipDate:'5/18',route:'電話',status:'shipped'},
+  {date:'5/15',buyer:'ニチモウ',species:'マダイ',size:'1.0〜1.5kg',qty:70,shipDate:'5/21',route:'LINE',status:'pending'},
+  {date:'5/14',buyer:'信源',species:'マダイ',size:'〜1.0kg',qty:90,shipDate:'5/17',route:'FAX',status:'shipped'},
+  {date:'5/13',buyer:'オーシャン',species:'シマアジ',size:'1.0〜1.5kg',qty:35,shipDate:'5/16',route:'電話',status:'shipped'},
+];
+
+const lots=[
+  {id:'2024-04-A',date:'2024/4/15',vendor:'XX種苗',species:'マダイ',intro:100000,current:78500,loss:21.5,status:'育成中'},
+  {id:'2024-05-A',date:'2024/5/8',vendor:'XX種苗',species:'カンパチ',intro:80000,current:64200,loss:19.8,status:'育成中'},
+  {id:'2024-06-A',date:'2024/6/20',vendor:'YY種苗',species:'マダイ',intro:50000,current:42100,loss:15.8,status:'育成中'},
+  {id:'2023-04-A',date:'2023/4/10',vendor:'XX種苗',species:'マダイ',intro:100000,current:0,loss:24.3,status:'出荷完了'},
+  {id:'2023-08-B',date:'2023/8/22',vendor:'ZZ種苗',species:'カンパチ',intro:60000,current:0,loss:18.7,status:'出荷完了'},
+];
+
+const ledgerData={
+  'ニチモウ':[
+    {date:'4/1',item:'鯛',qty:21,price:1000,sale:47500,recv:null},
+    {date:'4/1',item:'鯛',qty:40,price:1000,sale:66000,recv:null},
+    {date:'4/1',item:'カンパチ',qty:12,price:2000,sale:86000,recv:null},
+    {date:'4/1',item:'（合計）',qty:null,price:null,sale:242568,recv:null,isTotal:true},
+    {date:'4/15',item:'入金',qty:null,price:null,sale:null,recv:242568},
+    {date:'4月計',item:'',qty:null,price:null,sale:242568,recv:242568,isMon:true},
+  ],
+  '信源':[
+    {date:'4/5',item:'カンパチ',qty:30,price:2000,sale:120000,recv:null},
+    {date:'4/5',item:'鯛',qty:15,price:1000,sale:36500,recv:null},
+    {date:'4/5',item:'（合計）',qty:null,price:null,sale:156500,recv:null,isTotal:true},
+    {date:'4/18',item:'入金',qty:null,price:null,sale:null,recv:156500},
+    {date:'4月計',item:'',qty:null,price:null,sale:156500,recv:156500,isMon:true},
+  ],
+};
+['オーシャン','龍ヶ岳','和潮','紀勝','大海水産'].forEach(function(b){
+  var s=Math.floor(Math.random()*120000+40000);
+  ledgerData[b]=[
+    {date:'4/10',item:'鯛',qty:Math.floor(s/1000),price:1000,sale:s,recv:null},
+    {date:'4月計',item:'',qty:null,price:null,sale:s,recv:s,isMon:true},
+  ];
+});
+
+const calOrders={};
+[[3,'ニチモウ',50,'confirmed'],[4,'信源',80,'confirmed'],
+ [7,'オーシャン',120,'confirmed'],[9,'龍ヶ岳',30,'tentative'],
+ [12,'和潮',60,'confirmed'],[14,'紀勝',40,'tentative'],
+ [16,'信源',25,'confirmed'],[19,'大海水産',70,'confirmed'],
+ [21,'ニチモウ',90,'confirmed'],[23,'龍ヶ岳',35,'tentative'],
+ [26,'オーシャン',100,'confirmed'],[28,'紀勝',60,'confirmed']].forEach(function([d,b,q,st]){
+  var k='2026-5-'+d;
+  if(!calOrders[k])calOrders[k]=[];
+  calOrders[k].push({buyer:b,qty:q,status:st});
+});
+
+var shipRows=[
+  {no:1,species:'鯛',qty:6,gross:18.9,futa:0.5,mizu:0.9,price:1650,lot:'Lot.43,5,1〜2'},
+  {no:2,species:'鯛',qty:8,gross:20.0,futa:0.6,mizu:1.2,price:1600,lot:''},
+  {no:3,species:'鯛',qty:10,gross:24.5,futa:0.7,mizu:1.4,price:1700,lot:''},
+];
+
+var calYear=2026,calMonth=5;
+var costVisible=true;
+var currentLedger='ニチモウ';
+
+// ══════════════════════════════════════════
+// AI MODE
+// ══════════════════════════════════════════
+var AI_KEY = 'onoue_ai_mode';
+
+function initAiMode() {
+  var on = localStorage.getItem(AI_KEY) === 'on';
+  setAiMode(on, false);
+}
+
+function toggleAiMode() {
+  var on = document.body.classList.contains('ai-mode-on');
+  setAiMode(!on, true);
+}
+
+function setAiMode(on, save) {
+  if (on) {
+    document.body.classList.add('ai-mode-on');
+  } else {
+    document.body.classList.remove('ai-mode-on');
+  }
+  var btn = document.getElementById('aiToggleBtn') || document.getElementById('aiToggleBtnSp');
+  if (btn) {
+    btn.textContent = on ? '🟣 AI ON' : '🔘 AI OFF';
+    if (on) { btn.classList.add('on'); } else { btn.classList.remove('on'); }
+  }
+  if (save) localStorage.setItem(AI_KEY, on ? 'on' : 'off');
+}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+function init(){
+  initAiMode();
+  setDate();
+  renderPending();
+  renderTankGrid('all');
+  drawFeedChart();
+  drawMortChart();
+  renderHeatmap();
+  renderAlertList();
+  renderLotMini();
+  renderCalendar();
+  renderOrderList();
+  renderShipTable();
+  renderInv();
+  renderInvSummary();
+  renderLotTable();
+  renderLotSummary();
+  renderLedgerNav();
+  renderLedger('ニチモウ');
+  renderBuyerMaster();
+}
+
+function setDate(){
+  var d=new Date();
+  var days=['日','月','火','水','木','金','土'];
+  document.getElementById('hdate').textContent=d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日（'+days[d.getDay()]+'）';
+}
+
+// ══════════════════════════════════════════
+// NAV
+// ══════════════════════════════════════════
+function nav(name,btn){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById('s-'+name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+}
+
+function navDiary(name,btn){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById('s-'+name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  renderDailyMatrix();
+  renderDiaryCards('all');
+}
+
+function navAi(name,btn){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById('s-'+name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  setTimeout(function(){
+    var bar=document.getElementById('aiProgBar');
+    if(bar) bar.style.width='45%';
+  },200);
+}
+
+// ══════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════
+function swTab(screen,tab,btn){
+  var pfx='orders-tp-';
+  document.querySelectorAll('[id^="'+pfx+'"]').forEach(function(p){p.classList.remove('active');});
+  document.getElementById(pfx+tab).classList.add('active');
+  btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+}
+
+function swTabDiary(screen,tab,btn){
+  var pfx=screen+'-tp-';
+  document.querySelectorAll('[id^="'+pfx+'"]').forEach(function(p){p.classList.remove('active');});
+  var tabsEl=document.querySelector('#s-'+screen+' .tabs');
+  if(tabsEl) tabsEl.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  var pane=document.getElementById(pfx+tab);
+  if(pane) pane.classList.add('active');
+  btn.classList.add('active');
+  if(tab==='daily')  renderDailyMatrix();
+  if(tab==='monthly') renderMonthlyMatrix();
+  if(tab==='cards') renderDiaryCards('all');
+}
+
+// ══════════════════════════════════════════
+// DETAIL MODAL
+// ══════════════════════════════════════════
+function openDetail(title,html,actions){
+  actions=actions||'';
+  document.getElementById('mDetailTitle').textContent=title;
+  document.getElementById('mDetailBody').innerHTML=html;
+  document.getElementById('mDetailActions').innerHTML=actions;
+  openM('mDetail');
+}
+
+// ══════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════
+function renderPending(){
+  var bar=document.getElementById('pendingBar');
+  bar.innerHTML='<div class="plabel">⚠ 本日未記録のいけす — '+PENDING_IDS.length+'基</div><div class="pending-scroll" id="pscroll"></div>';
+  var sc=document.getElementById('pscroll');
+  PENDING_IDS.forEach(function(id){
+    var t=tanks.find(function(x){return x.id===id;});
+    if(!t)return;
+    var div=document.createElement('div');
+    div.className='pcard';
+    div.innerHTML='<div class="pid">'+t.id+'</div><div class="psp">'+t.species+'</div><div class="pct">'+t.count.toLocaleString()+'<small style="font-size:10px;font-weight:400;color:var(--sub)">尾</small></div>';
+    div.onclick=function(){openTankDetail(t);};
+    sc.appendChild(div);
+  });
+}
+
+function filterArea(area,btn){
+  document.querySelectorAll('#areaTabs .atab').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  renderTankGrid(area);
+}
+
+function renderTankGrid(area){
+  var grid=document.getElementById('tankGrid');
+  grid.innerHTML='';
+  var list=area==='all'?tanks:tanks.filter(function(t){return t.area===area;});
+  list.forEach(function(t){
+    var div=document.createElement('div');
+    div.className='tcard st-'+t.status;
+    var bCls=t.status==='ok'?'b-ok':t.status==='warn'?'b-warn':t.status==='alert'?'b-alert':'b-pending';
+    var bLbl=t.status==='ok'?'OK':t.status==='warn'?'要確認':t.status==='alert'?'要対応':'記録待ち';
+    div.innerHTML='<div class="tid">'+t.id+'</div><div class="tsp">'+t.species+' / '+t.shape+'</div><div class="tcnt">'+t.count.toLocaleString()+'<small>尾</small></div><div class="tfeed">'+(t.status==='pending'?'⚠ 未記録':t.feedHours+'時間前')+'</div><span class="badge '+bCls+'">'+bLbl+'</span>';
+    div.onclick=function(){openTankDetail(t);};
+    grid.appendChild(div);
+  });
+}
+
+function renderHeatmap(){
+  var hm=document.getElementById('heatmap');
+  hm.innerHTML='';
+  tanks.slice(0,65).forEach(function(t){
+    var div=document.createElement('div');
+    div.className='hm-cell hm-'+t.status;
+    div.setAttribute('data-tip',t.id+': '+(t.status==='ok'?'OK':t.status==='warn'?'要確認':t.status==='alert'?'要対応':'記録待ち'));
+    div.onclick=function(){openTankDetail(t);};
+    hm.appendChild(div);
+  });
+}
+
+function renderAlertList(){
+  var el=document.getElementById('alertList');
+  var alertItems=[
+    {id:'葛崎-12',desc:'死亡数が急増（本日12尾）',time:'2時間前',level:'red'},
+    {id:'楠森-08',desc:'3日間給餌記録なし',time:'72時間前',level:'red'},
+    {id:'横島-19',desc:'水温異常（27.8℃）',time:'30分前',level:'red'},
+    {id:'団地-07',desc:'給餌量が平均の50%以下',time:'5時間前',level:'orange'},
+    {id:'楠森-11',desc:'今日まだ記録なし',time:'未記録',level:'orange'},
+  ];
+  el.innerHTML=alertItems.map(function(a){
+    return '<div class="alert-item" style="cursor:pointer" onclick="openTankDetail(tanks.find(function(t){return t.id===\''+a.id+'\';})||tanks[0])"><div class="aleft"><div class="alert-dot dot-'+a.level+'"></div><div><div class="alert-id">'+a.id+'</div><div class="alert-desc">'+a.desc+'</div></div></div><div class="alert-time">'+a.time+'</div></div>';
+  }).join('');
+}
+
+function renderLotMini(){
+  var el=document.getElementById('lotMini');
+  el.innerHTML=lots.filter(function(l){return l.status==='育成中';}).map(function(l){
+    return '<div class="lot-bar-row"><div class="lot-bar-label"><span>'+l.id+' <span style="font-size:11px;color:var(--sub)">'+l.species+'</span></span><span style="font-size:12px;color:'+(l.loss>22?'var(--red)':l.loss>19?'var(--orange)':'var(--green)')+'">ロス '+l.loss+'%</span></div><div class="lot-bar-track"><div class="lot-bar-fill" style="width:'+(100-l.loss)+'%"></div></div></div>';
+  }).join('');
+}
+
+function toggleCost(){
+  costVisible=!costVisible;
+  document.getElementById('costVal').textContent=costVisible?'¥4,820,000':'———';
+}
+
+// ══════════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════════
+function drawLineChart(svgId,data,color,W,H){
+  var svg=document.getElementById(svgId);
+  if(!svg)return;
+  var pad={l:34,r:10,t:10,b:24};
+  var cw=W-(pad.l+pad.r),ch=H-(pad.t+pad.b);
+  var mn=Math.min.apply(null,data),mx=Math.max.apply(null,data);
+  var range=mx-mn||1;
+  var pts=data.map(function(v,i){
+    return [pad.l+i*(cw/(data.length-1)), pad.t+ch-(v-mn)/range*ch];
+  });
+  var gridHtml='';
+  [0,.25,.5,.75,1].forEach(function(f){
+    var y=pad.t+f*ch;
+    var val=Math.round(mx-f*range);
+    gridHtml+='<line x1="'+pad.l+'" y1="'+y+'" x2="'+(W-pad.r)+'" y2="'+y+'" stroke="#e2e8f0" stroke-width="1"/><text x="'+(pad.l-4)+'" y="'+(y+4)+'" text-anchor="end" font-size="9" fill="#94a3b8">'+val+'</text>';
+  });
+  data.forEach(function(_,i){
+    if(i===0||i===data.length-1){
+      gridHtml+='<text x="'+pts[i][0]+'" y="'+(H-4)+'" text-anchor="middle" font-size="9" fill="#94a3b8">'+(i===0?'14日前':'今日')+'</text>';
+    }
+  });
+  var pathD='M'+pts.map(function(p){return p.join(',');}).join('L');
+  var areaD=pathD+'L'+pts[pts.length-1][0]+','+(pad.t+ch)+'L'+pts[0][0]+','+(pad.t+ch)+'Z';
+  var dots=pts.map(function(p){return '<circle cx="'+p[0]+'" cy="'+p[1]+'" r="2" fill="'+color+'"/>';}).join('');
+  svg.innerHTML=gridHtml+'<path d="'+areaD+'" fill="'+color+'" fill-opacity="0.07" stroke="none"/><path d="'+pathD+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linejoin="round"/>'+dots;
+}
+
+function drawFeedChart(){
+  drawLineChart('feedChart',[4820,4950,4780,5100,4890,4760,5020,4930,4850,5180,4920,4840,5050,4880],'#2563eb',700,130);
+}
+function drawMortChart(){
+  drawLineChart('mortChart',[8,5,12,7,4,9,6,14,5,8,11,6,9,7,3,8,12,5,7,10,4,8,6,9,5,12,7,8,6,4],'#dc2626',300,110);
+}
+
+// ══════════════════════════════════════════
+// TANK DETAIL
+// ══════════════════════════════════════════
+function openTankDetail(t){
+  if(!t)return;
+  var feedRows=[['5/20','EP3','48.5','正常'],['5/19','EP3','47.2','正常'],['5/18','EP2','46.8','正常'],['5/17','EP3','49.1','正常'],['5/16','EP3','47.9','正常']];
+  var feedHTML=feedRows.map(function(r){
+    return '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td style="text-align:right">'+r[2]+'</td><td><span class="badge b-ok">'+r[3]+'</span></td></tr>';
+  }).join('');
+
+  var html='<div class="tank-detail-grid"><div class="td-stat"><div class="tds-label">魚種</div><div class="tds-val" style="font-size:18px">'+t.species+'</div></div><div class="td-stat"><div class="tds-label">在庫尾数</div><div class="tds-val">'+t.count.toLocaleString()+'</div><div class="tds-unit">尾</div></div><div class="td-stat"><div class="tds-label">形状</div><div class="tds-val" style="font-size:18px">'+(t.shape==='円'?'●':'■')+' '+t.shape+'</div></div><div class="td-stat"><div class="tds-label">推計サイズ</div><div class="tds-val" style="font-size:18px">'+t.sizeEst+'</div></div><div class="td-stat"><div class="tds-label">最終給餌</div><div class="tds-val" style="font-size:18px">'+(t.status==='pending'?'未記録':t.feedHours+'h前')+'</div></div><div class="td-stat"><div class="tds-label">状態</div><div class="tds-val" style="font-size:16px"><span class="badge '+(t.status==='ok'?'b-ok':t.status==='warn'?'b-warn':t.status==='alert'?'b-alert':'b-pending')+'">'+(t.status==='ok'?'OK':t.status==='warn'?'要確認':t.status==='alert'?'要対応':'記録待ち')+'</span></div></div></div><div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">直近5日の給餌履歴</div><div class="tbl-wrap"><table><thead><tr><th>日付</th><th>餌の種類</th><th style="text-align:right">投餌量(kg)</th><th>状態</th></tr></thead><tbody>'+feedHTML+'</tbody></table></div></div><div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">給餌量推移（直近10日）</div><div class="chart-wrap"><svg id="tankFeedChart" class="chart-svg" height="90" viewBox="0 0 500 90"></svg></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">直近の死亡記録</div><div class="timeline"><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/18</div><div class="tl-text">3尾</div></div></div><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/15</div><div class="tl-text">1尾</div></div></div><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/11</div><div class="tl-text">2尾</div></div></div></div></div><div><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">移動履歴</div><div class="timeline"><div class="tl-item"><div class="tl-dot"></div><div class="tl-content"><div class="tl-date">2026/4/15</div><div class="tl-text">楠森-03から移動 500尾</div></div></div><div class="tl-item"><div class="tl-dot green"></div><div class="tl-content"><div class="tl-date">2026/3/20</div><div class="tl-text">種苗導入 3,500尾</div></div></div></div></div></div><div class="divider"></div><div><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">ロット情報</div><span class="chip chip-blue">'+t.lot+'</span></div>';
+
+  openDetail(t.id+' 詳細',html,
+    '<button class="btn btn-secondary btn-sm" onclick="openM(\'mInvEdit\');document.getElementById(\'mInvEditTitle\').textContent=\'在庫修正 — '+t.id+'\';document.getElementById(\'mInvEditCount\').value='+t.count+'">在庫修正</button><button class="btn btn-primary btn-sm" style="margin-left:8px" onclick="showToast(\'給餌記録を開きます\')">給餌記録を入力</button>');
+
+  setTimeout(function(){
+    drawLineChart('tankFeedChart',[46.8,47.9,49.1,46.8,47.2,48.5,47.0,48.8,47.5,49.2],'#2563eb',500,90);
+  },50);
+}
+
+// ══════════════════════════════════════════
+// ORDERS
+// ══════════════════════════════════════════
+function renderOrderList(){
+  var sf=document.getElementById('oStatusF').value;
+  var bf=document.getElementById('oBuyerF').value;
+  var spf=document.getElementById('oSpeciesF').value;
+  var rows=orders.filter(function(o){return(sf==='all'||o.status===sf)&&(bf==='all'||o.buyer===bf)&&(spf==='all'||o.species===spf);});
+  document.getElementById('orderListBody').innerHTML=rows.map(function(o){
+    var idx=orders.indexOf(o);
+    return '<tr class="clickable" onclick="openOrderDetail('+idx+')"><td>'+o.date+'</td><td><strong>'+o.buyer+'</strong></td><td>'+o.species+'</td><td style="text-align:right">'+o.qty+'</td><td>'+o.size+'</td><td>'+o.shipDate+'</td><td><span class="chip chip-gray">'+o.route+'</span></td><td><span class="stag '+(o.status==='pending'?'stag-pending':'stag-done')+'">'+(o.status==='pending'?'未出荷':'出荷済')+'</span></td><td><span class="action-link" onclick="event.stopPropagation();openM(\'mNewOrder\')">編集</span></td></tr>';
+  }).join('');
+}
+
+function openOrderDetail(idx){
+  var o=orders[idx];
+  openDetail('注文詳細 — '+o.buyer+'（'+o.date+'）',
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:18px"><div class="td-stat"><div class="tds-label">業者名</div><div class="tds-val" style="font-size:16px">'+o.buyer+'</div></div><div class="td-stat"><div class="tds-label">魚種・サイズ</div><div class="tds-val" style="font-size:14px">'+o.species+' '+o.size+'</div></div><div class="td-stat"><div class="tds-label">数量</div><div class="tds-val">'+o.qty+'<span style="font-size:12px;color:var(--sub)">尾</span></div></div><div class="td-stat"><div class="tds-label">受注日</div><div class="tds-val" style="font-size:16px">'+o.date+'</div></div><div class="td-stat"><div class="tds-label">出荷予定日</div><div class="tds-val" style="font-size:16px">'+o.shipDate+'</div></div><div class="td-stat"><div class="tds-label">受付経路</div><div class="tds-val" style="font-size:16px">'+o.route+'</div></div></div><div class="divider"></div><div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;margin-bottom:8px">ステータス</div><span class="stag '+(o.status==='pending'?'stag-pending':'stag-done')+'" style="font-size:13px;padding:4px 12px">'+(o.status==='pending'?'未出荷':'出荷済')+'</span></div>',
+    '<button class="btn btn-secondary btn-sm" onclick="openM(\'mNewOrder\')">内容を編集</button>'+(o.status==='pending'?'<button class="btn btn-primary btn-sm" style="margin-left:8px" onclick="showToast(\'出荷済みにしました\');closeM(\'mDetail\')">出荷済みにする</button>':''));
+}
+
+// ══════════════════════════════════════════
+// CALENDAR
+// ══════════════════════════════════════════
+function renderCalendar(){
+  var grid=document.getElementById('calGrid');
+  while(grid.children.length>7)grid.removeChild(grid.lastChild);
+  document.getElementById('calLabel').textContent=calYear+'年'+calMonth+'月';
+  var fd=new Date(calYear,calMonth-1,1).getDay();
+  var dim=new Date(calYear,calMonth,0).getDate();
+  var today=new Date();
+  for(var i=0;i<fd;i++){var d=document.createElement('div');d.className='cal-cell cal-other';grid.appendChild(d);}
+  for(var day=1;day<=dim;day++){
+    var cell=document.createElement('div');
+    cell.className='cal-cell';
+    var isTd=today.getFullYear()===calYear&&today.getMonth()===calMonth-1&&today.getDate()===day;
+    if(isTd)cell.classList.add('today');
+    cell.innerHTML='<div class="cal-num">'+day+'</div>';
+    var key=calYear+'-'+calMonth+'-'+day;
+    if(calOrders[key]){
+      calOrders[key].forEach(function(o){
+        var e=document.createElement('div');
+        e.className='cal-entry ce-'+o.status;
+        e.textContent=o.buyer+' '+o.qty+'尾';
+        cell.appendChild(e);
+      });
+    }
+    (function(d){
+      cell.onclick=function(){
+        document.getElementById('mCalCellTitle').textContent=calYear+'/'+calMonth+'/'+d+' 注文';
+        openM('mCalCell');
+      };
+    })(day);
+    grid.appendChild(cell);
+  }
+}
+function chMonth(d){calMonth+=d;if(calMonth>12){calMonth=1;calYear++;}if(calMonth<1){calMonth=12;calYear--;}renderCalendar();}
+
+// ══════════════════════════════════════════
+// SHIPMENT
+// ══════════════════════════════════════════
+function renderShipTable(){
+  document.getElementById('shipBody').innerHTML=shipRows.map(function(r,i){
+    return '<tr><td>'+r.no+'</td><td><select class="ipt" style="width:72px" onchange="shipRows['+i+'].species=this.value"><option '+(r.species==='鯛'?'selected':'')+'>鯛</option><option '+(r.species==='カンパチ'?'selected':'')+'>カンパチ</option><option '+(r.species==='シマアジ'?'selected':'')+'>シマアジ</option></select></td><td><input class="ipt ipt-num" style="width:52px" value="'+r.qty+'" oninput="shipRows['+i+'].qty=+this.value"></td><td><input class="ipt ipt-num" style="width:60px" value="'+r.gross+'" oninput="shipRows['+i+'].gross=+this.value;calcShip()"></td><td><input class="ipt ipt-num" style="width:52px" value="'+r.futa+'" oninput="shipRows['+i+'].futa=+this.value;calcShip()"></td><td><input class="ipt ipt-num" style="width:52px" value="'+r.mizu+'" oninput="shipRows['+i+'].mizu=+this.value;calcShip()"></td><td style="text-align:right;font-weight:700" id="snet'+i+'">'+(r.gross-r.futa-r.mizu).toFixed(1)+'</td><td><input class="ipt ipt-num" style="width:65px" value="'+r.price+'" oninput="shipRows['+i+'].price=+this.value;calcShip()"></td><td style="text-align:right;font-weight:700;color:var(--blue)" id="samt'+i+'">'+Math.round((r.gross-r.futa-r.mizu)*r.price).toLocaleString()+'</td><td><input class="ipt" style="width:100px" value="'+r.lot+'"></td><td><span style="cursor:pointer;color:var(--red);font-size:13px" onclick="shipRows.splice('+i+',1);renderShipTable()">✕</span></td></tr>';
+  }).join('');
+  calcShip();
+}
+function calcShip(){
+  var totNet=0,totAmt=0;
+  shipRows.forEach(function(r,i){
+    var net=r.gross-r.futa-r.mizu;
+    var amt=Math.round(net*r.price);
+    totNet+=net;totAmt+=amt;
+    var n=document.getElementById('snet'+i);
+    var a=document.getElementById('samt'+i);
+    if(n)n.textContent=net.toFixed(1);
+    if(a)a.textContent=amt.toLocaleString();
+  });
+  document.getElementById('shipTotalNet').textContent=totNet.toFixed(1);
+  document.getElementById('shipTotalAmt').textContent='¥'+totAmt.toLocaleString();
+}
+function addShipRow(){
+  shipRows.push({no:shipRows.length+1,species:'鯛',qty:0,gross:0,futa:0,mizu:0,price:1600,lot:''});
+  renderShipTable();
+}
+
+// ══════════════════════════════════════════
+// LEDGER
+// ══════════════════════════════════════════
+function renderLedgerNav(){
+  var nav=document.getElementById('ledgerNav');
+  nav.innerHTML=BUYERS.map(function(b){
+    return '<div class="ledger-item'+(b==='ニチモウ'?' active':'')+'" onclick="selectLedger(\''+b+'\',this)">'+b+'</div>';
+  }).join('');
+}
+function selectLedger(b,el){
+  document.querySelectorAll('.ledger-item').forEach(function(x){x.classList.remove('active');});
+  el.classList.add('active');
+  renderLedger(b);
+}
+function renderLedger(buyer){
+  currentLedger=buyer;
+  document.getElementById('ledgerTitle').textContent=buyer+' 元帳';
+  var rows=ledgerData[buyer]||[];
+  var balance=0;
+  document.getElementById('ledgerBody').innerHTML=rows.map(function(r){
+    var st=r.isMon?'style="font-weight:700;background:var(--bg)"':'';
+    if(r.sale&&!r.isTotal&&!r.isMon)balance+=r.sale;
+    if(r.recv)balance-=r.recv;
+    var balStr=(r.isTotal||r.isMon)?'<span style="color:'+(Math.abs(balance)<1?'var(--green)':'var(--blue)')+'">'+balance.toLocaleString()+'</span>':'';
+    var chip=r.recv&&!r.isMon?'<span class="badge b-green">入金確認</span>':r.sale&&!r.isTotal&&!r.isMon?'<span class="badge b-warn">未入金</span>':'';
+    return '<tr '+st+'><td>'+r.date+'</td><td>'+r.item+'</td><td style="text-align:right">'+(r.qty!=null?r.qty:'')+'</td><td style="text-align:right">'+(r.price!=null?r.price.toLocaleString():'')+'</td><td style="text-align:right">'+(r.sale!=null?r.sale.toLocaleString():'')+'</td><td style="text-align:right;color:var(--green)">'+(r.recv!=null?r.recv.toLocaleString():'')+'</td><td style="text-align:right">'+balStr+'</td><td>'+chip+'</td></tr>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+// INVENTORY
+// ══════════════════════════════════════════
+function renderInvSummary(){
+  var areas=['団地','楠森','葛崎','横島'];
+  var rows=areas.map(function(area){
+    var at=tanks.filter(function(t){return t.area===area;});
+    var ok=at.filter(function(t){return t.status==='ok';}).length;
+    var pending=at.filter(function(t){return t.status==='pending';}).length;
+    var warn=at.filter(function(t){return t.status==='warn';}).length;
+    var alert=at.filter(function(t){return t.status==='alert';}).length;
+    return '<tr><td>'+area+'</td><td><span style="color:var(--green);font-weight:700">'+ok+'</span></td><td><span style="color:var(--orange)">'+pending+'</span></td><td><span style="color:var(--orange)">'+warn+'</span></td><td><span style="color:var(--red)">'+alert+'</span></td><td style="font-weight:700">'+at.length+'</td></tr>';
+  });
+  var totOk=tanks.filter(function(t){return t.status==='ok';}).length;
+  var totPend=tanks.filter(function(t){return t.status==='pending';}).length;
+  var totWarn=tanks.filter(function(t){return t.status==='warn';}).length;
+  var totAlert=tanks.filter(function(t){return t.status==='alert';}).length;
+  rows.push('<tr class="inv-summary-total"><td>合計</td><td><span style="color:var(--green);font-weight:700">'+totOk+'</span></td><td><span style="color:var(--orange)">'+totPend+'</span></td><td><span style="color:var(--orange)">'+totWarn+'</span></td><td><span style="color:var(--red)">'+totAlert+'</span></td><td style="font-weight:700">'+tanks.length+'</td></tr>');
+  document.getElementById('invSummaryBody').innerHTML=rows.join('');
+}
+
+function renderInv(){
+  var af=document.getElementById('invArea').value;
+  var sf=document.getElementById('invSp').value;
+  var stf=document.getElementById('invSt').value;
+  var list=tanks.filter(function(t){return(af==='all'||t.area===af)&&(sf==='all'||t.species===sf)&&(stf==='all'||t.status===stf);});
+  document.getElementById('invBody').innerHTML=list.map(function(t){
+    return '<tr class="clickable" onclick="openTankDetail(tanks.find(function(x){return x.id===\''+t.id+'\';}))"><td><strong>'+t.id+'</strong></td><td>'+(t.shape==='円'?'● 円':'■ 四角')+'</td><td>'+t.species+'</td><td style="text-align:right">'+t.count.toLocaleString()+'</td><td>'+t.sizeEst+'</td><td style="color:'+(t.status==='pending'?'var(--orange)':'var(--sub)')+'">'+(t.status==='pending'?'⚠ 未記録':t.feedHours+'時間前')+'</td><td><span class="badge '+(t.status==='ok'?'b-ok':t.status==='warn'?'b-warn':t.status==='alert'?'b-alert':'b-pending')+'">'+(t.status==='ok'?'OK':t.status==='warn'?'要確認':t.status==='alert'?'要対応':'記録待ち')+'</span></td><td><span class="chip chip-blue" style="font-size:10px">'+t.lot+'</span></td><td><span class="action-link" onclick="event.stopPropagation();openM(\'mInvEdit\');document.getElementById(\'mInvEditTitle\').textContent=\'在庫修正 — '+t.id+'\';document.getElementById(\'mInvEditCount\').value='+t.count+'">修正</span></td></tr>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+// LOTS
+// ══════════════════════════════════════════
+function renderLotSummary(){
+  var active=lots.filter(function(l){return l.status==='育成中';});
+  var avgLoss=(active.reduce(function(s,l){return s+l.loss;},0)/active.length).toFixed(1);
+  var totalIntro=active.reduce(function(s,l){return s+l.intro;},0);
+  document.getElementById('lotSummary').innerHTML='<div class="scard"><div class="slabel">育成中ロット</div><div class="sval" style="font-size:24px">'+active.length+'</div><div class="ssub">ロット</div></div><div class="scard"><div class="slabel">総導入尾数（育成中）</div><div class="sval" style="font-size:20px">'+totalIntro.toLocaleString()+'</div><div class="ssub">尾</div></div><div class="scard '+(parseFloat(avgLoss)>22?'red':'')+'"><div class="slabel">平均ロス率（育成中）</div><div class="sval" style="font-size:24px">'+avgLoss+'<span style="font-size:15px">%</span></div><div class="ssub">目標：20%以下</div></div>';
+}
+function renderLotTable(){
+  document.getElementById('lotBody').innerHTML=lots.map(function(l,i){
+    return '<tr class="clickable" onclick="openLotDetail('+i+')"><td><strong>'+l.id+'</strong></td><td>'+l.date+'</td><td>'+l.vendor+'</td><td>'+l.species+'</td><td style="text-align:right">'+l.intro.toLocaleString()+'</td><td style="text-align:right">'+l.current.toLocaleString()+'</td><td style="text-align:right;font-weight:700;color:'+(l.loss>22?'var(--red)':l.loss>19?'var(--orange)':'var(--green)')+'">'+l.loss+'%</td><td><span class="stag '+(l.status==='育成中'?'stag-breeding':'stag-done')+'">'+l.status+'</span></td><td><span class="action-link" onclick="event.stopPropagation();openLotDetail('+i+')">詳細</span></td></tr>';
+  }).join('');
+}
+
+function openLotDetail(i){
+  var l=lots[i];
+  var dead=Math.round(l.intro*(l.loss/100));
+  var myTanks=tanks.filter(function(t){return t.lot==='Lot.'+l.id;});
+  var survData=Array.from({length:14},function(_,j){return Math.round(l.intro*(1-(l.loss/100)*(j/13)));});
+
+  var html='<div class="lot-stats-row"><div class="lot-stat"><div class="ls-l">導入尾数</div><div class="ls-v">'+l.intro.toLocaleString()+'</div><div class="ls-u">尾</div></div><div class="lot-stat" style="background:var(--red-bg)"><div class="ls-l">死亡尾数</div><div class="ls-v" style="color:var(--red)">'+dead.toLocaleString()+'</div><div class="ls-u">尾（'+l.loss+'%）</div></div><div class="lot-stat" style="background:'+(l.status==='出荷完了'?'var(--green-bg)':'var(--bg)')+'"><div class="ls-l">'+(l.status==='出荷完了'?'出荷累積':'現在在庫')+'</div><div class="ls-v" style="color:'+(l.status==='出荷完了'?'var(--green)':'var(--text)')+'">'+l.current.toLocaleString()+'</div><div class="ls-u">尾</div></div><div class="lot-stat"><div class="ls-l">ステータス</div><div class="ls-v" style="font-size:14px"><span class="stag '+(l.status==='育成中'?'stag-breeding':'stag-done')+'">'+l.status+'</span></div></div></div><div style="background:var(--bg);border-radius:6px;padding:14px;margin-bottom:16px"><div style="font-size:12px;font-weight:700;margin-bottom:6px">導入 → 出荷 フロー</div><div style="display:flex;align-items:center;gap:8px;font-size:13px"><span><strong>'+l.intro.toLocaleString()+'</strong>尾 導入</span><span style="color:var(--gray)">→</span><span style="color:var(--red)"><strong>-'+dead.toLocaleString()+'</strong>尾 死亡</span><span style="color:var(--gray)">→</span><span style="color:var(--blue)"><strong>'+l.current.toLocaleString()+'</strong>尾 '+(l.status==='育成中'?'現在':'出荷済')+'</span></div><div class="progress-wrap" style="margin-top:8px;height:8px"><div class="progress-fill" style="width:'+(l.current/l.intro*100).toFixed(0)+'%"></div></div><div style="font-size:11px;color:var(--sub);margin-top:4px">生残率 '+(100-l.loss).toFixed(1)+'%</div></div><div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">生残数の推移（想定）</div><div class="chart-wrap"><svg id="lotSurvChart" class="chart-svg" height="110" viewBox="0 0 600 110"></svg></div></div><div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">配置いけす（'+myTanks.length+'基）</div><div style="display:flex;flex-wrap:wrap;gap:5px">'+myTanks.map(function(t){return '<span class="chip chip-blue" style="cursor:pointer" onclick="openTankDetail(tanks.find(function(x){return x.id===\''+t.id+'\';}))">'+t.id+'</span>';}).join('')+'</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">死亡記録（直近）</div><div class="timeline"><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/18</div><div class="tl-text">計12尾（複数いけす）</div></div></div><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/15</div><div class="tl-text">計8尾</div></div></div><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/11</div><div class="tl-text">計15尾</div></div></div></div></div><div><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">ロット基本情報</div><table style="font-size:12px;width:100%"><tr><td style="color:var(--sub);padding:4px 0">ロットID</td><td style="font-weight:700">'+l.id+'</td></tr><tr><td style="color:var(--sub);padding:4px 0">導入日</td><td>'+l.date+'</td></tr><tr><td style="color:var(--sub);padding:4px 0">種苗業者</td><td>'+l.vendor+'</td></tr><tr><td style="color:var(--sub);padding:4px 0">魚種</td><td>'+l.species+'</td></tr><tr><td style="color:var(--sub);padding:4px 0">配置基数</td><td>'+myTanks.length+'基</td></tr></table></div></div>';
+
+  openDetail('ロット詳細 — '+l.id,html,
+    '<button class="btn btn-secondary btn-sm">死亡を記録</button><button class="btn btn-primary btn-sm" style="margin-left:8px" onclick="openM(\'mNewLot\')">新規ロット登録</button>');
+
+  setTimeout(function(){drawLineChart('lotSurvChart',survData,'#2563eb',600,110);},50);
+}
+
+// ══════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════
+function renderBuyerMaster(){
+  document.getElementById('buyerMasterBody').innerHTML=BUYERS.map(function(b){
+    return '<tr><td>'+b+'</td><td><span class="chip chip-gray">卸業者</span></td><td style="font-size:12px;color:var(--sub)">0969-xx-xxxx</td><td><span class="action-link">編集</span><span class="action-link" style="color:var(--red)">削除</span></td></tr>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+// MODAL / TOAST
+// ══════════════════════════════════════════
+function openM(id){document.getElementById(id).classList.add('open');}
+function closeM(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.overlay').forEach(function(o){
+  o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){document.querySelectorAll('.overlay.open').forEach(function(m){m.classList.remove('open');});}
+});
+
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg;t.style.opacity='1';
+  setTimeout(function(){t.style.opacity='0';},2500);
+}
+
+// ══════════════════════════════════════════
+// DIARY — 日別マトリクス
+// ══════════════════════════════════════════
+function cellFilled(inp){
+  var td=inp.parentNode;
+  td.classList.remove('unfilled');
+  td.classList.add('filled');
+}
+
+function renderDailyMatrix(){
+  var tbl=document.getElementById('dailyMatrix');
+  if(!tbl)return;
+  var head='<thead><tr>';
+  head+='<th class="row-head">いけす名</th>';
+  head+='<th style="min-width:72px">給餌量(kg)</th>';
+  head+='<th style="min-width:62px">斃死数(尾)</th>';
+  head+='<th style="min-width:62px">B品数(尾)</th>';
+  head+='<th style="min-width:82px">状態</th>';
+  head+='<th style="min-width:140px">メモ</th>';
+  head+='</tr></thead>';
+  var body='<tbody>';
+  ['団地','楠森','葛崎','横島'].forEach(function(area){
+    body+='<tr class="m-area-sep"><td colspan="6">▌ '+area+'エリア</td></tr>';
+    tanks.filter(function(t){return t.area===area;}).forEach(function(t){
+      var uc=t.status==='pending'?'unfilled':'filled';
+      var feedVal=t.status==='pending'?'':t.feed;
+      body+='<tr>';
+      body+='<td class="row-label">'+t.id+'</td>';
+      body+='<td class="'+uc+'"><input type="number" value="'+feedVal+'" placeholder="—" onchange="cellFilled(this)"></td>';
+      body+='<td class="'+(t.mort>0?'filled':uc)+'"><input type="number" value="'+t.mort+'" placeholder="0" onchange="cellFilled(this)"></td>';
+      body+='<td class="'+(t.bgrade>0?'filled':uc)+'"><input type="number" value="'+t.bgrade+'" placeholder="0" onchange="cellFilled(this)"></td>';
+      var sel='<select style="width:76px;height:26px;font-size:11px;border:1px solid var(--border);border-radius:3px;padding:0 4px">';
+      ['正常','給餌済','異常あり','絶食'].forEach(function(o,i){sel+='<option'+(i===0?' selected':'')+'>'+o+'</option>';});
+      sel+='</select>';
+      body+='<td style="padding:2px 4px">'+sel+'</td>';
+      body+='<td><input type="text" placeholder="メモ..." style="width:100%;height:26px;border:1px solid var(--border);border-radius:3px;font-size:11px;padding:0 6px;font-family:inherit"></td>';
+      body+='</tr>';
+    });
+  });
+  body+='</tbody>';
+  tbl.innerHTML=head+body;
+}
+
+function markAllFilled(){
+  document.querySelectorAll('#dailyMatrix td.unfilled').forEach(function(td){
+    td.classList.remove('unfilled');td.classList.add('filled');
+    var inp=td.querySelector('input');if(inp&&!inp.value)inp.value='0';
+  });
+  showToast('すべて入力済みにしました');
+}
+
+// ══════════════════════════════════════════
+// DIARY — 月別マトリクス
+// ══════════════════════════════════════════
+function renderMonthlyMatrix(){
+  var tbl=document.getElementById('monthlyMatrix');
+  if(!tbl)return;
+  var todayDay=new Date().getDate();
+  var dataType=(document.getElementById('monthlyDataSel')||{}).value||'feed';
+  var days=31;
+
+  // Column header
+  var head='<thead><tr><th class="row-head">いけす名</th>';
+  for(var d=1;d<=days;d++){
+    var isT=(d===todayDay);
+    var bg=isT?';background:#0f2540':'';
+    head+='<th style="min-width:34px;text-align:center'+bg+'">'+(isT?'<strong>'+d+'</strong>':d)+'</th>';
+  }
+  head+='<th style="min-width:56px;text-align:right;background:#0f2540">合計</th></tr></thead>';
+
+  var body='<tbody>';
+  ['団地','楠森','葛崎','横島'].forEach(function(area){
+    body+='<tr class="m-area-sep"><td colspan="'+(days+2)+'">▌ '+area+'エリア</td></tr>';
+    tanks.filter(function(t){return t.area===area;}).forEach(function(t){
+      body+='<tr><td class="row-label">'+t.id+'</td>';
+      var total=0;
+      for(var d=1;d<=days;d++){
+        if(d>todayDay){
+          body+='<td></td>';
+        } else if(d===todayDay&&t.status==='pending'){
+          body+='<td class="unfilled"></td>';
+        } else {
+          var v;
+          if(dataType==='feed'){
+            var base=t.feed||40;
+            v=(d%3===0&&t.species!=='カンパチ')?0:Math.floor(base*(0.75+Math.random()*0.5));
+          } else if(dataType==='mort'){
+            v=Math.floor(Math.random()*4);
+          } else {
+            v=Math.floor(Math.random()*3);
+          }
+          total+=v;
+          var bg2=d===todayDay?'background:#eff6ff;':'';
+          body+='<td style="text-align:center;font-size:11px;'+bg2+'">'+(v>0?v:'')+'</td>';
+        }
+      }
+      body+='<td style="text-align:right;font-weight:700;font-size:11px;background:#f8fafc">'+total+'</td></tr>';
+    });
+  });
+  body+='</tbody>';
+  tbl.innerHTML=head+body;
+}
+
+// ══════════════════════════════════════════
+// DIARY — いけすカード
+// ══════════════════════════════════════════
+function filterCardArea(area,btn){
+  document.querySelectorAll('#cardAreaTabs .atab').forEach(function(x){x.classList.remove('active');});
+  btn.classList.add('active');
+  renderDiaryCards(area);
+}
+
+function renderDiaryCards(area){
+  var filtered=(!area||area==='all')?tanks:tanks.filter(function(t){return t.area===area;});
+  var stColors={
+    'ok':'border:1px solid #15803d;background:#f0fdf4',
+    'pending':'border:1px solid #d97706;background:#fffbeb',
+    'alert':'border:1px solid #991b1b;background:#fef2f2',
+    'warn':'border:1px solid #d97706;background:#fffbeb'
+  };
+  var stLabel={
+    'ok':'<span class="badge b-ok">記録済</span>',
+    'pending':'<span class="badge b-warn">未入力</span>',
+    'alert':'<span class="badge b-alert">要対応</span>',
+    'warn':'<span class="badge b-warn">要確認</span>'
+  };
+  var html='';
+  filtered.forEach(function(t){
+    var st=t.status||'ok';
+    var colStyle=stColors[st]||stColors['ok'];
+    var lbl=stLabel[st]||'';
+    html+='<div style="'+colStyle+';border-radius:4px;padding:10px;cursor:pointer" onclick="openTankDetail(tanks.find(function(x){return x.id===\''+t.id+'\';}))"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-size:11px;font-weight:700;color:var(--sub)">'+t.id+'</div>'+lbl+'</div><div style="font-size:11px;color:var(--sub);margin-bottom:2px">'+t.species+'</div><div style="font-size:18px;font-weight:700">'+t.count.toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--sub)"> 尾</span></div><div style="display:flex;gap:8px;margin-top:4px;font-size:10px;color:var(--sub)"><span>給餌 '+(t.feed||'—')+'kg</span><span>斃死 '+t.mort+'</span><span>B品 '+t.bgrade+'</span></div></div>';
+  });
+  var grid=document.getElementById('tankCardGrid');
+  if(grid)grid.innerHTML=html;
+}
+
+// ══════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════
+init();
+</script>
+</body>
+</html>

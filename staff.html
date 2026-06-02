@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>尾上水産 スタッフアプリ</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Hiragino Kaku Gothic Pro', 'Yu Gothic', sans-serif;
+  background: #0f2437;
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+
+/* ===== AUTH BOX ===== */
+.auth-box {
+  background: #fff;
+  border-radius: 20px;
+  padding: 40px 32px;
+  width: 100%; max-width: 340px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  text-align: center;
+}
+.auth-fish { font-size: 48px; margin-bottom: 16px; }
+.auth-box h2 {
+  font-size: 18px; font-weight: 700; color: #0f172a;
+  margin-bottom: 4px;
+}
+.auth-box .auth-sub {
+  font-size: 13px; color: #64748b; margin-bottom: 28px;
+}
+.auth-field { margin-bottom: 14px; text-align: left; }
+.auth-field label {
+  display: block; font-size: 12px; font-weight: 700;
+  color: #475569; margin-bottom: 6px; letter-spacing: 0.05em;
+}
+.auth-field input {
+  width: 100%; padding: 13px 14px;
+  border: 1.5px solid #cbd5e1; border-radius: 10px;
+  font-size: 16px; font-family: inherit;
+  outline: none; background: #f8fafc;
+  transition: border-color 0.15s;
+}
+.auth-field input:focus { border-color: #1d4ed8; background: #fff; }
+.auth-btn {
+  width: 100%; padding: 15px;
+  background: #1b3a5c; color: #fff;
+  border: none; border-radius: 10px;
+  font-size: 17px; font-weight: 700; font-family: inherit;
+  cursor: pointer; margin-top: 6px;
+  transition: background 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.auth-btn:hover { background: #2d5a8a; }
+.auth-err {
+  color: #b91c1c; font-size: 13px;
+  margin-top: 10px; display: none;
+}
+
+/* ===== LOADING ===== */
+.loading-wrap {
+  display: none;
+  flex-direction: column; align-items: center; gap: 16px;
+}
+.spinner {
+  width: 48px; height: 48px;
+  border: 4px solid #dbeafe;
+  border-top-color: #1d4ed8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 15px; color: #475569; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="auth-box" id="authBox">
+  <div class="auth-fish">🐟</div>
+  <h2>スタッフログイン</h2>
+  <p class="auth-sub">尾上水産 スマホアプリ</p>
+  <div class="auth-field">
+    <label>ユーザー名</label>
+    <input type="text" id="authUser" placeholder="onoue" autocomplete="username">
+  </div>
+  <div class="auth-field">
+    <label>パスワード</label>
+    <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')doAuth()">
+  </div>
+  <button class="auth-btn" onclick="doAuth()">📱 アプリを開く</button>
+  <div class="auth-err" id="authErr">ユーザー名またはパスワードが違います</div>
+
+  <div class="loading-wrap" id="loadingWrap">
+    <div class="spinner"></div>
+    <div class="loading-text">アプリを起動中...</div>
+  </div>
+</div>
+
+<script>
+var AUTH_KEY = 'onoue_auth_v1';
+var CORRECT_USER = 'onoue';
+var CORRECT_PASS = 'onoue2026';
+
+function checkAuth() {
+  return sessionStorage.getItem(AUTH_KEY) === 'ok';
+}
+function doAuth() {
+  var u = document.getElementById('authUser').value.trim();
+  var p = document.getElementById('authPass').value;
+  if (u === CORRECT_USER && p === CORRECT_PASS) {
+    sessionStorage.setItem(AUTH_KEY, 'ok');
+    goToApp();
+  } else {
+    document.getElementById('authErr').style.display = 'block';
+    document.getElementById('authPass').value = '';
+    document.getElementById('authPass').focus();
+  }
+}
+function goToApp() {
+  document.getElementById('authBox').querySelector('button').style.display = 'none';
+  document.getElementById('authErr').style.display = 'none';
+  document.getElementById('loadingWrap').style.display = 'flex';
+  setTimeout(function(){ location.href = 'app.html'; }, 600);
+}
+if (checkAuth()) {
+  goToApp();
+}
+</script>
+</body>
+</html>

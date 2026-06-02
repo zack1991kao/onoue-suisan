@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>尾上水産 養殖管理アプリ</title>
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: '游ゴシック', 'Yu Gothic', 'Hiragino Kaku Gothic Pro', sans-serif;
+  font-weight: 500;
+  background: #94a3b8;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding: 24px 0;
+}
+
+/* ===== PHONE FRAME ===== */
+.phone {
+  width: 100%;
+  max-width: 480px;
+  height: 812px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+@media (max-width: 500px) {
+  body { padding: 0; background: #fff; }
+  .phone { height: 100vh; max-width: 100%; border-radius: 0; box-shadow: none; }
+}
+@media (min-width: 501px) {
+  .phone { border-radius: 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+}
+
+/* ===== COLORS ===== */
+:root {
+  --ink: #0f172a;
+  --ink2: #475569;
+  --border: #cbd5e1;
+  --blue: #1d4ed8;
+  --blue-bg: #dbeafe;
+  --red: #b91c1c;
+  --red-bg: #fee2e2;
+  --dis: #94a3b8;
+  --dis-bg: #e2e8f0;
+  --line: #f1f5f9;
+}
+
+/* ===== APP HEADER ===== */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 2px solid var(--border);
+  flex-shrink: 0;
+  min-height: 56px;
+  background: #1b3a5c;
+}
+.hdr-back {
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.8);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 8px 4px;
+  min-width: 60px;
+}
+.hdr-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 8px;
+}
+.hdr-step {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.7);
+  min-width: 60px;
+  text-align: right;
+}
+
+/* ===== TAB CONTENT ===== */
+.tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+.tab-content.active { display: flex; }
+
+/* ===== SCROLL ===== */
+.scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 16px 20px; }
+.scroll.no-pad { padding: 0 0 20px; }
+
+/* ===== TAB BAR ===== */
+.tab-bar {
+  display: flex;
+  border-top: 2px solid var(--border);
+  flex-shrink: 0;
+  background: #fff;
+}
+.tab-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s;
+}
+.tab-btn:active { background: var(--line); }
+.tab-icon { font-size: 20px; line-height: 1; }
+.tab-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dis);
+  margin-top: 3px;
+  letter-spacing: 0.3px;
+}
+.tab-btn.active .tab-label { color: var(--blue); }
+
+/* ===== FOOTER ===== */
+.footer {
+  padding: 10px 16px 16px;
+  border-top: 2px solid var(--border);
+  flex-shrink: 0;
+  background: #fff;
+}
+.btn-primary {
+  width: 100%;
+  height: 60px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: inherit;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.btn-primary:active { background: #1e3a8a; }
+.btn-primary:disabled { background: var(--dis-bg); color: var(--dis); cursor: not-allowed; }
+
+/* ===== AREA TABS ===== */
+.area-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+  background: #fff;
+  scrollbar-width: none;
+}
+.area-tabs::-webkit-scrollbar { display: none; }
+.area-tab {
+  flex-shrink: 0;
+  padding: 10px 14px 8px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink2);
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  margin-bottom: -2px;
+  line-height: 1.3;
+  text-align: center;
+}
+.area-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+.area-count { display: block; font-size: 10px; font-weight: 500; color: #94a3b8; }
+
+/* ===== POND GRID ===== */
+.pond-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 14px 16px;
+}
+.pond-cell {
+  height: 80px;
+  border: 2px solid var(--border);
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  transition: all 0.1s;
+  position: relative;
+}
+.pond-cell.square { border-radius: 8px; }
+.pond-cell.circle { border-radius: 50%; }
+.pond-cell.selected { border-color: var(--blue); border-width: 3px; background: var(--blue-bg); }
+.pond-cell:active { opacity: 0.7; }
+.pond-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+  text-align: center;
+}
+.pond-fish { font-size: 10px; font-weight: 500; color: var(--ink2); margin-top: 2px; }
+.pond-count { font-size: 9px; color: #94a3b8; margin-top: 1px; }
+
+/* ===== POND STATUS COLORS ===== */
+.pond-cell.done { background: #dcfce7; border-color: #16a34a !important; }
+.pond-cell.done .pond-num { color: #166534; }
+.pond-cell.done .pond-fish { color: #16a34a; }
+.pond-cell.done::after { content: '✓'; position: absolute; top: 3px; right: 5px; font-size: 11px; font-weight: 700; color: #16a34a; }
+.pond-cell.todo { background: #fef2f2; border-color: #b91c1c !important; }
+.pond-cell.todo .pond-num { color: #991b1b; }
+.pond-cell.alert { background: #fff7ed; border-color: #d97706 !important; }
+.pond-cell.alert .pond-num { color: #92400e; }
+.pond-cell.alert .pond-fish { color: #d97706; }
+.pond-cell.alert::after { content: '⚠'; position: absolute; top: 3px; right: 5px; font-size: 11px; color: #d97706; }
+.pond-cell.skip { background: #f8fafc; border-color: #e2e8f0 !important; }
+.pond-cell.skip .pond-num { color: #94a3b8; }
+.pond-cell.skip .pond-fish { color: #cbd5e1; }
+
+/* ===== FORM SECTIONS ===== */
+.section { margin-top: 22px; }
+.section:first-child { margin-top: 16px; }
+.sec-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.badge-req {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--red);
+  background: var(--red-bg);
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+
+/* ===== KG INPUT ===== */
+.kg-wrap {
+  display: flex;
+  align-items: center;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+.kg-wrap:focus-within { border-color: var(--blue); background: #f8faff; }
+.kg-input {
+  flex: 1;
+  height: 76px;
+  border: none;
+  outline: none;
+  padding: 0 16px;
+  font-size: 38px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink);
+  background: transparent;
+}
+.kg-unit { font-size: 22px; font-weight: 700; color: var(--ink2); padding-right: 18px; }
+
+/* ===== NUMBER INPUT ===== */
+.num-wrap {
+  display: flex;
+  align-items: center;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+.num-wrap:focus-within { border-color: var(--blue); }
+.num-input {
+  flex: 1;
+  height: 64px;
+  border: none;
+  outline: none;
+  padding: 0 16px;
+  font-size: 32px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink);
+  background: transparent;
+}
+.num-unit { font-size: 18px; font-weight: 700; color: var(--ink2); padding-right: 16px; }
+
+/* ===== CHECKBOXES ===== */
+.check-list { display: flex; flex-direction: column; gap: 10px; }
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 52px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 0 16px;
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  background: #fff;
+  transition: all 0.1s;
+}
+.check-item.selected { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); }
+.check-box {
+  width: 24px; height: 24px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.check-item.selected .check-box { border-color: var(--blue); background: var(--blue); color: #fff; }
+
+/* ===== MEMO TOGGLE ===== */
+.memo-toggle { font-size: 15px; font-weight: 700; color: var(--ink2); background: none; border: none; cursor: pointer; font-family: inherit; padding: 6px 0; text-decoration: underline; }
+.memo-area {
+  width: 100%;
+  height: 84px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 16px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--ink);
+  resize: none;
+  outline: none;
+  margin-top: 8px;
+  display: none;
+}
+.memo-area.open { display: block; }
+.memo-area:focus { border-color: var(--blue); }
+
+/* ===== CONFIRM LIST ===== */
+.confirm-list {
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 14px;
+}
+.confirm-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  gap: 14px;
+}
+.confirm-row:last-child { border-bottom: none; }
+.confirm-key { font-size: 13px; font-weight: 700; color: var(--ink2); width: 80px; flex-shrink: 0; padding-top: 2px; }
+.confirm-val { font-size: 19px; font-weight: 700; color: var(--ink); flex: 1; }
+
+/* ===== COMPLETE SCREEN ===== */
+.complete-inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  gap: 18px;
+}
+.check-svg { width: 88px; height: 88px; }
+.complete-title { font-size: 26px; font-weight: 700; color: var(--ink); }
+.complete-sub { font-size: 15px; font-weight: 500; color: var(--ink2); text-align: center; }
+.btn-link { font-size: 16px; font-weight: 700; color: var(--ink2); background: none; border: none; cursor: pointer; font-family: inherit; text-decoration: underline; padding: 8px; }
+
+/* ===== BAIT FIXED DISPLAY ===== */
+.bait-fixed {
+  background: #f8fafc;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  cursor: pointer;
+}
+.bait-fixed:active { background: #f0f4f8; }
+.bait-fixed-value { font-size: 22px; font-weight: 700; color: var(--ink); }
+.bait-fixed-note { font-size: 12px; color: var(--ink2); font-weight: 700; }
+.bait-inline-select {
+  width: 100%;
+  height: 56px;
+  border: 2px solid var(--blue);
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 20px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink);
+  background: #fff;
+  outline: none;
+  display: none;
+  margin-top: 8px;
+}
+.bait-inline-select.open { display: block; }
+
+/* ===== TOGGLE ROWS ===== */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: #fff;
+  cursor: pointer;
+}
+.toggle-row.on { border-color: var(--red); background: var(--red-bg); }
+.toggle-label { font-size: 17px; font-weight: 700; color: var(--ink2); }
+.toggle-row.on .toggle-label { color: var(--red); }
+.toggle-pill {
+  width: 52px; height: 30px;
+  border-radius: 15px;
+  background: var(--dis-bg);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.toggle-pill.on { background: var(--red); }
+.toggle-pill::after {
+  content: '';
+  position: absolute;
+  width: 22px; height: 22px;
+  background: #fff;
+  border-radius: 50%;
+  top: 4px; left: 4px;
+  transition: left 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle-pill.on::after { left: 26px; }
+.toggle-expand {
+  margin-top: 10px;
+  border: 2px solid var(--red);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--red-bg);
+  display: none;
+}
+.toggle-expand.open { display: block; }
+
+/* ===== DRUG SECTION ===== */
+.drug-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: #fff;
+  cursor: pointer;
+}
+.drug-row.on { border-color: #d97706; background: #fffbeb; }
+.drug-row.on .toggle-label { color: #d97706; }
+.drug-pill { background: var(--dis-bg); }
+.drug-pill.on { background: #d97706; }
+.drug-expand {
+  margin-top: 10px;
+  border: 2px solid #d97706;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fffbeb;
+  display: none;
+}
+.drug-expand.open { display: block; }
+.drug-select {
+  width: 100%;
+  height: 52px;
+  border: 2px solid #d97706;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 17px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink);
+  background: #fff;
+  outline: none;
+  margin-bottom: 10px;
+}
+.drug-g-wrap {
+  display: flex;
+  align-items: center;
+  border: 2px solid #d97706;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+.drug-g-input {
+  flex: 1; height: 60px;
+  border: none; outline: none;
+  padding: 0 16px;
+  font-size: 30px; font-weight: 700;
+  font-family: inherit;
+  color: var(--ink); background: transparent;
+}
+.drug-g-unit { font-size: 20px; font-weight: 700; color: var(--ink2); padding-right: 16px; }
+
+/* ===== BAIT2 ROW ===== */
+.bait2-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: #fff;
+}
+.bait2-select {
+  flex: 1;
+  height: 44px;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink);
+  background: transparent;
+}
+.bait2-amount-wrap {
+  display: flex;
+  align-items: center;
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+  gap: 4px;
+}
+.bait2-input {
+  width: 72px;
+  height: 44px;
+  border: none;
+  outline: none;
+  font-size: 22px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink);
+  background: transparent;
+  text-align: right;
+}
+.bait2-unit { font-size: 15px; font-weight: 700; color: var(--ink2); }
+.btn-add-bait {
+  width: 100%;
+  height: 48px;
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink2);
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+/* ===== MOVE PREVIEW ===== */
+.move-preview {
+  background: var(--line);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.preview-num { font-size: 22px; font-weight: 700; color: var(--ink); }
+.preview-arrow { font-size: 18px; }
+.move-warn {
+  background: var(--red-bg);
+  border: 2px solid var(--red);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--red);
+  margin-top: 10px;
+  display: none;
+}
+
+/* ===== SHEET OVERLAY ===== */
+.sheet-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+}
+.sheet-overlay.hidden { display: none; }
+.sheet {
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  padding: 20px 16px 32px;
+  width: 100%;
+}
+.sheet-title { font-size: 13px; font-weight: 700; color: var(--ink2); margin-bottom: 14px; letter-spacing: 0.5px; }
+.sheet-name { font-size: 18px; font-weight: 700; color: var(--ink); margin-bottom: 16px; }
+.sheet-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  height: 64px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 18px;
+  margin-bottom: 10px;
+  font-size: 17px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.sheet-btn:active { background: var(--line); }
+.sheet-btn-icon { font-size: 22px; }
+.sheet-cancel {
+  width: 100%;
+  height: 52px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink2);
+  cursor: pointer;
+  margin-top: 6px;
+}
+
+/* ===== HOME STATUS LEGEND ===== */
+.home-legend {
+  display: flex;
+  gap: 10px;
+  padding: 8px 14px;
+  flex-shrink: 0;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ld-todo  { background: #b91c1c; }
+.ld-alert { background: #d97706; }
+.ld-done  { background: #16a34a; }
+.ld-skip  { background: #cbd5e1; }
+
+/* ===== FEED LIST (B-PATTERN) ===== */
+.feed-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+.feed-list-row.skip-row {
+  background: #f8fafc;
+  opacity: 0.5;
+}
+.feed-row-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-todo  { background: #b91c1c; }
+.dot-done  { background: #16a34a; }
+.dot-alert { background: #d97706; }
+.dot-skip  { background: #cbd5e1; }
+.feed-row-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  min-width: 64px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+.feed-row-fish {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink2);
+  min-width: 16px;
+  flex-shrink: 0;
+}
+.feed-bait-select {
+  flex: 1;
+  height: 34px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink);
+  background: #fff;
+  outline: none;
+  min-width: 0;
+}
+.feed-bait-select:focus { border-color: var(--blue); }
+.feed-kg-input {
+  width: 68px;
+  height: 36px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  text-align: right;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  padding: 0 6px;
+  color: var(--ink);
+  outline: none;
+  flex-shrink: 0;
+}
+.feed-kg-input:focus { border-color: var(--blue); background: #f8faff; }
+.feed-kg-unit {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink2);
+  flex-shrink: 0;
+}
+.feed-save-bar {
+  padding: 10px 16px 14px;
+  border-top: 2px solid var(--border);
+  flex-shrink: 0;
+  background: #fff;
+}
+.feed-save-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink2);
+  text-align: center;
+  margin-bottom: 6px;
+}
+.feed-save-btn {
+  width: 100%;
+  height: 56px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  font-family: inherit;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.feed-save-btn:active { background: #1e3a8a; }
+
+/* ===== CALENDAR ===== */
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
+}
+.cal-nav-title { font-size: 16px; font-weight: 700; color: var(--ink); }
+.cal-nav-btn {
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink2);
+  font-weight: 700;
+}
+.cal-header-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  flex-shrink: 0;
+  padding: 0 8px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--line);
+}
+.cal-hd {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink2);
+  padding: 5px 0;
+}
+.cal-hd.sun { color: #dc2626; }
+.cal-hd.sat { color: #2563eb; }
+.cal-grid-wrap {
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.cal-cell {
+  min-height: 60px;
+  border: 1px solid #f1f5f9;
+  padding: 3px 2px 2px;
+  background: #fff;
+}
+.cal-cell.other-month { background: #f8fafc; }
+.cal-cell.today-cell { background: #eff6ff; border-color: #93c5fd; }
+.cal-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink2);
+  text-align: center;
+  display: block;
+  margin-bottom: 2px;
+}
+.cal-num.sun { color: #dc2626; }
+.cal-num.sat { color: #2563eb; }
+.cal-num.today-num {
+  background: var(--blue);
+  color: #fff;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  margin: 0 auto 2px;
+}
+.cal-order-chip {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 3px;
+  margin-bottom: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+.chip-confirmed { background: #dcfce7; color: #166534; }
+.chip-tentative  { background: #fef9c3; color: #854d0e; }
+.orders-divider {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink2);
+  padding: 8px 16px 4px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.orders-list { flex: 1; overflow-y: auto; padding: 0 16px 20px; }
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.order-date {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink2);
+  width: 44px;
+  flex-shrink: 0;
+  line-height: 1.3;
+  text-align: center;
+}
+.order-detail { flex: 1; }
+.order-buyer { font-size: 14px; font-weight: 700; color: var(--ink); }
+.order-spec { font-size: 12px; color: var(--ink2); margin-top: 1px; }
+.order-status-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.os-confirmed { background: #dcfce7; color: #166534; }
+.os-tentative  { background: #fef9c3; color: #854d0e; }
+
+/* ===== AI Mode Toggle ===== */
+.ai-toggle-sp{
+  background: rgba(255,255,255,0.0);
+  border: 1.5px solid rgba(255,255,255,0.6);
+  color: #fff;
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: all .2s;
+  flex-shrink: 0;
+  letter-spacing: .02em;
+}
+.ai-toggle-sp.on{
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(124,58,237,0.35);
+}
+
+/* ===== AI Feed Hint ===== */
+.ai-feed-hint{display:flex;align-items:flex-start;gap:8px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:10px 14px;margin-top:10px}
+.ai-feed-hint-icon{font-size:15px;flex-shrink:0;margin-top:2px}
+.ai-feed-hint-body{flex:1}
+.ai-feed-hint-label{font-size:11px;font-weight:700;color:#7c3aed;letter-spacing:.04em;margin-bottom:2px}
+.ai-feed-hint-val{font-size:20px;font-weight:700;color:#7c3aed;line-height:1}
+.ai-feed-hint-reason{font-size:12px;color:#6d28d9;margin-top:3px;line-height:1.5}
+.ai-element{display:none}
+body.ai-mode-on .ai-element{display:block}
+body.ai-mode-on .ai-element-flex{display:flex}
+.ai-home-banner{background:linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%);border-radius:10px;padding:10px 14px;align-items:center;gap:10px;margin:8px 16px 0;color:#fff}
+.ai-home-banner-icon{font-size:20px;flex-shrink:0}
+.ai-home-banner-body{flex:1}
+.ai-home-banner-title{font-size:13px;font-weight:700}
+.ai-home-banner-sub{font-size:11px;opacity:0.82;margin-top:1px;line-height:1.4}
+body.ai-mode-on .ai-home-banner{display:flex}
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+
+<!-- ===== APP HEADER ===== -->
+<header class="app-header" id="appHeader">
+  <button class="hdr-back" id="hdrBack" onclick="doBack()">← 戻る</button>
+  <div class="hdr-title" id="hdrTitle">尾上水産</div>
+  <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+    <button id="aiToggleBtnSp" class="ai-toggle-sp" onclick="toggleAiMode()">　AI OFF</button>
+    <div class="hdr-step" id="hdrStep"></div>
+  </div>
+</header>
+
+<!-- ===== TAB CONTENTS ===== -->
+
+<!-- ══ HOME：漁場図 ══ -->
+<section class="tab-content active" id="tab-home">
+  <!-- AIバナー -->
+  <div class="ai-home-banner ai-element" id="aiHomeBanner">
+    <div class="ai-home-banner-icon">🟣</div>
+    <div class="ai-home-banner-body">
+      <div class="ai-home-banner-title">AIモード ON</div>
+      <div class="ai-home-banner-sub">給餌入力画面でAI参考値が確認できます</div>
+    </div>
+  </div>
+  <div class="area-tabs" id="homeAreaTabs"></div>
+  <div id="homeSummary" style="display:flex;gap:12px;padding:6px 16px;background:#f8fafc;border-bottom:1px solid var(--border);font-size:13px;color:var(--ink2);flex-shrink:0;"></div>
+  <div class="home-legend">
+    <div class="legend-item"><div class="legend-dot ld-todo"></div>未記録</div>
+    <div class="legend-item"><div class="legend-dot ld-alert"></div>要確認</div>
+    <div class="legend-item"><div class="legend-dot ld-done"></div>記録済</div>
+    <div class="legend-item"><div class="legend-dot ld-skip"></div>対象外</div>
+  </div>
+  <div class="scroll no-pad" style="padding:0;">
+    <div class="pond-grid" id="homeGrid"></div>
+  </div>
+</section>
+
+<!-- ══ FEED：Bパターン リスト ══ -->
+<section class="tab-content" id="tab-feed">
+  <!-- リスト画面 -->
+  <div id="feed-list-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+    <div class="area-tabs" id="feedAreaTabs"></div>
+    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+      <div id="feedList"></div>
+    </div>
+    <div class="feed-save-bar">
+      <div class="feed-save-count" id="feedSaveCount">入力済み: 0基</div>
+      <button class="feed-save-btn" onclick="saveFeedList()">まとめて保存する</button>
+    </div>
+  </div>
+  <!-- 完了画面 -->
+  <div id="feed-done" style="display:none;flex-direction:column;flex:1;">
+    <div class="complete-inner">
+      <svg class="check-svg" viewBox="0 0 88 88" fill="none"><circle cx="44" cy="44" r="44" fill="#dbeafe"/><circle cx="44" cy="44" r="32" fill="#bfdbfe"/><path d="M26 44 L38 56 L62 32" stroke="#1d4ed8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="complete-title">保存しました</div>
+      <div class="complete-sub" id="feedDoneSub"></div>
+      <button class="btn-primary" style="width:100%;margin-top:8px;" onclick="feedDoneRestart()">続けて入力する</button>
+      <button class="btn-link" onclick="goHome()">漁場図に戻る</button>
+    </div>
+  </div>
+</section>
+
+<!-- ══ CALENDAR ══ -->
+<section class="tab-content" id="tab-calendar">
+  <div class="cal-nav">
+    <button class="cal-nav-btn" onclick="calMove(-1)">◀</button>
+    <div class="cal-nav-title" id="calTitle">2026年6月</div>
+    <button class="cal-nav-btn" onclick="calMove(1)">▶</button>
+  </div>
+  <div class="cal-header-row">
+    <div class="cal-hd sun">日</div>
+    <div class="cal-hd">月</div>
+    <div class="cal-hd">火</div>
+    <div class="cal-hd">水</div>
+    <div class="cal-hd">木</div>
+    <div class="cal-hd">金</div>
+    <div class="cal-hd sat">土</div>
+  </div>
+  <div class="cal-grid-wrap">
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+  <div class="orders-divider">受注一覧</div>
+  <div class="orders-list" id="ordersList"></div>
+</section>
+
+<!-- ══ MOVE ══ -->
+<section class="tab-content" id="tab-move">
+  <!-- Step 1 -->
+  <div id="move-s1" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+    <div class="scroll">
+      <div class="section" style="margin-top:14px;">
+        <div class="sec-label">移動元 <span class="badge-req">必須</span></div>
+        <div class="area-tabs" id="moveFromTabs" style="margin:0 -16px;border-radius:0;border-top:2px solid var(--border);"></div>
+        <div class="pond-grid" style="padding:10px 0;" id="moveFromGrid"></div>
+        <button class="choice-btn full" id="moveFromExternal" style="margin-top:4px;font-size:15px;height:52px;border:2px solid var(--border);border-radius:8px;background:#fff;font-family:inherit;font-weight:700;color:var(--ink);cursor:pointer;" onclick="selectFromExternal()">外部（種苗業者）から受入</button>
+      </div>
+      <div class="section">
+        <div class="sec-label">移動先 <span class="badge-req">必須</span></div>
+        <div class="area-tabs" id="moveToTabs" style="margin:0 -16px;border-radius:0;border-top:2px solid var(--border);"></div>
+        <div class="pond-grid" style="padding:10px 0;" id="moveToGrid"></div>
+      </div>
+      <div class="section">
+        <div class="sec-label">移動尾数 <span class="badge-req">必須</span></div>
+        <div class="num-wrap"><input class="num-input" id="moveCount" type="number" inputmode="numeric" min="1" placeholder="0" oninput="moveCheck()"><span class="num-unit">尾</span></div>
+        <div id="movePreview" class="move-preview" style="display:none;"></div>
+        <div id="moveWarn" class="move-warn"></div>
+      </div>
+    </div>
+    <div class="footer"><button class="btn-primary" id="moveBtn1" disabled onclick="moveGoS2()">次へ</button></div>
+  </div>
+  <!-- Step 2 -->
+  <div id="move-s2" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+    <div class="scroll">
+      <div class="section" style="margin-top:14px;">
+        <div class="sec-label">移動理由 <span class="badge-req">必須</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="moveReasonBtns">
+          <button class="choice-btn" data-v="間引き" onclick="selectMoveReason(this)" style="height:64px;border:2px solid var(--border);border-radius:8px;background:#fff;font-size:16px;font-weight:700;font-family:inherit;color:var(--ink);cursor:pointer;">間引き</button>
+          <button class="choice-btn" data-v="網替え" onclick="selectMoveReason(this)" style="height:64px;border:2px solid var(--border);border-radius:8px;background:#fff;font-size:16px;font-weight:700;font-family:inherit;color:var(--ink);cursor:pointer;">網替え</button>
+          <button class="choice-btn" data-v="サイズ別分け" onclick="selectMoveReason(this)" style="height:64px;border:2px solid var(--border);border-radius:8px;background:#fff;font-size:16px;font-weight:700;font-family:inherit;color:var(--ink);cursor:pointer;">サイズ別分け</button>
+          <button class="choice-btn" data-v="出荷準備" onclick="selectMoveReason(this)" style="height:64px;border:2px solid var(--border);border-radius:8px;background:#fff;font-size:16px;font-weight:700;font-family:inherit;color:var(--ink);cursor:pointer;">出荷準備</button>
+        </div>
+      </div>
+      <div class="section" style="margin-bottom:8px;">
+        <div class="confirm-list" id="moveSummary"></div>
+      </div>
+    </div>
+    <div class="footer"><button class="btn-primary" id="moveBtn2" disabled onclick="moveSave()">記録する</button></div>
+  </div>
+  <!-- Complete -->
+  <div id="move-done" style="display:none;flex-direction:column;flex:1;">
+    <div class="complete-inner">
+      <svg class="check-svg" viewBox="0 0 88 88" fill="none"><circle cx="44" cy="44" r="44" fill="#dbeafe"/><circle cx="44" cy="44" r="32" fill="#bfdbfe"/><path d="M26 44 L38 56 L62 32" stroke="#1d4ed8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="complete-title">移動を記録しました</div>
+      <div class="complete-sub" id="moveDoneSub"></div>
+      <button class="btn-primary" style="width:100%;margin-top:8px;" onclick="moveRestart()">続けて記録する</button>
+      <button class="btn-link" onclick="goHome()">漁場図に戻る</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TAB BAR ===== -->
+<nav class="tab-bar">
+  <button class="tab-btn active" id="tabHome" onclick="switchTab('home')">
+    <span class="tab-icon">🗺️</span><span class="tab-label">漁場図</span>
+  </button>
+  <button class="tab-btn" id="tabFeed" onclick="switchTab('feed')">
+    <span class="tab-icon">🍚</span><span class="tab-label">給餌</span>
+  </button>
+  <button class="tab-btn" id="tabCalendar" onclick="switchTab('calendar')">
+    <span class="tab-icon">📅</span><span class="tab-label">カレンダー</span>
+  </button>
+  <button class="tab-btn" id="tabMove" onclick="switchTab('move')">
+    <span class="tab-icon">↔️</span><span class="tab-label">移動</span>
+  </button>
+</nav>
+
+<!-- ===== SHEET OVERLAY ===== -->
+<div class="sheet-overlay hidden" id="sheetOverlay" onclick="closeSheet(event)">
+  <div class="sheet">
+    <div class="sheet-title">記録する内容を選んでください</div>
+    <div class="sheet-name" id="sheetName"></div>
+    <button class="sheet-btn" onclick="sheetGo('feed')"><span class="sheet-btn-icon">🍚</span>給餌を記録する</button>
+    <button class="sheet-btn" onclick="sheetGo('move')"><span class="sheet-btn-icon">↔️</span>移動を記録する</button>
+    <button class="sheet-cancel" onclick="closeSheetDirect()">キャンセル</button>
+  </div>
+</div>
+
+</div><!-- /phone -->
+<script>
+// ===== MASTER DATA =====
+const AREAS = ['団地', '楠森', '葛崎', '横島', '太喜', '瀬後の裏'];
+
+const POND_CONFIG = [
+  {id:'団地-01', area:'団地', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-02', area:'団地', species:'シマアジ', stock:2500,  yr:'4年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-03', area:'団地', species:'シマアジ', stock:3000,  yr:'3年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-04', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-05', area:'団地', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-06', area:'団地', species:'シマアジ', stock:10000, yr:'1年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-07', area:'団地', species:'シマアジ', stock:10000, yr:'1年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-08', area:'団地', species:'シマアジ', stock:10000, yr:'1年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-09', area:'団地', species:'マダイ',   stock:20000, yr:'1年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-10', area:'団地', species:'マダイ',   stock:20000, yr:'1年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-11', area:'団地', species:'マダイ',   stock:20000, yr:'1年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-12', area:'団地', species:'マダイ',   stock:20000, yr:'1年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-13', area:'団地', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-14', area:'団地', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'団地-15', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-16', area:'団地', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'団地-17', area:'団地', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'団地-18', area:'団地', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'団地-19', area:'団地', species:'マダイ',   stock:12300, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-20', area:'団地', species:'マダイ',   stock:12500, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-21', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-22', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-23', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-24', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-25', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-26', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-01', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-02', area:'楠森', species:'マダイ',   stock:11000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-03', area:'楠森', species:'マダイ',   stock:12300, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-04', area:'楠森', species:'カンパチ', stock:3345,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-05', area:'楠森', species:'カンパチ', stock:3360,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-06', area:'楠森', species:'マダイ',   stock:11500, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-07', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-08', area:'楠森', species:'マダイ',   stock:6000,  yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-09', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-10', area:'楠森', species:'マダイ',   stock:11000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-11', area:'楠森', species:'マダイ',   stock:11000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-12', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-13', area:'楠森', species:'マダイ',   stock:13000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-14', area:'楠森', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-15', area:'楠森', species:'マダイ',   stock:12000, yr:'4年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-16', area:'楠森', species:'マダイ',   stock:11800, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-17', area:'楠森', species:'カンパチ', stock:3300,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-18', area:'楠森', species:'カンパチ', stock:3320,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-19', area:'楠森', species:'カンパチ', stock:3500,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-20', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-21', area:'楠森', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'楠森-22', area:'楠森', species:'マダイ',   stock:12000, yr:'4年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-23', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-01', area:'葛崎', species:'マダイ',   stock:11500, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-02', area:'葛崎', species:'マダイ',   stock:7000,  yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-03', area:'葛崎', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-04', area:'葛崎', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-05', area:'葛崎', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-06', area:'葛崎', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-07', area:'葛崎', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-08', area:'葛崎', species:'マダイ',   stock:10500, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-01', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'横島-02', area:'横島', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-03', area:'横島', species:'マダイ',   stock:15000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-04', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'横島-05', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'横島-06', area:'横島', species:'カンパチ', stock:3500,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-07', area:'横島', species:'カンパチ', stock:2500,  yr:'3年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-08', area:'横島', species:'マダイ',   stock:12000, yr:'4年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-09', area:'横島', species:'マダイ',   stock:11400, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-10', area:'横島', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-11', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'横島-12', area:'横島', species:'シマアジ', stock:4500,  yr:'2年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-13', area:'横島', species:'シマアジ', stock:9000,  yr:'2年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-14', area:'横島', species:'シマアジ', stock:9000,  yr:'2年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-15', area:'横島', species:'マダイ',   stock:13000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-16', area:'横島', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-17', area:'横島', species:'マダイ',   stock:12500, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-18', area:'横島', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-19', area:'横島', species:'シマアジ', stock:4500,  yr:'2年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-20', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'横島-21', area:'横島', species:'シマアジ', stock:3900,  yr:'3年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-22', area:'横島', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-23', area:'横島', species:'マダイ',   stock:10000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-24', area:'横島', species:'シマアジ', stock:4000,  yr:'3年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-25', area:'横島', species:'シマアジ', stock:4000,  yr:'3年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-26', area:'横島', species:'シマアジ', stock:1000,  yr:'4年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-27', area:'横島', species:'シマアジ', stock:2900,  yr:'3年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-28', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'太喜-01', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-02', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-03', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-04', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-05', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-06', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-07', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-08', area:'太喜', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'瀬後-01', area:'瀬後の裏', species:'マダイ', stock:12000, yr:'3年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後-02', area:'瀬後の裏', species:'マダイ', stock:25000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後-03', area:'瀬後の裏', species:'マダイ', stock:25000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後-04', area:'瀬後の裏', species:'マダイ', stock:25000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後-05', area:'瀬後の裏', species:'マダイ', stock:25000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後-06', area:'瀬後の裏', species:'マダイ', stock:13000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後-07', area:'瀬後の裏', species:'マダイ', stock:17000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後-08', area:'瀬後の裏', species:'',       stock:0,     yr:'',    bait:'',           status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'瀬後-09', area:'瀬後の裏', species:'マダイ', stock:12300, yr:'2年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後-10', area:'瀬後の裏', species:'マダイ', stock:12000, yr:'2年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+];
+
+const BAITS = [
+  'p7','p8','p9',
+  'チェリー8','チェリー9',
+  '紅 6mm','紅 8mm','PBP 6mm',
+  'Nまだいさくら 8mm','Nまだいさくら 10mm',
+  'Nシマアジ 6mm','NKMS',
+  'ノーサン','ヒガシマル',
+  'ひめ桜 s6','ひめ桜 s7','ひめ桜 3mm','ひめ桜 4mm',
+  'その他'
+];
+
+const ORDERS = [
+  {date:'2026-05-02',buyer:'ニチモウ',   fish:'マダイ',   spec:'2.0kg〜 120尾', status:'confirmed'},
+  {date:'2026-05-05',buyer:'信源',       fish:'マダイ',   spec:'1.5〜2.0kg 80尾',status:'confirmed'},
+  {date:'2026-05-07',buyer:'オーシャン', fish:'カンパチ', spec:'2.0kg〜 60尾',  status:'confirmed'},
+  {date:'2026-05-09',buyer:'龍ヶ岳',    fish:'マダイ',   spec:'1.0〜1.5kg 200尾',status:'confirmed'},
+  {date:'2026-05-12',buyer:'ニチモウ',   fish:'マダイ',   spec:'2.0kg〜 150尾', status:'confirmed'},
+  {date:'2026-05-14',buyer:'和潮',       fish:'シマアジ', spec:'0.8kg〜 100尾', status:'confirmed'},
+  {date:'2026-05-16',buyer:'信源',       fish:'マダイ',   spec:'1.5〜2.0kg 90尾',status:'confirmed'},
+  {date:'2026-05-19',buyer:'紀勝',       fish:'カンパチ', spec:'2.0kg〜 75尾',  status:'confirmed'},
+  {date:'2026-05-21',buyer:'大海水産',   fish:'マダイ',   spec:'2.0kg〜 180尾', status:'confirmed'},
+  {date:'2026-05-23',buyer:'オーシャン', fish:'マダイ',   spec:'1.0〜1.5kg 120尾',status:'confirmed'},
+  {date:'2026-05-26',buyer:'ニチモウ',   fish:'カンパチ', spec:'2.5kg〜 50尾',  status:'tentative'},
+  {date:'2026-05-28',buyer:'龍ヶ岳',    fish:'マダイ',   spec:'2.0kg〜 160尾', status:'tentative'},
+  {date:'2026-05-30',buyer:'信源',       fish:'シマアジ', spec:'1.0kg〜 80尾',  status:'tentative'},
+  {date:'2026-06-02',buyer:'和潮',       fish:'マダイ',   spec:'2.0kg〜 140尾', status:'tentative'},
+  {date:'2026-06-04',buyer:'紀勝',       fish:'マダイ',   spec:'1.5〜2.0kg 100尾',status:'tentative'},
+  {date:'2026-06-09',buyer:'ニチモウ',   fish:'マダイ',   spec:'2.0kg〜 130尾', status:'tentative'},
+  {date:'2026-06-11',buyer:'大海水産',   fish:'カンパチ', spec:'2.5kg〜 60尾',  status:'tentative'},
+];
+
+// ===== GLOBAL STATE =====
+const state = {
+  tab: 'home',
+  homeArea: '団地',
+  feedArea: '団地',
+  moveStep: 1, moveFromArea:'団地', moveToArea:'団地',
+  mv: { from:null, to:null, count:null, reason:null, external:false },
+  sheetIkesu: null,
+  calYear: 2026, calMonth: 5
+};
+
+// ===== UTILITY =====
+function getPond(id) {
+  return POND_CONFIG.find(function(p){ return p.id === id; }) || null;
+}
+function getPondArea(id) {
+  var p = getPond(id);
+  return p ? p.area : null;
+}
+function fishInitial(fish) {
+  var map = {'マダイ':'鯛','カンパチ':'勘','シマアジ':'縞'};
+  return map[fish] || fish.charAt(0);
+}
+
+// ===== HEADER =====
+function updateHeader(title, step, showBack) {
+  document.getElementById('hdrTitle').textContent = title;
+  document.getElementById('hdrStep').textContent = step || '';
+  document.getElementById('hdrBack').style.visibility = showBack ? 'visible' : 'hidden';
+}
+
+// ===== TAB SWITCH =====
+function switchTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll('.tab-content').forEach(function(s){ s.classList.remove('active'); });
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  var tabIds = {home:'tabHome', feed:'tabFeed', calendar:'tabCalendar', move:'tabMove'};
+  var btnEl = document.getElementById(tabIds[tab]);
+  if (btnEl) btnEl.classList.add('active');
+  if (tab === 'home') {
+    updateHeader('尾上水産', '', false);
+    buildHome(state.homeArea);
+  }
+  if (tab === 'feed') {
+    updateHeader('給餌入力', '', false);
+    buildFeedList(state.feedArea);
+    document.getElementById('feed-list-view').style.display = 'flex';
+    document.getElementById('feed-list-view').style.flexDirection = 'column';
+    document.getElementById('feed-done').style.display = 'none';
+  }
+  if (tab === 'calendar') {
+    updateHeader('カレンダー', '', false);
+    renderCalendar();
+  }
+  if (tab === 'move') {
+    updateHeader('移動記録', '', false);
+    buildMoveGrids();
+    showMoveStep(1);
+  }
+}
+function goHome() { switchTab('home'); }
+
+// ===== BACK BUTTON =====
+function doBack() {
+  if (state.tab === 'move') {
+    if (state.moveStep === 2) { state.moveStep = 1; showMoveStep(1); }
+  }
+}
+
+// ===== BUILD AREA TABS =====
+function buildAreaTabs(containerId, activeArea, onSelect) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = AREAS.map(function(a){
+    var count = POND_CONFIG.filter(function(p){ return p.area === a; }).length;
+    var label = a === '瀬後の裏' ? '瀬後' : a;
+    return '<button class="area-tab' + (a===activeArea?' active':'') + '" data-a="' + a + '" onclick="' + onSelect + '(this)">' + label + '<span class="area-count">' + count + '基</span></button>';
+  }).join('');
+}
+
+// ===== BUILD POND GRID =====
+function buildGrid(containerId, area, selectedId, onSelect, extra, showStatus) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  var ponds = POND_CONFIG.filter(function(p){ return p.area === area; });
+  el.innerHTML = ponds.map(function(p) {
+    var sel = selectedId === p.id ? ' selected' : '';
+    var statusCls = showStatus && p.status ? ' ' + p.status : '';
+    return '<div class="pond-cell square' + sel + statusCls + '" onclick="' + onSelect + '(\'' + p.id + '\')">' +
+      '<div class="pond-num">' + p.id.split('-')[1] + '</div>' +
+      '<div class="pond-fish">' + fishInitial(p.species) + '</div>' +
+      (extra ? '<div class="pond-count">' + (p.stock||0).toLocaleString() + '尾</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+// ===== HOME：漁場図 =====
+function buildHome(area) {
+  if (!area) area = state.homeArea;
+  state.homeArea = area;
+  buildAreaTabs('homeAreaTabs', area, 'homeSelectArea');
+  var el = document.getElementById('homeGrid');
+  if (!el) return;
+  var ponds = POND_CONFIG.filter(function(p){ return p.area === area; });
+  el.innerHTML = ponds.map(function(p) {
+    return '<div class="pond-cell square ' + p.status + '" onclick="homeSelectPond(\'' + p.id + '\')">' +
+      '<div class="pond-num">' + p.id.split('-')[1] + '</div>' +
+      '<div class="pond-fish">' + fishInitial(p.species) + '</div>' +
+      '</div>';
+  }).join('');
+  // 集計サマリー更新
+  var total = POND_CONFIG.length;
+  var active = POND_CONFIG.filter(function(p){ return p.status !== 'skip'; }).length;
+  var totalStock = POND_CONFIG.reduce(function(s,p){ return s + (p.stock||0); }, 0);
+  var sumEl = document.getElementById('homeSummary');
+  if (sumEl) {
+    sumEl.innerHTML =
+      '<span>総いけす <b>' + total + '基</b></span>' +
+      '<span>稼働中 <b>' + active + '基</b></span>' +
+      '<span>総在庫 <b>' + Math.round(totalStock/10000) + '万尾</b></span>';
+  }
+}
+function homeSelectArea(btn) {
+  document.querySelectorAll('#homeAreaTabs .area-tab').forEach(function(t){ t.classList.remove('active'); });
+  btn.classList.add('active');
+  state.homeArea = btn.dataset.a;
+  buildHome(state.homeArea);
+}
+function homeSelectPond(id) {
+  var p = getPond(id);
+  if (!p || p.status === 'skip') return;
+  state.sheetIkesu = id;
+  document.getElementById('sheetName').textContent = id + '　' + p.species;
+  document.getElementById('sheetOverlay').classList.remove('hidden');
+}
+
+// ===== SHEET =====
+function closeSheet(e) { if (e.target === document.getElementById('sheetOverlay')) closeSheetDirect(); }
+function closeSheetDirect() { document.getElementById('sheetOverlay').classList.add('hidden'); }
+function sheetGo(tab) {
+  closeSheetDirect();
+  var id = state.sheetIkesu;
+  var areaKey = getPondArea(id) || id.split('-')[0];
+  if (tab === 'feed') {
+    state.feedArea = areaKey;
+    switchTab('feed');
+  } else if (tab === 'move') {
+    state.mv.from = id;
+    state.moveFromArea = areaKey;
+    switchTab('move');
+    buildMoveGrids();
+    moveCheck();
+  }
+}
+
+// ===== FEED LIST (Bパターン) =====
+function buildFeedList(area) {
+  if (!area) area = state.feedArea;
+  state.feedArea = area;
+  buildAreaTabs('feedAreaTabs', area, 'feedSelectArea');
+  var ponds = POND_CONFIG.filter(function(p){ return p.area === area; });
+  var el = document.getElementById('feedList');
+  if (!el) return;
+  el.innerHTML = ponds.map(function(p) {
+    var dotCls = 'dot-' + p.status;
+    var rowCls = p.status === 'skip' ? ' skip-row' : '';
+    var disabled = p.status === 'skip' ? ' disabled' : '';
+    var baitOptions = BAITS.map(function(b){
+      return '<option' + (b===p.bait?' selected':'') + '>' + b + '</option>';
+    }).join('');
+    return '<div class="feed-list-row' + rowCls + '" id="flrow-' + p.id.replace('-','_') + '">' +
+      '<div class="feed-row-dot ' + dotCls + '"></div>' +
+      '<div class="feed-row-name">' + p.id.split('-')[1] + '</div>' +
+      '<div class="feed-row-fish">' + fishInitial(p.species) + '</div>' +
+      '<select class="feed-bait-select" data-pond="' + p.id + '"' + disabled + '>' + baitOptions + '</select>' +
+      '<input class="feed-kg-input" type="number" inputmode="decimal" placeholder="kg" data-pond="' + p.id + '"' + disabled + ' oninput="feedListCheck()">' +
+      '<span class="feed-kg-unit">kg</span>' +
+      '</div>';
+  }).join('');
+  feedListCheck();
+}
+function feedSelectArea(btn) {
+  document.querySelectorAll('#feedAreaTabs .area-tab').forEach(function(t){ t.classList.remove('active'); });
+  btn.classList.add('active');
+  state.feedArea = btn.dataset.a;
+  buildFeedList(state.feedArea);
+}
+function feedListCheck() {
+  var inputs = document.querySelectorAll('#feedList .feed-kg-input:not([disabled])');
+  var count = 0;
+  inputs.forEach(function(inp){ if (inp.value && parseFloat(inp.value) > 0) count++; });
+  var countEl = document.getElementById('feedSaveCount');
+  if (countEl) countEl.textContent = '入力済み: ' + count + '基';
+}
+function saveFeedList() {
+  var inputs = document.querySelectorAll('#feedList .feed-kg-input:not([disabled])');
+  var saved = 0;
+  inputs.forEach(function(inp) {
+    var pondId = inp.dataset.pond;
+    var kg = parseFloat(inp.value);
+    if (!pondId || !(kg > 0)) return;
+    var p = getPond(pondId);
+    if (!p) return;
+    var baitSel = document.querySelector('#feedList .feed-bait-select[data-pond="' + pondId + '"]');
+    if (baitSel) p.bait = baitSel.value;
+    p.status = 'done';
+    saved++;
+  });
+  document.getElementById('feedDoneSub').textContent = state.feedArea + 'エリア ' + saved + '基を保存しました';
+  buildHome(state.homeArea);
+  document.getElementById('feed-list-view').style.display = 'none';
+  var doneEl = document.getElementById('feed-done');
+  doneEl.style.display = 'flex';
+  doneEl.style.flexDirection = 'column';
+  updateHeader('保存完了', '', false);
+}
+function feedDoneRestart() {
+  document.getElementById('feed-list-view').style.display = 'flex';
+  document.getElementById('feed-list-view').style.flexDirection = 'column';
+  document.getElementById('feed-done').style.display = 'none';
+  buildFeedList(state.feedArea);
+  updateHeader('給餌入力', '', false);
+}
+
+// ===== CALENDAR =====
+function renderCalendar() {
+  var yr = state.calYear;
+  var mo = state.calMonth;
+  var monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  document.getElementById('calTitle').textContent = yr + '年' + monthNames[mo-1];
+  var firstDay = new Date(yr, mo-1, 1).getDay();
+  var daysInMonth = new Date(yr, mo, 0).getDate();
+  var today = new Date();
+  var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  var orderMap = {};
+  ORDERS.forEach(function(o) {
+    if (!orderMap[o.date]) orderMap[o.date] = [];
+    orderMap[o.date].push(o);
+  });
+  var cells = '';
+  for (var i = 0; i < firstDay; i++) {
+    cells += '<div class="cal-cell other-month"></div>';
+  }
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dateStr = yr + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var isToday = dateStr === todayStr;
+    var dow = (firstDay + d - 1) % 7;
+    var cellCls = isToday ? ' today-cell' : '';
+    var numCls = dow === 0 ? ' sun' : (dow === 6 ? ' sat' : '');
+    var numContent = isToday
+      ? '<span class="cal-num today-num">' + d + '</span>'
+      : '<span class="cal-num' + numCls + '">' + d + '</span>';
+    var chips = '';
+    if (orderMap[dateStr]) {
+      orderMap[dateStr].slice(0, 2).forEach(function(o) {
+        chips += '<span class="cal-order-chip ' + (o.status==='confirmed'?'chip-confirmed':'chip-tentative') + '">' + o.buyer + '</span>';
+      });
+    }
+    cells += '<div class="cal-cell' + cellCls + '">' + numContent + chips + '</div>';
+  }
+  document.getElementById('calGrid').innerHTML = cells;
+  var moStr = String(mo).padStart(2,'0');
+  var monthOrders = ORDERS.filter(function(o){ return o.date.startsWith(yr+'-'+moStr) || o.date.startsWith(yr+'-0'+mo+'-') || o.date.startsWith(yr+'-'+moStr+'-'); });
+  var allOrders = ORDERS.filter(function(o){ return o.date >= yr+'-'+moStr; }).sort(function(a,b){ return a.date > b.date ? 1 : -1; });
+  var listHtml = allOrders.slice(0, 12).map(function(o) {
+    var d2 = new Date(o.date);
+    var mm = d2.getMonth()+1;
+    var dd = d2.getDate();
+    var tag = o.status === 'confirmed'
+      ? '<span class="order-status-tag os-confirmed">確定</span>'
+      : '<span class="order-status-tag os-tentative">仮</span>';
+    return '<div class="order-item">' +
+      '<div class="order-date">' + mm + '/' + dd + '</div>' +
+      '<div class="order-detail"><div class="order-buyer">' + o.buyer + '</div><div class="order-spec">' + o.fish + '　' + o.spec + '</div></div>' +
+      tag + '</div>';
+  }).join('');
+  document.getElementById('ordersList').innerHTML = listHtml || '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:14px;">受注データはありません</div>';
+}
+function calMove(dir) {
+  state.calMonth += dir;
+  if (state.calMonth > 12) { state.calMonth = 1; state.calYear++; }
+  if (state.calMonth < 1)  { state.calMonth = 12; state.calYear--; }
+  renderCalendar();
+}
+
+// ===== MOVE =====
+function buildMoveGrids() {
+  buildAreaTabs('moveFromTabs', state.moveFromArea, 'moveFromAreaSel');
+  buildAreaTabs('moveToTabs', state.moveToArea, 'moveToAreaSel');
+  buildGrid('moveFromGrid', state.moveFromArea, state.mv.from, 'moveSelectFrom', true, false);
+  buildGrid('moveToGrid', state.moveToArea, state.mv.to, 'moveSelectTo', true, false);
+  document.getElementById('moveFromExternal').classList.toggle('selected', state.mv.external);
+}
+function moveFromAreaSel(btn) {
+  document.querySelectorAll('#moveFromTabs .area-tab').forEach(function(t){ t.classList.remove('active'); });
+  btn.classList.add('active');
+  state.moveFromArea = btn.dataset.a;
+  var fromPond = state.mv.from ? getPond(state.mv.from) : null;
+  if (state.mv.from && (!fromPond || fromPond.area !== state.moveFromArea)) { state.mv.from=null; state.mv.external=false; }
+  buildGrid('moveFromGrid', state.moveFromArea, state.mv.from, 'moveSelectFrom', true, false);
+  moveCheck();
+}
+function moveToAreaSel(btn) {
+  document.querySelectorAll('#moveToTabs .area-tab').forEach(function(t){ t.classList.remove('active'); });
+  btn.classList.add('active');
+  state.moveToArea = btn.dataset.a;
+  var toPond = state.mv.to ? getPond(state.mv.to) : null;
+  if (state.mv.to && (!toPond || toPond.area !== state.moveToArea)) state.mv.to = null;
+  buildGrid('moveToGrid', state.moveToArea, state.mv.to, 'moveSelectTo', true, false);
+  moveCheck();
+}
+function moveSelectFrom(id) {
+  state.mv.from = id; state.mv.external = false;
+  document.getElementById('moveFromExternal').classList.remove('selected');
+  buildGrid('moveFromGrid', state.moveFromArea, id, 'moveSelectFrom', true, false);
+  moveCheck();
+}
+function moveSelectTo(id) {
+  state.mv.to = id;
+  buildGrid('moveToGrid', state.moveToArea, id, 'moveSelectTo', true, false);
+  moveCheck();
+}
+function selectFromExternal() {
+  state.mv.external = !state.mv.external;
+  if (state.mv.external) { state.mv.from = '外部'; buildGrid('moveFromGrid', state.moveFromArea, null, 'moveSelectFrom', true, false); }
+  else { state.mv.from = null; }
+  document.getElementById('moveFromExternal').classList.toggle('selected', state.mv.external);
+  moveCheck();
+}
+function moveCheck() {
+  state.mv.count = parseInt(document.getElementById('moveCount').value) || null;
+  var fromOk = state.mv.from;
+  var toOk = state.mv.to;
+  var countOk = state.mv.count && state.mv.count > 0;
+  var sameWarn = fromOk && toOk && state.mv.from === state.mv.to;
+  var warn = document.getElementById('moveWarn');
+  var prev = document.getElementById('movePreview');
+  if (sameWarn) { warn.textContent = '移動元と移動先が同じいけすです'; warn.style.display='block'; }
+  else { warn.style.display='none'; }
+  if (fromOk && toOk && countOk && !sameWarn) {
+    var fromP = state.mv.external ? null : getPond(state.mv.from);
+    var toP = getPond(state.mv.to);
+    var fromStock = fromP ? fromP.stock : 0;
+    var toStock = toP ? toP.stock : 0;
+    prev.innerHTML = '<span>' + state.mv.from + '</span><span style="font-size:20px;font-weight:700;color:var(--ink)">' + fromStock.toLocaleString() + '</span><span>→</span><span style="font-size:20px;font-weight:700;color:var(--ink)">' + (fromStock - state.mv.count).toLocaleString() + '</span>　　<span>' + state.mv.to + '</span><span style="font-size:20px;font-weight:700;color:var(--ink)">' + toStock.toLocaleString() + '</span><span>→</span><span style="font-size:20px;font-weight:700;color:var(--ink)">' + (toStock + state.mv.count).toLocaleString() + '</span>';
+    prev.style.display = 'flex'; prev.style.flexWrap = 'wrap'; prev.style.gap = '8px';
+  } else { prev.style.display='none'; }
+  document.getElementById('moveBtn1').disabled = !(fromOk && toOk && countOk && !sameWarn);
+}
+function moveGoS2() {
+  var fromLabel = state.mv.external ? '外部（種苗業者）' : state.mv.from;
+  var fromP = state.mv.external ? null : getPond(state.mv.from);
+  var toP = getPond(state.mv.to);
+  document.getElementById('moveSummary').innerHTML = [
+    {k:'移動元', v:fromLabel + (fromP?' '+fromP.species:'')},
+    {k:'移動先', v:state.mv.to + (toP?' '+toP.species:'')},
+    {k:'移動尾数', v:(state.mv.count||0).toLocaleString()+'尾'},
+  ].map(function(r){ return '<div class="confirm-row"><div class="confirm-key">'+r.k+'</div><div class="confirm-val">'+r.v+'</div></div>'; }).join('');
+  state.moveStep = 2; showMoveStep(2);
+}
+function selectMoveReason(btn) {
+  document.querySelectorAll('#moveReasonBtns .choice-btn').forEach(function(b){ b.classList.remove('selected'); });
+  btn.classList.add('selected');
+  state.mv.reason = btn.dataset.v;
+  document.getElementById('moveBtn2').disabled = false;
+}
+function showMoveStep(n) {
+  ['move-s1','move-s2','move-done'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  if (n===1) { var e1=document.getElementById('move-s1'); e1.style.display='flex'; e1.style.flexDirection='column'; }
+  else if (n===2) { var e2=document.getElementById('move-s2'); e2.style.display='flex'; e2.style.flexDirection='column'; }
+  else { document.getElementById('move-done').style.display='flex'; }
+  if (n===1) updateHeader('移動記録','1 / 2',false);
+  else if (n===2) updateHeader('理由・確認','2 / 2',true);
+  else updateHeader('移動記録','',false);
+}
+function moveSave() {
+  var fromLabel = state.mv.external ? '外部' : state.mv.from;
+  document.getElementById('moveDoneSub').textContent = fromLabel + ' → ' + state.mv.to + ' / ' + (state.mv.count||0).toLocaleString() + '尾 / ' + state.mv.reason;
+  state.moveStep = 99; showMoveStep('done');
+}
+function moveRestart() {
+  state.mv = {from:null,to:null,count:null,reason:null,external:false};
+  state.moveStep = 1;
+  document.getElementById('moveCount').value = '';
+  document.getElementById('moveBtn2').disabled = true;
+  document.querySelectorAll('#moveReasonBtns .choice-btn').forEach(function(b){ b.classList.remove('selected'); });
+  buildMoveGrids(); showMoveStep(1);
+}
+
+// ===== AI MODE =====
+var AI_KEY = 'onoue_ai_mode';
+
+function initAiMode() {
+  var on = localStorage.getItem(AI_KEY) === 'on';
+  setAiMode(on, false);
+}
+function toggleAiMode() {
+  var on = document.body.classList.contains('ai-mode-on');
+  setAiMode(!on, true);
+}
+function setAiMode(on, save) {
+  if (on) { document.body.classList.add('ai-mode-on'); }
+  else { document.body.classList.remove('ai-mode-on'); }
+  var btn = document.getElementById('aiToggleBtnSp');
+  if (btn) {
+    btn.textContent = on ? '🟣 AI ON' : '　AI OFF';
+    if (on) { btn.classList.add('on'); } else { btn.classList.remove('on'); }
+  }
+  if (save) localStorage.setItem(AI_KEY, on ? 'on' : 'off');
+}
+
+// ===== INIT =====
+initAiMode();
+buildHome('団地');
+buildFeedList('団地');
+renderCalendar();
+buildMoveGrids();
+showMoveStep(1);
+updateHeader('尾上水産','',false);
+</script>
+</body>
+</html>
