@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>尾上水産 養殖管理アプリ</title>
 <style>
 /* ===== RESET & BASE ===== */
@@ -107,6 +107,7 @@ body {
   border-top: 2px solid var(--border);
   flex-shrink: 0;
   background: #fff;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .tab-btn {
   flex: 1;
@@ -120,6 +121,7 @@ body {
   cursor: pointer;
   font-family: inherit;
   transition: background 0.1s;
+  touch-action: manipulation;
 }
 .tab-btn:active { background: var(--line); }
 .tab-icon { font-size: 20px; line-height: 1; }
@@ -150,6 +152,7 @@ body {
   border: none;
   border-radius: 8px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .btn-primary:active { background: #1e3a8a; }
 .btn-primary:disabled { background: var(--dis-bg); color: var(--dis); cursor: not-allowed; }
@@ -776,6 +779,7 @@ body {
   border: none;
   border-radius: 8px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .feed-save-btn:active { background: #1e3a8a; }
 
@@ -952,7 +956,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
   width: 100%; max-width: 480px;
   background: #f1f5f9;
   border-top: 2px solid #e2e8f0;
-  padding: 8px 12px 12px;
+  padding: 8px 12px calc(12px + env(safe-area-inset-bottom));
   z-index: 50;
   display: none;
   grid-template-columns: repeat(3, 1fr);
@@ -971,11 +975,12 @@ body.ai-mode-on .ai-home-banner{display:flex}
   color: #1e293b;
   box-shadow: 0 1px 3px rgba(0,0,0,0.12);
   cursor: pointer;
+  touch-action: manipulation;
 }
 .numpad-btn:active { background: #e2e8f0; }
-.numpad-btn-action { background: #1b3a5c; color: #fff; font-size: 14px; }
+.numpad-btn-action { background: #1b3a5c; color: #fff; font-size: 14px; touch-action: manipulation; }
 .numpad-btn-action:active { background: #2d5a8e; }
-.numpad-btn-next { background: #2563eb; color: #fff; font-size: 14px; }
+.numpad-btn-next { background: #2563eb; color: #fff; font-size: 14px; touch-action: manipulation; }
 .numpad-btn-save {
   grid-column: span 3;
   height: 44px;
@@ -983,6 +988,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
   color: #fff;
   font-size: 15px;
   font-weight: 700;
+  touch-action: manipulation;
 }
 
 /* ===== 実装③：魚種別一括適用 ===== */
@@ -991,6 +997,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
   width: 100%; padding: 8px 14px; text-align: left;
   background: none; border: none; font-size: 12px; font-weight: 700;
   color: var(--ink2); cursor: pointer; font-family: inherit;
+  touch-action: manipulation;
 }
 .bulk-bar-body { display: none; padding: 8px 14px; gap: 6px; flex-direction: column; }
 .bulk-bar-body.open { display: flex; }
@@ -1004,13 +1011,14 @@ body.ai-mode-on .ai-home-banner{display:flex}
 .bulk-bar-apply {
   padding: 0 12px; height: 34px; border: none; border-radius: 6px;
   background: #1b3a5c; color: #fff; font-size: 12px; font-weight: 700;
-  font-family: inherit; cursor: pointer;
+  font-family: inherit; cursor: pointer; touch-action: manipulation;
 }
 
 /* ===== 実装④：異常フラグ ===== */
 .flag-btn {
   background: none; border: none; font-size: 16px; cursor: pointer;
   color: #cbd5e1; padding: 0 2px; flex-shrink: 0;
+  touch-action: manipulation;
 }
 .flag-btn.on { color: #d97706; }
 </style>
@@ -1058,7 +1066,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
   <!-- リスト画面 -->
   <div id="feed-list-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
     <div class="area-tabs" id="feedAreaTabs"></div>
-    <div id="feedScrollArea" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:280px;">
+    <div id="feedScrollArea" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(280px + env(safe-area-inset-bottom));">
       <div class="bulk-bar" id="bulkBar">
         <button class="bulk-bar-toggle" onclick="toggleBulkBar()">一括適用 ▼</button>
         <div class="bulk-bar-body" id="bulkBarBody">
