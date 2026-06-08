@@ -29,6 +29,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  padding-bottom: calc(60px + env(safe-area-inset-bottom));
 }
 @media (max-width: 500px) {
   body { padding: 0; background: #fff; }
@@ -108,6 +109,13 @@ body {
   flex-shrink: 0;
   background: #fff;
   padding-bottom: env(safe-area-inset-bottom);
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  z-index: 100;
 }
 .tab-btn {
   flex: 1;
@@ -957,7 +965,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
   background: #f1f5f9;
   border-top: 2px solid #e2e8f0;
   padding: 8px 12px calc(12px + env(safe-area-inset-bottom));
-  z-index: 50;
+  z-index: 200;
   display: none;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
@@ -989,6 +997,34 @@ body.ai-mode-on .ai-home-banner{display:flex}
   font-size: 15px;
   font-weight: 700;
   touch-action: manipulation;
+}
+
+/* ===== 実装②：テンキートグルボタン ===== */
+.feed-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.numpad-toggle-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  color: var(--ink2);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.numpad-toggle-btn.active {
+  background: #1b3a5c;
+  border-color: #1b3a5c;
+  color: #fff;
 }
 
 /* ===== 実装③：魚種別一括適用 ===== */
@@ -1066,7 +1102,10 @@ body.ai-mode-on .ai-home-banner{display:flex}
   <!-- リスト画面 -->
   <div id="feed-list-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
     <div class="area-tabs" id="feedAreaTabs"></div>
-    <div id="feedScrollArea" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(280px + env(safe-area-inset-bottom));">
+    <div id="feedScrollArea" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:16px;">
+      <div class="feed-toolbar">
+        <button class="numpad-toggle-btn" id="numpadToggleBtn" onclick="toggleNumpad()">⌨ テンキー表示</button>
+      </div>
       <div class="bulk-bar" id="bulkBar">
         <button class="bulk-bar-toggle" onclick="toggleBulkBar()">一括適用 ▼</button>
         <div class="bulk-bar-body" id="bulkBarBody">
@@ -1571,10 +1610,19 @@ function buildFeedList(area) {
       el.addEventListener('input', function() { this.style.color = '#1e293b'; }, { once: true });
     }
   });
-  // テンキー表示（feedタブ表示時）
-  var numpad = document.getElementById('numpad');
-  if (numpad) numpad.classList.add('active');
+  // テンキーはデフォルト非表示。トグルボタンのテキストを初期化
   numpadTarget = null;
+  var toggleBtn = document.getElementById('numpadToggleBtn');
+  if (toggleBtn) {
+    toggleBtn.textContent = '⌨ テンキー表示';
+    toggleBtn.classList.remove('active');
+  }
+  // numpad が非表示の場合は padding を小さく保つ
+  var scroll = document.getElementById('feedScrollArea');
+  var numpad = document.getElementById('numpad');
+  if (scroll && numpad && !numpad.classList.contains('active')) {
+    scroll.style.paddingBottom = '16px';
+  }
   feedListCheck();
 }
 function feedSelectArea(btn) {
@@ -1688,6 +1736,31 @@ function numpadNext() {
   var idx = numpadTarget ? inputs.indexOf(numpadTarget) : -1;
   var next = inputs[idx + 1] || inputs[0];
   numpadFocus(next);
+}
+
+// ===== 実装②：テンキートグル =====
+function toggleNumpad() {
+  var numpad = document.getElementById('numpad');
+  var btn = document.getElementById('numpadToggleBtn');
+  var isActive = numpad.classList.toggle('active');
+  btn.textContent = isActive ? '⌨ テンキー非表示' : '⌨ テンキー表示';
+  var scroll = document.getElementById('feedScrollArea');
+  if (isActive) {
+    btn.classList.add('active');
+    if (scroll) scroll.style.paddingBottom =
+      'calc(280px + env(safe-area-inset-bottom))';
+  } else {
+    btn.classList.remove('active');
+    numpadTarget = null;
+    if (scroll) scroll.style.paddingBottom = '16px';
+    // 行のハイライトを解除
+    document.querySelectorAll('.feed-list-row').forEach(function(r) {
+      r.style.background = '';
+    });
+    document.querySelectorAll('.feed-kg-input').forEach(function(el) {
+      el.style.borderColor = '';
+    });
+  }
 }
 
 // ===== 実装③：魚種別一括適用 =====
