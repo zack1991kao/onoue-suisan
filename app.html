@@ -944,6 +944,75 @@ body.ai-mode-on .ai-element-flex{display:flex}
 .ai-home-banner-title{font-size:13px;font-weight:700}
 .ai-home-banner-sub{font-size:11px;opacity:0.82;margin-top:1px;line-height:1.4}
 body.ai-mode-on .ai-home-banner{display:flex}
+
+/* ===== 実装①：固定テンキー ===== */
+.numpad-wrap {
+  position: fixed;
+  bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 480px;
+  background: #f1f5f9;
+  border-top: 2px solid #e2e8f0;
+  padding: 8px 12px 12px;
+  z-index: 50;
+  display: none;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  box-sizing: border-box;
+}
+.numpad-wrap.active { display: grid; }
+.numpad-btn {
+  height: 48px;
+  border: none;
+  border-radius: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  font-family: inherit;
+  background: #fff;
+  color: #1e293b;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  cursor: pointer;
+}
+.numpad-btn:active { background: #e2e8f0; }
+.numpad-btn-action { background: #1b3a5c; color: #fff; font-size: 14px; }
+.numpad-btn-action:active { background: #2d5a8e; }
+.numpad-btn-next { background: #2563eb; color: #fff; font-size: 14px; }
+.numpad-btn-save {
+  grid-column: span 3;
+  height: 44px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ===== 実装③：魚種別一括適用 ===== */
+.bulk-bar { border-bottom: 1px solid var(--border); background: #f8fafc; }
+.bulk-bar-toggle {
+  width: 100%; padding: 8px 14px; text-align: left;
+  background: none; border: none; font-size: 12px; font-weight: 700;
+  color: var(--ink2); cursor: pointer; font-family: inherit;
+}
+.bulk-bar-body { display: none; padding: 8px 14px; gap: 6px; flex-direction: column; }
+.bulk-bar-body.open { display: flex; }
+.bulk-bar-row { display: flex; align-items: center; gap: 8px; }
+.bulk-bar-label { font-size: 12px; font-weight: 700; color: var(--ink); min-width: 56px; }
+.bulk-bar-input {
+  width: 64px; height: 34px; border: 1.5px solid var(--border);
+  border-radius: 6px; text-align: right; font-size: 14px; font-weight: 700;
+  font-family: inherit; padding: 0 6px;
+}
+.bulk-bar-apply {
+  padding: 0 12px; height: 34px; border: none; border-radius: 6px;
+  background: #1b3a5c; color: #fff; font-size: 12px; font-weight: 700;
+  font-family: inherit; cursor: pointer;
+}
+
+/* ===== 実装④：異常フラグ ===== */
+.flag-btn {
+  background: none; border: none; font-size: 16px; cursor: pointer;
+  color: #cbd5e1; padding: 0 2px; flex-shrink: 0;
+}
+.flag-btn.on { color: #d97706; }
 </style>
 </head>
 <body>
@@ -989,13 +1058,50 @@ body.ai-mode-on .ai-home-banner{display:flex}
   <!-- リスト画面 -->
   <div id="feed-list-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
     <div class="area-tabs" id="feedAreaTabs"></div>
-    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div id="feedScrollArea" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:280px;">
+      <div class="bulk-bar" id="bulkBar">
+        <button class="bulk-bar-toggle" onclick="toggleBulkBar()">一括適用 ▼</button>
+        <div class="bulk-bar-body" id="bulkBarBody">
+          <div class="bulk-bar-row">
+            <span class="bulk-bar-label">マダイ</span>
+            <input class="bulk-bar-input" id="bulkMadai" type="number" inputmode="decimal" placeholder="kg" onclick="numpadFocus(this)">
+            <button class="bulk-bar-apply" onclick="applyBulk('マダイ','bulkMadai')">適用</button>
+          </div>
+          <div class="bulk-bar-row">
+            <span class="bulk-bar-label">カンパチ</span>
+            <input class="bulk-bar-input" id="bulkKampachi" type="number" inputmode="decimal" placeholder="kg" onclick="numpadFocus(this)">
+            <button class="bulk-bar-apply" onclick="applyBulk('カンパチ','bulkKampachi')">適用</button>
+          </div>
+          <div class="bulk-bar-row">
+            <span class="bulk-bar-label">シマアジ</span>
+            <input class="bulk-bar-input" id="bulkShimaaji" type="number" inputmode="decimal" placeholder="kg" onclick="numpadFocus(this)">
+            <button class="bulk-bar-apply" onclick="applyBulk('シマアジ','bulkShimaaji')">適用</button>
+          </div>
+        </div>
+      </div>
       <div id="feedList"></div>
     </div>
     <div class="feed-save-bar">
       <div class="feed-save-count" id="feedSaveCount">入力済み: 0基</div>
       <button class="feed-save-btn" onclick="saveFeedList()">まとめて保存する</button>
     </div>
+  </div>
+  <!-- テンキー（固定） -->
+  <div class="numpad-wrap" id="numpad">
+    <button class="numpad-btn" onclick="numpadInput('7')">7</button>
+    <button class="numpad-btn" onclick="numpadInput('8')">8</button>
+    <button class="numpad-btn" onclick="numpadInput('9')">9</button>
+    <button class="numpad-btn" onclick="numpadInput('4')">4</button>
+    <button class="numpad-btn" onclick="numpadInput('5')">5</button>
+    <button class="numpad-btn" onclick="numpadInput('6')">6</button>
+    <button class="numpad-btn" onclick="numpadInput('1')">1</button>
+    <button class="numpad-btn" onclick="numpadInput('2')">2</button>
+    <button class="numpad-btn" onclick="numpadInput('3')">3</button>
+    <button class="numpad-btn numpad-btn-action" onclick="numpadClear()">C</button>
+    <button class="numpad-btn" onclick="numpadInput('0')">0</button>
+    <button class="numpad-btn numpad-btn-action" onclick="numpadBack()">←</button>
+    <button class="numpad-btn numpad-btn-next" onclick="numpadNext()" style="grid-column:span 3">次▶</button>
+    <button class="numpad-btn numpad-btn-save" onclick="saveFeedList()">保存</button>
   </div>
   <!-- 完了画面 -->
   <div id="feed-done" style="display:none;flex-direction:column;flex:1;">
@@ -1117,112 +1223,118 @@ body.ai-mode-on .ai-home-banner{display:flex}
 </div><!-- /phone -->
 <script>
 // ===== MASTER DATA =====
-const AREAS = ['団地', '楠森', '葛崎', '横島', '太喜', '瀬後の裏'];
+const AREAS = ['団地', '楠森', '葛崎', '横島', '太喜', '瀬後の浦'];
 
 const POND_CONFIG = [
-  {id:'団地-01', area:'団地', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-02', area:'団地', species:'シマアジ', stock:2500,  yr:'4年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-03', area:'団地', species:'シマアジ', stock:3000,  yr:'3年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-04', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-05', area:'団地', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-06', area:'団地', species:'シマアジ', stock:10000, yr:'1年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-07', area:'団地', species:'シマアジ', stock:10000, yr:'1年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-08', area:'団地', species:'シマアジ', stock:10000, yr:'1年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-09', area:'団地', species:'マダイ',   stock:20000, yr:'1年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-10', area:'団地', species:'マダイ',   stock:20000, yr:'1年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-11', area:'団地', species:'マダイ',   stock:20000, yr:'1年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-12', area:'団地', species:'マダイ',   stock:20000, yr:'1年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-13', area:'団地', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-14', area:'団地', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'団地-15', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-16', area:'団地', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'団地-17', area:'団地', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'団地-18', area:'団地', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'団地-19', area:'団地', species:'マダイ',   stock:12300, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-20', area:'団地', species:'マダイ',   stock:12500, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-21', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-22', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-23', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-24', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-25', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'団地-26', area:'団地', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-01', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-02', area:'楠森', species:'マダイ',   stock:11000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-03', area:'楠森', species:'マダイ',   stock:12300, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-04', area:'楠森', species:'カンパチ', stock:3345,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-05', area:'楠森', species:'カンパチ', stock:3360,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-06', area:'楠森', species:'マダイ',   stock:11500, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-07', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-08', area:'楠森', species:'マダイ',   stock:6000,  yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-09', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-10', area:'楠森', species:'マダイ',   stock:11000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-11', area:'楠森', species:'マダイ',   stock:11000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-12', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-13', area:'楠森', species:'マダイ',   stock:13000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-14', area:'楠森', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-15', area:'楠森', species:'マダイ',   stock:12000, yr:'4年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-16', area:'楠森', species:'マダイ',   stock:11800, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-17', area:'楠森', species:'カンパチ', stock:3300,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-18', area:'楠森', species:'カンパチ', stock:3320,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-19', area:'楠森', species:'カンパチ', stock:3500,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-20', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-21', area:'楠森', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'楠森-22', area:'楠森', species:'マダイ',   stock:12000, yr:'4年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'楠森-23', area:'楠森', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'葛崎-01', area:'葛崎', species:'マダイ',   stock:11500, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'葛崎-02', area:'葛崎', species:'マダイ',   stock:7000,  yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'葛崎-03', area:'葛崎', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'葛崎-04', area:'葛崎', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'葛崎-05', area:'葛崎', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'葛崎-06', area:'葛崎', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'葛崎-07', area:'葛崎', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'葛崎-08', area:'葛崎', species:'マダイ',   stock:10500, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-01', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'横島-02', area:'横島', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-03', area:'横島', species:'マダイ',   stock:15000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-04', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'横島-05', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'横島-06', area:'横島', species:'カンパチ', stock:3500,  yr:'2年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-07', area:'横島', species:'カンパチ', stock:2500,  yr:'3年', bait:'チェリー9',   bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-08', area:'横島', species:'マダイ',   stock:12000, yr:'4年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-09', area:'横島', species:'マダイ',   stock:11400, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-10', area:'横島', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-11', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'横島-12', area:'横島', species:'シマアジ', stock:4500,  yr:'2年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-13', area:'横島', species:'シマアジ', stock:9000,  yr:'2年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-14', area:'横島', species:'シマアジ', stock:9000,  yr:'2年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-15', area:'横島', species:'マダイ',   stock:13000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-16', area:'横島', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-17', area:'横島', species:'マダイ',   stock:12500, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-18', area:'横島', species:'マダイ',   stock:12000, yr:'3年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-19', area:'横島', species:'シマアジ', stock:4500,  yr:'2年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-20', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'横島-21', area:'横島', species:'シマアジ', stock:3900,  yr:'3年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-22', area:'横島', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-23', area:'横島', species:'マダイ',   stock:10000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-24', area:'横島', species:'シマアジ', stock:4000,  yr:'3年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-25', area:'横島', species:'シマアジ', stock:4000,  yr:'3年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-26', area:'横島', species:'シマアジ', stock:1000,  yr:'4年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-27', area:'横島', species:'シマアジ', stock:2900,  yr:'3年', bait:'Nシマアジ 6mm',status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'横島-28', area:'横島', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'太喜-01', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'太喜-02', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'太喜-03', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'太喜-04', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'太喜-05', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'太喜-06', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'太喜-07', area:'太喜', species:'マダイ',   stock:12000, yr:'2年', bait:'ひめ桜 s7',   status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'太喜-08', area:'太喜', species:'',         stock:0,     yr:'',    bait:'',             status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'瀬後-01', area:'瀬後の裏', species:'マダイ', stock:12000, yr:'3年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'瀬後-02', area:'瀬後の裏', species:'マダイ', stock:25000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'瀬後-03', area:'瀬後の裏', species:'マダイ', stock:25000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'瀬後-04', area:'瀬後の裏', species:'マダイ', stock:25000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'瀬後-05', area:'瀬後の裏', species:'マダイ', stock:25000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'瀬後-06', area:'瀬後の裏', species:'マダイ', stock:13000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'瀬後-07', area:'瀬後の裏', species:'マダイ', stock:17000, yr:'1年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'瀬後-08', area:'瀬後の裏', species:'',       stock:0,     yr:'',    bait:'',           status:'skip', feed:0, mort:0, bgrade:0},
-  {id:'瀬後-09', area:'瀬後の裏', species:'マダイ', stock:12300, yr:'2年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
-  {id:'瀬後-10', area:'瀬後の裏', species:'マダイ', stock:12000, yr:'2年', bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  // ===== 団地 (26基) =====
+  {id:'団地-01', area:'団地', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-02', area:'団地', sh:'sq', species:'シマアジ', stock:2500,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-03', area:'団地', sh:'sq', species:'シマアジ', stock:3000,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-04', area:'団地', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-05', area:'団地', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-06', area:'団地', sh:'sq', species:'シマアジ', stock:10000, bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-07', area:'団地', sh:'sq', species:'シマアジ', stock:10000, bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-08', area:'団地', sh:'sq', species:'シマアジ', stock:10000, bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-09', area:'団地', sh:'sq', species:'マダイ',   stock:20000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-10', area:'団地', sh:'sq', species:'マダイ',   stock:20000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-11', area:'団地', sh:'sq', species:'マダイ',   stock:20000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-12', area:'団地', sh:'sq', species:'マダイ',   stock:20000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-13', area:'団地', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-14', area:'団地', sh:'sq', species:'',         stock:0,     bait:'',              status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'団地-15', area:'団地', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-16', area:'団地', sh:'sq', species:'',         stock:0,     bait:'',              status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'団地-17', area:'団地', sh:'sq', species:'',         stock:0,     bait:'',              status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'団地-18', area:'団地', sh:'sq', species:'',         stock:0,     bait:'',              status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'団地-19', area:'団地', sh:'sq', species:'マダイ',   stock:12300, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-20', area:'団地', sh:'sq', species:'マダイ',   stock:12500, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-21', area:'団地', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-22', area:'団地', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-23', area:'団地', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-24', area:'団地', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-25', area:'団地', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'団地-26', area:'団地', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  // ===== 楠森 (23基) =====
+  {id:'楠森-01', area:'楠森', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-02', area:'楠森', sh:'ci', species:'マダイ',   stock:11000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-03', area:'楠森', sh:'ci', species:'マダイ',   stock:12300, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-04', area:'楠森', sh:'sq', species:'カンパチ', stock:3345,  bait:'チェリー9', bait2:'p8',       status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-05', area:'楠森', sh:'sq', species:'カンパチ', stock:3360,  bait:'チェリー9', bait2:'p8',       status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-06', area:'楠森', sh:'sq', species:'マダイ',   stock:11500, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-07', area:'楠森', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-08', area:'楠森', sh:'sq', species:'マダイ',   stock:6000,  bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-09', area:'楠森', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-10', area:'楠森', sh:'sq', species:'マダイ',   stock:11000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-11', area:'楠森', sh:'sq', species:'マダイ',   stock:11000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-12', area:'楠森', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-13', area:'楠森', sh:'sq', species:'マダイ',   stock:13000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-14', area:'楠森', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-15', area:'楠森', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-16', area:'楠森', sh:'ci', species:'マダイ',   stock:11800, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-17', area:'楠森', sh:'sq', species:'カンパチ', stock:3300,  bait:'チェリー9', bait2:'p8',       status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-18', area:'楠森', sh:'sq', species:'カンパチ', stock:3320,  bait:'チェリー9', bait2:'p8',       status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-19', area:'楠森', sh:'sq', species:'カンパチ', stock:3500,  bait:'チェリー9', bait2:'p8',       status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-20', area:'楠森', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-21', area:'楠森', sh:'ci', species:'',         stock:0,     bait:'',                           status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'楠森-22', area:'楠森', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'楠森-23', area:'楠森', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',                  status:'todo', feed:0, mort:0, bgrade:0},
+  // ===== 葛崎 (8基) =====
+  {id:'葛崎-01', area:'葛崎', sh:'sq', species:'マダイ', stock:11500, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-02', area:'葛崎', sh:'sq', species:'マダイ', stock:7000,  bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-03', area:'葛崎', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-04', area:'葛崎', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-05', area:'葛崎', sh:'ci', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-06', area:'葛崎', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-07', area:'葛崎', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'葛崎-08', area:'葛崎', sh:'sq', species:'マダイ', stock:10500, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  // ===== 横島 (28基) =====
+  {id:'横島-01', area:'横島', sh:'ci', species:'',         stock:0,     bait:'',              status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'横島-02', area:'横島', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-03', area:'横島', sh:'sq', species:'マダイ',   stock:15000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-04', area:'横島', sh:'sq', species:'',         stock:0,     bait:'',              status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'横島-05', area:'横島', sh:'sq', species:'',         stock:0,     bait:'',              status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'横島-06', area:'横島', sh:'sq', species:'カンパチ', stock:3500,  bait:'チェリー9', bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-07', area:'横島', sh:'sq', species:'カンパチ', stock:2500,  bait:'チェリー9', bait2:'p8', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-08', area:'横島', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-09', area:'横島', sh:'ci', species:'マダイ',   stock:11400, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-10', area:'横島', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-11', area:'横島', sh:'sq', species:'',         stock:0,     bait:'',              status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'横島-12', area:'横島', sh:'sq', species:'シマアジ', stock:4500,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-13', area:'横島', sh:'sq', species:'シマアジ', stock:9000,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-14', area:'横島', sh:'sq', species:'シマアジ', stock:9000,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-15', area:'横島', sh:'sq', species:'マダイ',   stock:13000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-16', area:'横島', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-17', area:'横島', sh:'ci', species:'マダイ',   stock:12500, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-18', area:'横島', sh:'ci', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-19', area:'横島', sh:'sq', species:'シマアジ', stock:4500,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-20', area:'横島', sh:'sq', species:'',         stock:0,     bait:'',              status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'横島-21', area:'横島', sh:'sq', species:'シマアジ', stock:3900,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-22', area:'横島', sh:'sq', species:'マダイ',   stock:12000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-23', area:'横島', sh:'sq', species:'マダイ',   stock:10000, bait:'ひめ桜 s7',     status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-24', area:'横島', sh:'sq', species:'シマアジ', stock:4000,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-25', area:'横島', sh:'sq', species:'シマアジ', stock:4000,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-26', area:'横島', sh:'sq', species:'シマアジ', stock:1000,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-27', area:'横島', sh:'sq', species:'シマアジ', stock:2900,  bait:'Nシマアジ 6mm', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'横島-28', area:'横島', sh:'sq', species:'',         stock:0,     bait:'',              status:'skip', feed:0, mort:0, bgrade:0},
+  // ===== 太喜 (8基) =====
+  {id:'太喜-01', area:'太喜', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-02', area:'太喜', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-03', area:'太喜', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-04', area:'太喜', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-05', area:'太喜', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-06', area:'太喜', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-07', area:'太喜', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'太喜-08', area:'太喜', sh:'sq', species:'',       stock:0,     bait:'',          status:'skip', feed:0, mort:0, bgrade:0},
+  // ===== 瀬後の浦 (10基) =====
+  {id:'瀬後の浦-01', area:'瀬後の浦', sh:'ci', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後の浦-02', area:'瀬後の浦', sh:'sq', species:'マダイ', stock:25000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後の浦-03', area:'瀬後の浦', sh:'sq', species:'マダイ', stock:25000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後の浦-04', area:'瀬後の浦', sh:'sq', species:'マダイ', stock:25000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後の浦-05', area:'瀬後の浦', sh:'sq', species:'マダイ', stock:25000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後の浦-06', area:'瀬後の浦', sh:'sq', species:'マダイ', stock:13000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後の浦-07', area:'瀬後の浦', sh:'sq', species:'マダイ', stock:17000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後の浦-08', area:'瀬後の浦', sh:'sq', species:'',       stock:0,     bait:'',          status:'skip', feed:0, mort:0, bgrade:0},
+  {id:'瀬後の浦-09', area:'瀬後の浦', sh:'sq', species:'マダイ', stock:12300, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
+  {id:'瀬後の浦-10', area:'瀬後の浦', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
 ];
 
 const BAITS = [
@@ -1290,6 +1402,9 @@ function updateHeader(title, step, showBack) {
 // ===== TAB SWITCH =====
 function switchTab(tab) {
   state.tab = tab;
+  // feedタブ以外ではテンキーを隠す
+  var numpad = document.getElementById('numpad');
+  if (numpad) { numpad.classList.remove('active'); }
   document.querySelectorAll('.tab-content').forEach(function(s){ s.classList.remove('active'); });
   document.getElementById('tab-'+tab).classList.add('active');
   document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
@@ -1332,7 +1447,7 @@ function buildAreaTabs(containerId, activeArea, onSelect) {
   if (!el) return;
   el.innerHTML = AREAS.map(function(a){
     var count = POND_CONFIG.filter(function(p){ return p.area === a; }).length;
-    var label = a === '瀬後の裏' ? '瀬後' : a;
+    var label = a === '瀬後の浦' ? '瀬後' : a;
     return '<button class="area-tab' + (a===activeArea?' active':'') + '" data-a="' + a + '" onclick="' + onSelect + '(this)">' + label + '<span class="area-count">' + count + '基</span></button>';
   }).join('');
 }
@@ -1341,7 +1456,7 @@ function buildAreaTabs(containerId, activeArea, onSelect) {
 function buildGrid(containerId, area, selectedId, onSelect, extra, showStatus) {
   var el = document.getElementById(containerId);
   if (!el) return;
-  var ponds = POND_CONFIG.filter(function(p){ return p.area === area; });
+  var ponds = POND_CONFIG.filter(function(p){ return p.area === area && p.status !== 'skip'; });
   el.innerHTML = ponds.map(function(p) {
     var sel = selectedId === p.id ? ' selected' : '';
     var statusCls = showStatus && p.status ? ' ' + p.status : '';
@@ -1360,7 +1475,7 @@ function buildHome(area) {
   buildAreaTabs('homeAreaTabs', area, 'homeSelectArea');
   var el = document.getElementById('homeGrid');
   if (!el) return;
-  var ponds = POND_CONFIG.filter(function(p){ return p.area === area; });
+  var ponds = POND_CONFIG.filter(function(p){ return p.area === area && p.status !== 'skip'; });
   el.innerHTML = ponds.map(function(p) {
     return '<div class="pond-cell square ' + p.status + '" onclick="homeSelectPond(\'' + p.id + '\')">' +
       '<div class="pond-num">' + p.id.split('-')[1] + '</div>' +
@@ -1417,7 +1532,7 @@ function buildFeedList(area) {
   if (!area) area = state.feedArea;
   state.feedArea = area;
   buildAreaTabs('feedAreaTabs', area, 'feedSelectArea');
-  var ponds = POND_CONFIG.filter(function(p){ return p.area === area; });
+  var ponds = POND_CONFIG.filter(function(p){ return p.area === area && p.status !== 'skip'; });
   var el = document.getElementById('feedList');
   if (!el) return;
   el.innerHTML = ponds.map(function(p) {
@@ -1427,15 +1542,31 @@ function buildFeedList(area) {
     var baitOptions = BAITS.map(function(b){
       return '<option' + (b===p.bait?' selected':'') + '>' + b + '</option>';
     }).join('');
-    return '<div class="feed-list-row' + rowCls + '" id="flrow-' + p.id.replace('-','_') + '">' +
+    return '<div class="feed-list-row' + rowCls + '" id="flrow-' + p.id.replace('-','_') + '" onclick="numpadFocusRow(this)">' +
       '<div class="feed-row-dot ' + dotCls + '"></div>' +
       '<div class="feed-row-name">' + p.id.split('-')[1] + '</div>' +
       '<div class="feed-row-fish">' + fishInitial(p.species) + '</div>' +
       '<select class="feed-bait-select" data-pond="' + p.id + '"' + disabled + '>' + baitOptions + '</select>' +
-      '<input class="feed-kg-input" type="number" inputmode="decimal" placeholder="kg" data-pond="' + p.id + '"' + disabled + ' oninput="feedListCheck()">' +
+      '<input class="feed-kg-input" type="number" inputmode="decimal" placeholder="kg" data-pond="' + p.id + '"' + disabled + ' oninput="feedListCheck()" onclick="numpadFocus(this);event.stopPropagation()">' +
       '<span class="feed-kg-unit">kg</span>' +
+      '<button class="flag-btn" data-pond="' + p.id + '" onclick="toggleFlag(this);event.stopPropagation()">⚑</button>' +
       '</div>';
   }).join('');
+  // 実装②：前回値を localStorage から prefill
+  var prevFeed = {};
+  try { prevFeed = JSON.parse(localStorage.getItem('onoue_prev_feed') || '{}'); } catch(e) {}
+  document.querySelectorAll('#feedList .feed-kg-input:not([disabled])').forEach(function(el) {
+    var prev = prevFeed[el.dataset.pond];
+    if (prev) {
+      el.value = prev;
+      el.style.color = '#94a3b8';
+      el.addEventListener('input', function() { this.style.color = '#1e293b'; }, { once: true });
+    }
+  });
+  // テンキー表示（feedタブ表示時）
+  var numpad = document.getElementById('numpad');
+  if (numpad) numpad.classList.add('active');
+  numpadTarget = null;
   feedListCheck();
 }
 function feedSelectArea(btn) {
@@ -1452,6 +1583,21 @@ function feedListCheck() {
   if (countEl) countEl.textContent = '入力済み: ' + count + '基';
 }
 function saveFeedList() {
+  // 実装②：当日入力値を localStorage に保存
+  var prevData = {};
+  document.querySelectorAll('#feedList .feed-kg-input:not([disabled])').forEach(function(el) {
+    if (el.value) prevData[el.dataset.pond] = el.value;
+  });
+  localStorage.setItem('onoue_prev_feed', JSON.stringify(prevData));
+  // 実装④：フラグ付き行を収集して完了画面に表示
+  var flaggedRows = [];
+  document.querySelectorAll('#feedList .flag-btn.on').forEach(function(btn) {
+    flaggedRows.push(btn.dataset.pond);
+  });
+  // テンキー非表示
+  var numpad = document.getElementById('numpad');
+  if (numpad) numpad.classList.remove('active');
+  numpadTarget = null;
   var inputs = document.querySelectorAll('#feedList .feed-kg-input:not([disabled])');
   var saved = 0;
   inputs.forEach(function(inp) {
@@ -1465,7 +1611,9 @@ function saveFeedList() {
     p.status = 'done';
     saved++;
   });
-  document.getElementById('feedDoneSub').textContent = state.feedArea + 'エリア ' + saved + '基を保存しました';
+  var subMsg = state.feedArea + 'エリア ' + saved + '基を保存しました';
+  if (flaggedRows.length > 0) subMsg += '\n⚑ 要確認：' + flaggedRows.join(', ');
+  document.getElementById('feedDoneSub').textContent = subMsg;
   buildHome(state.homeArea);
   document.getElementById('feed-list-view').style.display = 'none';
   var doneEl = document.getElementById('feed-done');
@@ -1477,8 +1625,97 @@ function feedDoneRestart() {
   document.getElementById('feed-list-view').style.display = 'flex';
   document.getElementById('feed-list-view').style.flexDirection = 'column';
   document.getElementById('feed-done').style.display = 'none';
-  buildFeedList(state.feedArea);
+  buildFeedList(state.feedArea);  // テンキー表示は buildFeedList 内で行う
   updateHeader('給餌入力', '', false);
+}
+
+// ===== 実装①：固定テンキー =====
+var numpadTarget = null;
+
+function numpadFocus(input) {
+  if (numpadTarget) numpadTarget.style.borderColor = '';
+  numpadTarget = input;
+  input.style.borderColor = '#2563eb';
+  input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function numpadFocusRow(row) {
+  var input = row.querySelector('.feed-kg-input:not([disabled])');
+  if (input) numpadFocus(input);
+}
+
+function numpadInput(val) {
+  if (!numpadTarget) return;
+  var cur = numpadTarget.value || '';
+  // 一括入力欄（bulkBar）では上書き入力
+  if (numpadTarget.classList.contains('bulk-bar-input')) {
+    numpadTarget.value = cur + val;
+  } else {
+    numpadTarget.value = cur + val;
+    numpadTarget.style.color = '#1e293b';
+  }
+  feedListCheck();
+}
+
+function numpadBack() {
+  if (!numpadTarget) return;
+  numpadTarget.value = numpadTarget.value.slice(0, -1);
+  if (!numpadTarget.classList.contains('bulk-bar-input')) {
+    numpadTarget.style.color = '#1e293b';
+  }
+  feedListCheck();
+}
+
+function numpadClear() {
+  if (!numpadTarget) return;
+  numpadTarget.value = '';
+  feedListCheck();
+}
+
+function numpadNext() {
+  var inputs = Array.from(
+    document.querySelectorAll('#feedList .feed-kg-input:not([disabled])')
+  );
+  if (!inputs.length) return;
+  var idx = numpadTarget ? inputs.indexOf(numpadTarget) : -1;
+  var next = inputs[idx + 1] || inputs[0];
+  numpadFocus(next);
+}
+
+// ===== 実装③：魚種別一括適用 =====
+function toggleBulkBar() {
+  var body = document.getElementById('bulkBarBody');
+  var btn = document.querySelector('.bulk-bar-toggle');
+  var isOpen = body.classList.toggle('open');
+  btn.textContent = isOpen ? '一括適用 ▲' : '一括適用 ▼';
+}
+
+function applyBulk(species, inputId) {
+  var val = document.getElementById(inputId).value;
+  if (!val) return;
+  document.querySelectorAll('#feedList .feed-kg-input:not([disabled])').forEach(function(el) {
+    var pond = getPond(el.dataset.pond);
+    if (pond && pond.species === species) {
+      el.value = val;
+      el.style.color = '#1e293b';
+    }
+  });
+  feedListCheck();
+}
+
+// ===== 実装④：異常フラグ =====
+function toggleFlag(btn) {
+  btn.classList.toggle('on');
+  var row = btn.closest('.feed-list-row');
+  if (row) row.classList.toggle('flagged');
+  var dot = row && row.querySelector('.feed-row-dot');
+  if (dot) {
+    if (btn.classList.contains('on')) {
+      dot.className = 'feed-row-dot dot-alert';
+    } else {
+      dot.className = 'feed-row-dot dot-todo';
+    }
+  }
 }
 
 // ===== CALENDAR =====
