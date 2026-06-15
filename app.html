@@ -662,6 +662,53 @@ body {
   margin-top: 6px;
 }
 
+/* ===== RECORD PANEL ===== */
+.rec-sheet { background: #fff; border-radius: 16px 16px 0 0; padding: 20px 16px 32px; width: 100%; max-height: 85vh; overflow-y: auto; }
+.rec-title { font-size: 13px; font-weight: 700; color: var(--ink2); margin-bottom: 4px; letter-spacing: 0.5px; }
+.rec-name { font-size: 18px; font-weight: 700; color: var(--ink); margin-bottom: 16px; }
+.rec-field { margin-bottom: 12px; }
+.rec-label { font-size: 12px; font-weight: 700; color: var(--ink2); margin-bottom: 4px; }
+.rec-row { display: flex; gap: 8px; }
+.rec-input {
+  width: 100%; height: 52px; border: 2px solid var(--border); border-radius: 8px;
+  padding: 0 14px; font-size: 20px; font-weight: 700; font-family: inherit;
+  color: var(--ink); background: #fff; outline: none; box-sizing: border-box;
+}
+.rec-input:focus { border-color: var(--blue); }
+.rec-select {
+  width: 100%; height: 52px; border: 2px solid var(--border); border-radius: 8px;
+  padding: 0 14px; font-size: 16px; font-weight: 700; font-family: inherit;
+  color: var(--ink); background: #fff; outline: none; box-sizing: border-box;
+}
+.rec-flag-row {
+  display: flex; align-items: center; justify-content: space-between;
+  border: 2px solid var(--border); border-radius: 8px; padding: 14px 16px;
+  background: #fff; margin-bottom: 12px;
+}
+.rec-flag-row.on { border-color: #b91c1c; background: #fef2f2; }
+.rec-flag-label { font-size: 16px; font-weight: 700; color: var(--ink); }
+.rec-flag-row.on .rec-flag-label { color: #b91c1c; }
+.rec-memo {
+  width: 100%; border: 2px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; font-size: 15px; font-family: inherit;
+  color: var(--ink); background: #fff; outline: none; resize: none;
+  box-sizing: border-box; min-height: 68px;
+}
+.rec-memo:focus { border-color: var(--blue); }
+.rec-save {
+  width: 100%; height: 56px; background: var(--blue); color: #fff; border: none;
+  border-radius: 10px; font-size: 18px; font-weight: 700; font-family: inherit;
+  cursor: pointer; margin-top: 4px;
+}
+.rec-save:active { opacity: 0.85; }
+.rec-nav-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.rec-nav-btn {
+  flex: 1; height: 44px; border: 2px solid var(--border); border-radius: 8px;
+  background: #fff; font-size: 14px; font-weight: 700; font-family: inherit;
+  color: var(--ink2); cursor: pointer;
+}
+.rec-nav-btn:active { background: var(--line); }
+
 /* ===== HOME STATUS LEGEND ===== */
 .home-legend {
   display: flex;
@@ -1267,6 +1314,65 @@ body.ai-mode-on .ai-home-banner{display:flex}
   </div>
 </div>
 
+<!-- ===== RECORD PANEL ===== -->
+<div class="sheet-overlay hidden" id="recordPanel" onclick="closeRecordPanel(event)">
+  <div class="rec-sheet">
+    <div class="rec-title">個別記録</div>
+    <div class="rec-name" id="recName"></div>
+    <div class="rec-nav-row">
+      <button class="rec-nav-btn" onclick="recNavGo('feed')">🍚 給餌画面へ</button>
+      <button class="rec-nav-btn" onclick="recNavGo('move')">↔ 移動画面へ</button>
+    </div>
+
+    <div class="rec-field">
+      <div class="rec-label">給餌量 (kg)</div>
+      <input class="rec-input" type="number" id="recFeed" inputmode="decimal" placeholder="0.0">
+    </div>
+    <div class="rec-field">
+      <div class="rec-label">餌の種類</div>
+      <select class="rec-select" id="recBait"></select>
+    </div>
+    <div class="rec-row">
+      <div class="rec-field" style="flex:1">
+        <div class="rec-label">死魚数 (尾)</div>
+        <input class="rec-input" type="number" id="recMort" inputmode="numeric" placeholder="0">
+      </div>
+      <div class="rec-field" style="flex:1">
+        <div class="rec-label">B品数 (尾)</div>
+        <input class="rec-input" type="number" id="recBgrade" inputmode="numeric" placeholder="0">
+      </div>
+    </div>
+
+    <div class="rec-field">
+      <div class="rec-label">薬品</div>
+      <div class="drug-row" id="recDrugRow" onclick="toggleRecordDrug()">
+        <span class="toggle-label" id="recDrugLabel">薬品なし</span>
+        <span class="toggle-pill drug-pill" id="recDrugPill"></span>
+      </div>
+      <div class="drug-expand" id="recDrugExpand">
+        <select class="drug-select" id="recDrugSelect"></select>
+        <div class="drug-g-wrap">
+          <input class="drug-g-input" type="number" id="recDrugAmt" inputmode="decimal" placeholder="0">
+          <span class="drug-g-unit">g</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rec-flag-row" id="recFlagRow" onclick="toggleRecordFlag()">
+      <span class="rec-flag-label" id="recFlagLabel">⚠ 異常フラグ</span>
+      <span class="toggle-pill" id="recFlagPill" style="background:var(--dis-bg)"></span>
+    </div>
+
+    <div class="rec-field">
+      <div class="rec-label">メモ</div>
+      <textarea class="rec-memo" id="recMemo" placeholder="特記事項があれば入力"></textarea>
+    </div>
+
+    <button class="rec-save" onclick="saveRecord()">保存する</button>
+    <button class="sheet-cancel" onclick="closeRecordPanelDirect()">キャンセル</button>
+  </div>
+</div>
+
 </div><!-- /phone -->
 <script>
 // ===== MASTER DATA =====
@@ -1395,6 +1501,12 @@ const BAITS = [
   'その他'
 ];
 
+const DRUGS = [
+  'オキシテトラサイクリン','フロルフェニコール','スルファモノメトキシン',
+  'エンロフロキサシン','プラジクアンテル','トリクロルホン',
+  'マラカイトグリーン','ホルマリン','その他'
+];
+
 const ORDERS = [
   {date:'2026-05-02',buyer:'ニチモウ',   fish:'マダイ',   spec:'2.0kg〜 120尾', status:'confirmed'},
   {date:'2026-05-05',buyer:'信源',       fish:'マダイ',   spec:'1.5〜2.0kg 80尾',status:'confirmed'},
@@ -1500,17 +1612,18 @@ function buildAreaTabs(containerId, activeArea, onSelect) {
 }
 
 // ===== BUILD POND GRID =====
-function buildGrid(containerId, area, selectedId, onSelect, extra, showStatus) {
+function buildGrid(containerId, area, selectedId, onSelect, extra, showStatus, includeEmpty) {
   var el = document.getElementById(containerId);
   if (!el) return;
-  var ponds = POND_CONFIG.filter(function(p){ return p.area === area && p.status !== 'skip'; });
+  var ponds = POND_CONFIG.filter(function(p){ return p.area === area && (includeEmpty || p.status !== 'skip'); });
   el.innerHTML = ponds.map(function(p) {
+    var isEmpty = p.status === 'skip';
     var sel = selectedId === p.id ? ' selected' : '';
     var statusCls = showStatus && p.status ? ' ' + p.status : '';
     return '<div class="pond-cell square' + sel + statusCls + '" onclick="' + onSelect + '(\'' + p.id + '\')">' +
       '<div class="pond-num">' + p.id.split('-')[1] + '</div>' +
-      '<div class="pond-fish">' + fishInitial(p.species) + '</div>' +
-      (extra ? '<div class="pond-count">' + (p.stock||0).toLocaleString() + '尾</div>' : '') +
+      '<div class="pond-fish">' + (isEmpty ? '空き' : fishInitial(p.species)) + '</div>' +
+      (extra && !isEmpty ? '<div class="pond-count">' + (p.stock||0).toLocaleString() + '尾</div>' : '') +
       '</div>';
   }).join('');
 }
@@ -1550,9 +1663,121 @@ function homeSelectArea(btn) {
 function homeSelectPond(id) {
   var p = getPond(id);
   if (!p || p.status === 'skip') return;
+  openRecordPanel(id);
+}
+
+// ===== RECORD PANEL =====
+function openRecordPanel(id) {
+  var p = getPond(id);
+  if (!p) return;
   state.sheetIkesu = id;
-  document.getElementById('sheetName').textContent = id + '　' + p.species;
-  document.getElementById('sheetOverlay').classList.remove('hidden');
+  document.getElementById('recName').textContent = id + '　' + p.species;
+
+  // 餌セレクト構築
+  var baitSel = document.getElementById('recBait');
+  baitSel.innerHTML = BAITS.map(function(b) {
+    return '<option value="' + b + '"' + (b === p.bait ? ' selected' : '') + '>' + b + '</option>';
+  }).join('');
+
+  // 薬品セレクト構築
+  var drugSel = document.getElementById('recDrugSelect');
+  drugSel.innerHTML = DRUGS.map(function(d) {
+    return '<option value="' + d + '">' + d + '</option>';
+  }).join('');
+
+  // 既存値セット
+  document.getElementById('recFeed').value = p.feed || '';
+  document.getElementById('recMort').value = p.mort || '';
+  document.getElementById('recBgrade').value = p.bgrade || '';
+  document.getElementById('recDrugAmt').value = p.drugAmt || '';
+  document.getElementById('recMemo').value = p.memo || '';
+
+  // 薬品トグル
+  var drugOn = !!p.drugOn;
+  document.getElementById('recDrugRow').classList.toggle('on', drugOn);
+  document.getElementById('recDrugPill').classList.toggle('on', drugOn);
+  document.getElementById('recDrugLabel').textContent = drugOn ? '薬品あり' : '薬品なし';
+  document.getElementById('recDrugExpand').classList.toggle('open', drugOn);
+  if (p.drug && drugOn) {
+    var opts = document.getElementById('recDrugSelect').options;
+    for (var i = 0; i < opts.length; i++) { if (opts[i].value === p.drug) { opts[i].selected = true; break; } }
+  }
+
+  // 異常フラグ
+  var flagOn = p.status === 'alert';
+  document.getElementById('recFlagRow').classList.toggle('on', flagOn);
+  document.getElementById('recFlagPill').style.background = flagOn ? '#b91c1c' : 'var(--dis-bg)';
+  document.getElementById('recFlagLabel').textContent = flagOn ? '⚠ 異常あり' : '⚠ 異常フラグ';
+
+  document.getElementById('recordPanel').classList.remove('hidden');
+}
+function closeRecordPanel(e) {
+  if (e.target === document.getElementById('recordPanel')) closeRecordPanelDirect();
+}
+function closeRecordPanelDirect() {
+  document.getElementById('recordPanel').classList.add('hidden');
+}
+function toggleRecordDrug() {
+  var row = document.getElementById('recDrugRow');
+  var on = row.classList.toggle('on');
+  document.getElementById('recDrugPill').classList.toggle('on', on);
+  document.getElementById('recDrugLabel').textContent = on ? '薬品あり' : '薬品なし';
+  document.getElementById('recDrugExpand').classList.toggle('open', on);
+}
+function toggleRecordFlag() {
+  var row = document.getElementById('recFlagRow');
+  var on = row.classList.toggle('on');
+  document.getElementById('recFlagPill').style.background = on ? '#b91c1c' : 'var(--dis-bg)';
+  document.getElementById('recFlagLabel').textContent = on ? '⚠ 異常あり' : '⚠ 異常フラグ';
+}
+function saveRecord() {
+  var id = state.sheetIkesu;
+  var p = getPond(id);
+  if (!p) return;
+  var feed = parseFloat(document.getElementById('recFeed').value) || 0;
+  var mort = parseInt(document.getElementById('recMort').value) || 0;
+  var bgrade = parseInt(document.getElementById('recBgrade').value) || 0;
+  var bait = document.getElementById('recBait').value;
+  var drugOn = document.getElementById('recDrugRow').classList.contains('on');
+  var drug = drugOn ? document.getElementById('recDrugSelect').value : '';
+  var drugAmt = drugOn ? (parseFloat(document.getElementById('recDrugAmt').value) || 0) : 0;
+  var flagOn = document.getElementById('recFlagRow').classList.contains('on');
+  var memo = document.getElementById('recMemo').value.trim();
+
+  p.feed = feed;
+  p.mort = mort;
+  p.bgrade = bgrade;
+  p.bait = bait;
+  p.drugOn = drugOn;
+  p.drug = drug;
+  p.drugAmt = drugAmt;
+  p.memo = memo;
+
+  if (flagOn) {
+    p.status = 'alert';
+  } else if (feed > 0 || mort > 0 || bgrade > 0 || drugOn) {
+    p.status = 'done';
+  } else {
+    p.status = 'todo';
+  }
+
+  closeRecordPanelDirect();
+  buildHome(state.homeArea);
+}
+function recNavGo(tab) {
+  closeRecordPanelDirect();
+  var id = state.sheetIkesu;
+  var areaKey = getPondArea(id) || id.split('-')[0];
+  if (tab === 'feed') {
+    state.feedArea = areaKey;
+    switchTab('feed');
+  } else if (tab === 'move') {
+    state.mv.from = id;
+    state.moveFromArea = areaKey;
+    switchTab('move');
+    buildMoveGrids();
+    moveCheck();
+  }
 }
 
 // ===== SHEET =====
@@ -1864,8 +2089,8 @@ function calMove(dir) {
 function buildMoveGrids() {
   buildAreaTabs('moveFromTabs', state.moveFromArea, 'moveFromAreaSel');
   buildAreaTabs('moveToTabs', state.moveToArea, 'moveToAreaSel');
-  buildGrid('moveFromGrid', state.moveFromArea, state.mv.from, 'moveSelectFrom', true, false);
-  buildGrid('moveToGrid', state.moveToArea, state.mv.to, 'moveSelectTo', true, false);
+  buildGrid('moveFromGrid', state.moveFromArea, state.mv.from, 'moveSelectFrom', true, false, false);
+  buildGrid('moveToGrid', state.moveToArea, state.mv.to, 'moveSelectTo', true, false, true);
   document.getElementById('moveFromExternal').classList.toggle('selected', state.mv.external);
 }
 function moveFromAreaSel(btn) {
@@ -1883,7 +2108,7 @@ function moveToAreaSel(btn) {
   state.moveToArea = btn.dataset.a;
   var toPond = state.mv.to ? getPond(state.mv.to) : null;
   if (state.mv.to && (!toPond || toPond.area !== state.moveToArea)) state.mv.to = null;
-  buildGrid('moveToGrid', state.moveToArea, state.mv.to, 'moveSelectTo', true, false);
+  buildGrid('moveToGrid', state.moveToArea, state.mv.to, 'moveSelectTo', true, false, true);
   moveCheck();
 }
 function moveSelectFrom(id) {
@@ -1894,7 +2119,7 @@ function moveSelectFrom(id) {
 }
 function moveSelectTo(id) {
   state.mv.to = id;
-  buildGrid('moveToGrid', state.moveToArea, id, 'moveSelectTo', true, false);
+  buildGrid('moveToGrid', state.moveToArea, id, 'moveSelectTo', true, false, true);
   moveCheck();
 }
 function selectFromExternal() {
