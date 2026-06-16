@@ -436,9 +436,9 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div class="summary-row">
     <div class="scard">
       <div class="slabel">総在庫尾数</div>
-      <div class="sval">284,500</div>
-      <div class="ssub">尾（65基合計）</div>
-      <div class="progress-wrap"><div class="progress-fill" style="width:71%"></div></div>
+      <div class="sval" id="dashStockVal">—</div>
+      <div class="ssub" id="dashStockSub">読み込み中...</div>
+      <div class="progress-wrap"><div class="progress-fill" id="dashStockBar" style="width:0%"></div></div>
     </div>
     <div class="scard">
       <div class="slabel">本日の給餌記録</div>
@@ -698,8 +698,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
   </div>
   <div class="tbl-wrap">
     <table><thead><tr>
-      <th>いけす</th><th>形状</th><th>魚種</th><th style="text-align:right">在庫尾数</th>
-      <th>給餌実績</th><th>状態</th><th></th>
+      <th>いけす</th><th>魚種</th><th>年齢</th>
+      <th style="text-align:right">在庫尾数</th><th>状態</th>
     </tr></thead>
     <tbody id="invBody"></tbody></table>
   </div>
@@ -795,9 +795,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px" id="lotSummary"></div>
   <div class="tbl-wrap">
     <table><thead><tr>
-      <th>ロットID</th><th>導入日</th><th>種苗業者</th><th>魚種</th>
-      <th style="text-align:right">導入尾数</th><th style="text-align:right">現在尾数</th>
-      <th style="text-align:right">ロス率</th><th>ステータス</th><th></th>
+      <th>魚種</th><th>年齢</th><th style="text-align:center">基数</th>
+      <th style="text-align:right">在庫尾数</th><th>配置いけす</th>
     </tr></thead>
     <tbody id="lotBody"></tbody></table>
   </div>
@@ -1258,6 +1257,34 @@ const POND_CONFIG=[
   {id:'瀬後の浦-09',area:'瀬後の浦',sh:'sq',species:'マダイ',stock:12300,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
   {id:'瀬後の浦-10',area:'瀬後の浦',sh:'sq',species:'マダイ',stock:12000,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
 ];
+var POND_YR = {
+  '団地-01':3,'団地-02':4,'団地-03':3,'団地-04':2,'団地-05':3,
+  '団地-06':1,'団地-07':1,'団地-08':1,'団地-09':1,'団地-10':1,
+  '団地-11':1,'団地-12':1,'団地-13':3,'団地-15':2,
+  '団地-19':2,'団地-20':2,'団地-21':2,'団地-22':2,'団地-23':2,
+  '団地-24':2,'団地-25':2,'団地-26':2,
+  '太喜-01':2,'太喜-02':2,'太喜-03':2,'太喜-04':2,
+  '太喜-05':2,'太喜-06':2,'太喜-07':2,
+  '瀬後の浦-01':3,'瀬後の浦-02':1,'瀬後の浦-03':1,'瀬後の浦-04':1,
+  '瀬後の浦-05':1,'瀬後の浦-06':1,'瀬後の浦-07':1,
+  '瀬後の浦-09':2,'瀬後の浦-10':2,
+  '横島-02':3,'横島-03':3,'横島-06':2,'横島-07':3,
+  '横島-08':4,'横島-09':3,'横島-10':3,
+  '横島-12':2,'横島-13':2,'横島-14':2,'横島-15':2,
+  '横島-16':3,'横島-17':3,'横島-18':3,'横島-19':2,
+  '横島-21':3,'横島-22':2,'横島-23':2,
+  '横島-24':3,'横島-25':3,'横島-26':4,'横島-27':3,
+  '楠森-01':3,'楠森-02':3,'楠森-03':3,'楠森-04':2,'楠森-05':2,
+  '楠森-06':3,'楠森-07':3,'楠森-08':3,'楠森-09':3,'楠森-10':3,
+  '楠森-11':3,'楠森-12':3,'楠森-13':3,'楠森-14':2,'楠森-15':4,
+  '楠森-16':3,'楠森-17':2,'楠森-18':2,'楠森-19':2,'楠森-20':3,
+  '楠森-22':4,'楠森-23':3,
+  '葛崎-01':3,'葛崎-02':3,'葛崎-03':2,'葛崎-04':2,
+  '葛崎-05':3,'葛崎-06':2,'葛崎-07':2,'葛崎-08':2
+};
+function yrToLabel(yr) {
+  return yr + '年魚（' + (2026-yr) + '年春入荷）';
+}
 var CAGE_MAP={
   '楠森-01':{x:10,y:40,sh:'ci'},'楠森-02':{x:10,y:68,sh:'ci'},
   '楠森-03':{x:10,y:96,sh:'ci'},'楠森-04':{x:10,y:132,sh:'sq'},
@@ -1456,6 +1483,7 @@ function setAiMode(on, save) {
 function init(){
   initAiMode();
   setDate();
+  calcDashSummary();
   renderPending();
   renderTankGrid('all');
   drawFeedChart();
@@ -1799,6 +1827,22 @@ function renderLedger(buyer){
 }
 
 // ══════════════════════════════════════════
+// DASHBOARD SUMMARY
+// ══════════════════════════════════════════
+function calcDashSummary(){
+  var total=POND_CONFIG.length;
+  var active=POND_CONFIG.filter(function(p){return p.status!=='skip';}).length;
+  var skip=total-active;
+  var totalStock=POND_CONFIG.reduce(function(s,p){return s+(p.stock||0);},0);
+  var el=document.getElementById('dashStockVal');
+  if(el)el.textContent=totalStock.toLocaleString();
+  var sub=document.getElementById('dashStockSub');
+  if(sub)sub.textContent='尾（'+active+'基稼働 / '+total+'基中）';
+  var bar=document.getElementById('dashStockBar');
+  if(bar)bar.style.width=Math.round(active/total*100)+'%';
+}
+
+// ══════════════════════════════════════════
 // FISH MAP (diary tab)
 // ══════════════════════════════════════════
 function fishInitial(fish){
@@ -1864,32 +1908,108 @@ function renderInvSummary(){
 }
 
 function renderInv(){
-  var af=document.getElementById('invArea').value;
-  var sf=document.getElementById('invSp').value;
-  var stf=document.getElementById('invSt').value;
-  var stLabel={todo:'未記録',done:'完了',alert:'要確認',skip:'空き'};
-  var stBadge={todo:'b-pending',done:'b-ok',alert:'b-alert',skip:'b-gray'};
-  var list=POND_CONFIG.filter(function(p){return(af==='all'||p.area===af)&&(sf==='all'||p.species===sf)&&(stf==='all'||p.status===stf);});
-  document.getElementById('invBody').innerHTML=list.map(function(p){
-    var sh=p.sh==='ci'?'● 円':'■ 四角';
-    var feedStr=p.feedKg?p.feedKg+'kg':(p.feed>0?p.feed+'kg':'—');
-    return '<tr><td><strong>'+p.id+'</strong></td><td>'+sh+'</td><td>'+p.species+'</td><td style="text-align:right">'+(p.stock?p.stock.toLocaleString():'—')+'</td><td>'+feedStr+'</td><td><span class="badge '+(stBadge[p.status]||'b-pending')+'">'+(stLabel[p.status]||p.status)+'</span></td><td><span class="action-link">詳細</span></td></tr>';
-  }).join('');
+  var areas=['団地','太喜','瀬後の浦','横島','楠森','葛崎'];
+  var container=document.getElementById('invBody');
+  if(!container)return;
+  var html='';
+  var grandTotal=0,grandActive=0;
+  areas.forEach(function(area){
+    var ponds=POND_CONFIG.filter(function(p){return p.area===area;});
+    var activePonds=ponds.filter(function(p){return p.status!=='skip';});
+    var areaTotal=activePonds.reduce(function(s,p){return s+(p.stock||0);},0);
+    grandTotal+=areaTotal;
+    grandActive+=activePonds.length;
+    html+='<tr class="inv-area-header">'
+      +'<td colspan="5" style="background:#1b3a5c;color:#fff;font-weight:700;padding:8px 12px;font-size:13px;">'
+      +area+'（'+activePonds.length+'/'+ponds.length+'基・'+areaTotal.toLocaleString()+'尾）</td></tr>';
+    ponds.forEach(function(p){
+      var yr=POND_YR[p.id];
+      var yrLabel=yr?yrToLabel(yr):'―';
+      var isSkip=p.status==='skip';
+      var rowStyle=isSkip?'color:#94a3b8;background:#f8fafc;':'';
+      var statusBadge=isSkip
+        ?'<span style="background:#e2e8f0;color:#94a3b8;padding:2px 8px;border-radius:10px;font-size:11px;">空き</span>'
+        :'<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;font-size:11px;">稼働中</span>';
+      html+='<tr style="'+rowStyle+'">'
+        +'<td style="padding:7px 12px;font-size:13px;font-weight:600;">'+p.id+'</td>'
+        +'<td style="padding:7px 12px;font-size:13px;">'+(isSkip?'―':p.species)+'</td>'
+        +'<td style="padding:7px 12px;font-size:12px;color:#64748b;">'+yrLabel+'</td>'
+        +'<td style="padding:7px 12px;text-align:right;font-size:13px;font-weight:700;">'+(isSkip?'―':(p.stock||0).toLocaleString()+'尾')+'</td>'
+        +'<td style="padding:7px 12px;text-align:center;">'+statusBadge+'</td>'
+        +'</tr>';
+    });
+  });
+  html+='<tr style="background:#f1f5f9;font-weight:700;">'
+    +'<td colspan="3" style="padding:10px 12px;font-size:14px;">合 計</td>'
+    +'<td style="padding:10px 12px;text-align:right;font-size:14px;">'+grandTotal.toLocaleString()+'尾</td>'
+    +'<td style="padding:10px 12px;text-align:center;font-size:13px;">'+grandActive+'基稼働</td></tr>';
+  container.innerHTML=html;
 }
 
 // ══════════════════════════════════════════
 // LOTS
 // ══════════════════════════════════════════
-function renderLotSummary(){
-  var active=lots.filter(function(l){return l.status==='育成中';});
-  var avgLoss=(active.reduce(function(s,l){return s+l.loss;},0)/active.length).toFixed(1);
-  var totalIntro=active.reduce(function(s,l){return s+l.intro;},0);
-  document.getElementById('lotSummary').innerHTML='<div class="scard"><div class="slabel">育成中ロット</div><div class="sval" style="font-size:24px">'+active.length+'</div><div class="ssub">ロット</div></div><div class="scard"><div class="slabel">総導入尾数（育成中）</div><div class="sval" style="font-size:20px">'+totalIntro.toLocaleString()+'</div><div class="ssub">尾</div></div><div class="scard '+(parseFloat(avgLoss)>22?'red':'')+'"><div class="slabel">平均ロス率（育成中）</div><div class="sval" style="font-size:24px">'+avgLoss+'<span style="font-size:15px">%</span></div><div class="ssub">目標：20%以下</div></div>';
+function buildLots(){
+  var lotMap={};
+  POND_CONFIG.forEach(function(p){
+    if(p.status==='skip'||!p.species)return;
+    var yr=POND_YR[p.id];
+    if(!yr)return;
+    var key=p.species+'_'+yr;
+    if(!lotMap[key]){
+      lotMap[key]={
+        id:'L'+(2026-yr)+'-'+p.species.charAt(0),
+        species:p.species,yr:yr,
+        label:yrToLabel(yr),ponds:[],stock:0
+      };
+    }
+    lotMap[key].ponds.push(p.id);
+    lotMap[key].stock+=(p.stock||0);
+  });
+  return Object.keys(lotMap).map(function(k){return lotMap[k];}).sort(function(a,b){
+    if(a.species!==b.species)return a.species<b.species?-1:1;
+    return a.yr-b.yr;
+  });
 }
-function renderLotTable(){
-  document.getElementById('lotBody').innerHTML=lots.map(function(l,i){
-    return '<tr class="clickable" onclick="openLotDetail('+i+')"><td><strong>'+l.id+'</strong></td><td>'+l.date+'</td><td>'+l.vendor+'</td><td>'+l.species+'</td><td style="text-align:right">'+l.intro.toLocaleString()+'</td><td style="text-align:right">'+l.current.toLocaleString()+'</td><td style="text-align:right;font-weight:700;color:'+(l.loss>22?'var(--red)':l.loss>19?'var(--orange)':'var(--green)')+'">'+l.loss+'%</td><td><span class="stag '+(l.status==='育成中'?'stag-breeding':'stag-done')+'">'+l.status+'</span></td><td><span class="action-link" onclick="event.stopPropagation();openLotDetail('+i+')">詳細</span></td></tr>';
-  }).join('');
+function renderLotSummary(){
+  var built=buildLots();
+  var totalStock=built.reduce(function(s,l){return s+l.stock;},0);
+  var byFish={};
+  built.forEach(function(l){
+    if(!byFish[l.species])byFish[l.species]={cnt:0,stock:0};
+    byFish[l.species].cnt+=l.ponds.length;
+    byFish[l.species].stock+=l.stock;
+  });
+  var cards='<div class="scard"><div class="slabel">ロット数</div><div class="sval" style="font-size:24px">'+built.length+'</div><div class="ssub">魚種×年齢別</div></div>';
+  cards+='<div class="scard"><div class="slabel">総在庫尾数</div><div class="sval" style="font-size:20px">'+totalStock.toLocaleString()+'</div><div class="ssub">尾（稼働90基）</div></div>';
+  var fishSub=Object.keys(byFish).map(function(f){return f+' '+byFish[f].cnt+'基・'+byFish[f].stock.toLocaleString()+'尾';}).join(' / ');
+  cards+='<div class="scard"><div class="slabel">魚種別内訳</div><div class="sval" style="font-size:13px;line-height:1.8">'+fishSub+'</div></div>';
+  document.getElementById('lotSummary').innerHTML=cards;
+}
+function renderLotTable(){renderLot();}
+function renderLot(){
+  var container=document.getElementById('lotBody');
+  if(!container)return;
+  var built=buildLots();
+  var fishColors={
+    'マダイ':  {bg:'#eff6ff',border:'#3b82f6',text:'#1e40af'},
+    'カンパチ':{bg:'#f0fdf4',border:'#22c55e',text:'#15803d'},
+    'シマアジ':{bg:'#fff7ed',border:'#f97316',text:'#c2410c'}
+  };
+  var html='';
+  built.forEach(function(lot){
+    var c=fishColors[lot.species]||{bg:'#f8fafc',border:'#cbd5e1',text:'#475569'};
+    var pondList=lot.ponds.slice(0,5).join('、')+(lot.ponds.length>5?' 他'+(lot.ponds.length-5)+'基':'');
+    html+='<tr>'
+      +'<td style="padding:10px 12px;">'
+      +'<span style="background:'+c.bg+';color:'+c.text+';border:1px solid '+c.border+';padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;">'+lot.species+'</span></td>'
+      +'<td style="padding:10px 12px;font-size:13px;color:#374151;">'+lot.label+'</td>'
+      +'<td style="padding:10px 12px;font-size:13px;text-align:center;">'+lot.ponds.length+'基</td>'
+      +'<td style="padding:10px 12px;font-size:13px;font-weight:700;text-align:right;">'+lot.stock.toLocaleString()+'尾</td>'
+      +'<td style="padding:10px 12px;font-size:11px;color:#64748b;">'+pondList+'</td>'
+      +'</tr>';
+  });
+  container.innerHTML=html;
 }
 
 function openLotDetail(i){
@@ -1954,21 +2074,27 @@ function renderDailyMatrix(){
   head+='<th style="min-width:140px">メモ</th>';
   head+='</tr></thead>';
   var body='<tbody>';
-  ['団地','楠森','葛崎','横島'].forEach(function(area){
-    body+='<tr class="m-area-sep"><td colspan="6">▌ '+area+'エリア</td></tr>';
-    tanks.filter(function(t){return t.area===area;}).forEach(function(t){
-      var uc=t.status==='pending'?'unfilled':'filled';
-      var feedVal=t.status==='pending'?'':t.feed;
+  ['団地','太喜','瀬後の浦','横島','楠森','葛崎'].forEach(function(area){
+    var ponds=POND_CONFIG.filter(function(p){return p.area===area && p.status!=='skip';});
+    if(!ponds.length)return;
+    body+='<tr class="m-area-sep"><td colspan="6">▌ '+area+'エリア（'+ponds.length+'基）</td></tr>';
+    ponds.forEach(function(p){
+      var uc=p.status==='todo'?'unfilled':'filled';
+      var feedVal=p.status==='todo'?'':(p.feedKg||p.feed||'');
+      var yr=POND_YR[p.id];
+      var yrLabel=yr?'<span style="font-size:10px;color:#94a3b8;margin-left:4px;">'+yr+'年魚</span>':'';
       body+='<tr>';
-      body+='<td class="row-label">'+t.id+'</td>';
+      body+='<td class="row-label">'+p.id+yrLabel+'</td>';
       body+='<td class="'+uc+'"><input type="number" value="'+feedVal+'" placeholder="—" onchange="cellFilled(this)"></td>';
-      body+='<td class="'+(t.mort>0?'filled':uc)+'"><input type="number" value="'+t.mort+'" placeholder="0" onchange="cellFilled(this)"></td>';
-      body+='<td class="'+(t.bgrade>0?'filled':uc)+'"><input type="number" value="'+t.bgrade+'" placeholder="0" onchange="cellFilled(this)"></td>';
+      body+='<td class="'+(p.mort>0?'filled':uc)+'"><input type="number" value="'+(p.mort||'')+'" placeholder="0" onchange="cellFilled(this)"></td>';
+      body+='<td class="'+(p.bgrade>0?'filled':uc)+'"><input type="number" value="'+(p.bgrade||'')+'" placeholder="0" onchange="cellFilled(this)"></td>';
       var sel='<select style="width:76px;height:26px;font-size:11px;border:1px solid var(--border);border-radius:3px;padding:0 4px">';
-      ['正常','給餌済','異常あり','絶食'].forEach(function(o,i){sel+='<option'+(i===0?' selected':'')+'>'+o+'</option>';});
+      var opts=['正常','給餌済','異常あり','絶食'];
+      var selIdx=p.status==='done'?1:p.status==='alert'?2:0;
+      opts.forEach(function(o,i){sel+='<option'+(i===selIdx?' selected':'')+'>'+o+'</option>';});
       sel+='</select>';
       body+='<td style="padding:2px 4px">'+sel+'</td>';
-      body+='<td><input type="text" placeholder="メモ..." style="width:100%;height:26px;border:1px solid var(--border);border-radius:3px;font-size:11px;padding:0 6px;font-family:inherit"></td>';
+      body+='<td><input type="text" value="'+(p.memo||'')+'" placeholder="メモ..." style="width:100%;height:26px;border:1px solid var(--border);border-radius:3px;font-size:11px;padding:0 6px;font-family:inherit"></td>';
       body+='</tr>';
     });
   });

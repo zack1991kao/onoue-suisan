@@ -1676,6 +1676,35 @@ const POND_CONFIG = [
   {id:'瀬後の浦-10', area:'瀬後の浦', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
 ];
 
+var POND_YR = {
+  '団地-01':3,'団地-02':4,'団地-03':3,'団地-04':2,'団地-05':3,
+  '団地-06':1,'団地-07':1,'団地-08':1,'団地-09':1,'団地-10':1,
+  '団地-11':1,'団地-12':1,'団地-13':3,'団地-15':2,
+  '団地-19':2,'団地-20':2,'団地-21':2,'団地-22':2,'団地-23':2,
+  '団地-24':2,'団地-25':2,'団地-26':2,
+  '太喜-01':2,'太喜-02':2,'太喜-03':2,'太喜-04':2,
+  '太喜-05':2,'太喜-06':2,'太喜-07':2,
+  '瀬後の浦-01':3,'瀬後の浦-02':1,'瀬後の浦-03':1,'瀬後の浦-04':1,
+  '瀬後の浦-05':1,'瀬後の浦-06':1,'瀬後の浦-07':1,
+  '瀬後の浦-09':2,'瀬後の浦-10':2,
+  '横島-02':3,'横島-03':3,'横島-06':2,'横島-07':3,
+  '横島-08':4,'横島-09':3,'横島-10':3,
+  '横島-12':2,'横島-13':2,'横島-14':2,'横島-15':2,
+  '横島-16':3,'横島-17':3,'横島-18':3,'横島-19':2,
+  '横島-21':3,'横島-22':2,'横島-23':2,
+  '横島-24':3,'横島-25':3,'横島-26':4,'横島-27':3,
+  '楠森-01':3,'楠森-02':3,'楠森-03':3,'楠森-04':2,'楠森-05':2,
+  '楠森-06':3,'楠森-07':3,'楠森-08':3,'楠森-09':3,'楠森-10':3,
+  '楠森-11':3,'楠森-12':3,'楠森-13':3,'楠森-14':2,'楠森-15':4,
+  '楠森-16':3,'楠森-17':2,'楠森-18':2,'楠森-19':2,'楠森-20':3,
+  '楠森-22':4,'楠森-23':3,
+  '葛崎-01':3,'葛崎-02':3,'葛崎-03':2,'葛崎-04':2,
+  '葛崎-05':3,'葛崎-06':2,'葛崎-07':2,'葛崎-08':2
+};
+function yrToLabel(yr) {
+  return yr + '年魚（' + (2026-yr) + '年春入荷）';
+}
+
 const BAITS = [
   'p7','p8','p9',
   'チェリー8','チェリー9',
@@ -1944,12 +1973,18 @@ function drawFishMap(areaFilter) {
   if (areaFilter) {
     var filtered = ponds.map(function(p) { return CAGE_MAP[p.id]; }).filter(Boolean);
     if (filtered.length) {
-      var xs = filtered.map(function(c) { return c.x + SVG_R; });
-      var ys = filtered.map(function(c) { return c.y + SVG_R; });
-      var cx = (Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2;
-      var cy = (Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2;
-      var VW = 200, VH = 500;
-      svg.setAttribute('viewBox', (cx - VW/2) + ' ' + (cy - VH/2) + ' ' + VW + ' ' + VH);
+      var PAD = 30;
+      var xs = filtered.map(function(c) { return c.x; });
+      var ys = filtered.map(function(c) { return c.y; });
+      var bMinX = Math.min.apply(null, xs) - PAD;
+      var bMinY = Math.min.apply(null, ys) - PAD;
+      var bMaxX = Math.max.apply(null, xs) + SVG_SZ + PAD;
+      var bMaxY = Math.max.apply(null, ys) + SVG_SZ + PAD;
+      var vw = Math.max(bMaxX - bMinX, 120);
+      var vh = Math.max(bMaxY - bMinY, 300);
+      var cx = (bMinX + bMaxX) / 2;
+      var cy = (bMinY + bMaxY) / 2;
+      svg.setAttribute('viewBox', (cx - vw/2) + ' ' + (cy - vh/2) + ' ' + vw + ' ' + vh);
     }
   } else {
     svg.setAttribute('viewBox', '0 0 310 730');
