@@ -193,6 +193,37 @@ body {
 .area-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
 .area-count { display: block; font-size: 10px; font-weight: 500; color: #94a3b8; }
 
+/* ===== AREA FILTER (漁場図) ===== */
+.area-filter-wrap {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+  flex-shrink: 0;
+}
+.area-filter-btn {
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  border: 1.5px solid #cbd5e1;
+  background: #fff;
+  color: #64748b;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  flex-shrink: 0;
+}
+.area-filter-btn.active {
+  background: #1b3a5c;
+  border-color: #1b3a5c;
+  color: #fff;
+}
+
 /* ===== POND GRID ===== */
 .pond-grid {
   display: grid;
@@ -708,6 +739,19 @@ body {
   color: var(--ink2); cursor: pointer;
 }
 .rec-nav-btn:active { background: var(--line); }
+.rec-add-bait2-btn {
+  background: none;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #64748b;
+  font-family: inherit;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 4px;
+  touch-action: manipulation;
+}
 
 /* ===== HOME STATUS LEGEND ===== */
 .home-legend {
@@ -1131,7 +1175,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
       <div class="ai-home-banner-sub">給餌入力画面でAI参考値が確認できます</div>
     </div>
   </div>
-  <div class="area-tabs" id="homeAreaTabs"></div>
+  <div class="area-filter-wrap" id="areaFilterWrap"></div>
   <div id="homeSummary" style="display:flex;gap:12px;padding:6px 16px;background:#f8fafc;border-bottom:1px solid var(--border);font-size:13px;color:var(--ink2);flex-shrink:0;"></div>
   <div class="home-legend">
     <div class="legend-item"><div class="legend-dot ld-todo"></div>未記録</div>
@@ -1332,6 +1376,11 @@ body.ai-mode-on .ai-home-banner{display:flex}
       <div class="rec-label">餌の種類</div>
       <select class="rec-select" id="recBait"></select>
     </div>
+    <div class="rec-field" id="recBait2Wrap" style="display:none;">
+      <div class="rec-label">配合餌</div>
+      <select class="rec-select" id="recBait2"></select>
+    </div>
+    <button class="rec-add-bait2-btn" id="recAddBait2Btn" onclick="toggleBait2Field()">＋ 配合餌を追加</button>
     <div class="rec-row">
       <div class="rec-field" style="flex:1">
         <div class="rec-label">死魚数 (尾)</div>
@@ -1572,7 +1621,7 @@ function switchTab(tab) {
   if (btnEl) btnEl.classList.add('active');
   if (tab === 'home') {
     updateHeader('尾上水産', '', false);
-    buildHome(state.homeArea);
+    buildHome(currentHomeArea);
   }
   if (tab === 'feed') {
     updateHeader('給餌入力', '', false);
@@ -1630,20 +1679,37 @@ function buildGrid(containerId, area, selectedId, onSelect, extra, showStatus, i
 }
 
 // ===== HOME：漁場図 =====
+var currentHomeArea = null; // null = 全て
+
+function initAreaFilter() {
+  var areas = ['全て'].concat(AREAS);
+  var wrap = document.getElementById('areaFilterWrap');
+  if (!wrap) return;
+  wrap.innerHTML = areas.map(function(a) {
+    return '<button class="area-filter-btn' + (a === '全て' ? ' active' : '') +
+      '" id="areaBtn-' + a + '" onclick="selectArea(\'' + a + '\')">' + a + '</button>';
+  }).join('');
+}
+
+function selectArea(area) {
+  currentHomeArea = (area === '全て') ? null : area;
+  document.querySelectorAll('.area-filter-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.getElementById('areaBtn-' + area).classList.add('active');
+  buildHome(currentHomeArea);
+}
+
 function buildHome(area) {
-  if (!area) area = state.homeArea;
-  state.homeArea = area;
-  buildAreaTabs('homeAreaTabs', area, 'homeSelectArea');
   var el = document.getElementById('homeGrid');
   if (!el) return;
-  var ponds = POND_CONFIG.filter(function(p){ return p.area === area && p.status !== 'skip'; });
+  var ponds = area
+    ? POND_CONFIG.filter(function(p){ return p.area === area && p.status !== 'skip'; })
+    : POND_CONFIG.filter(function(p){ return p.status !== 'skip'; });
   el.innerHTML = ponds.map(function(p) {
     return '<div class="pond-cell square ' + p.status + '" onclick="homeSelectPond(\'' + p.id + '\')">' +
       '<div class="pond-num">' + p.id.split('-')[1] + '</div>' +
       '<div class="pond-fish">' + fishInitial(p.species) + '</div>' +
       '</div>';
   }).join('');
-  // 集計サマリー更新
   var total = POND_CONFIG.length;
   var active = POND_CONFIG.filter(function(p){ return p.status !== 'skip'; }).length;
   var totalStock = POND_CONFIG.reduce(function(s,p){ return s + (p.stock||0); }, 0);
@@ -1654,12 +1720,6 @@ function buildHome(area) {
       '<span>稼働中 <b>' + active + '基</b></span>' +
       '<span>総在庫 <b>' + Math.round(totalStock/10000) + '万尾</b></span>';
   }
-}
-function homeSelectArea(btn) {
-  document.querySelectorAll('#homeAreaTabs .area-tab').forEach(function(t){ t.classList.remove('active'); });
-  btn.classList.add('active');
-  state.homeArea = btn.dataset.a;
-  buildHome(state.homeArea);
 }
 function homeSelectPond(id) {
   var p = getPond(id);
@@ -1679,6 +1739,22 @@ function openRecordPanel(id) {
   baitSel.innerHTML = BAITS.map(function(b) {
     return '<option value="' + b + '"' + (b === p.bait ? ' selected' : '') + '>' + b + '</option>';
   }).join('');
+
+  // 配合餌セレクト構築
+  var bait2El = document.getElementById('recBait2');
+  bait2El.innerHTML = '<option value="">なし</option>' + BAITS.map(function(b) {
+    return '<option value="' + b + '">' + b + '</option>';
+  }).join('');
+  bait2El.value = p.bait2 || '';
+  var bait2Wrap = document.getElementById('recBait2Wrap');
+  var addBtn = document.getElementById('recAddBait2Btn');
+  if (p.bait2) {
+    bait2Wrap.style.display = 'block';
+    addBtn.textContent = '－ 配合餌を削除';
+  } else {
+    bait2Wrap.style.display = 'none';
+    addBtn.textContent = '＋ 配合餌を追加';
+  }
 
   // 薬品セレクト構築
   var drugSel = document.getElementById('recDrugSelect');
@@ -1718,6 +1794,14 @@ function closeRecordPanel(e) {
 function closeRecordPanelDirect() {
   document.getElementById('recordPanel').classList.add('hidden');
 }
+function toggleBait2Field() {
+  var wrap = document.getElementById('recBait2Wrap');
+  var btn = document.getElementById('recAddBait2Btn');
+  var visible = wrap.style.display !== 'none';
+  wrap.style.display = visible ? 'none' : 'block';
+  btn.textContent = visible ? '＋ 配合餌を追加' : '－ 配合餌を削除';
+  if (visible) document.getElementById('recBait2').value = '';
+}
 function toggleRecordDrug() {
   var row = document.getElementById('recDrugRow');
   var on = row.classList.toggle('on');
@@ -1739,6 +1823,7 @@ function saveRecord() {
   var mort = parseInt(document.getElementById('recMort').value) || 0;
   var bgrade = parseInt(document.getElementById('recBgrade').value) || 0;
   var bait = document.getElementById('recBait').value;
+  var bait2 = document.getElementById('recBait2').value;
   var drugOn = document.getElementById('recDrugRow').classList.contains('on');
   var drug = drugOn ? document.getElementById('recDrugSelect').value : '';
   var drugAmt = drugOn ? (parseFloat(document.getElementById('recDrugAmt').value) || 0) : 0;
@@ -1749,6 +1834,7 @@ function saveRecord() {
   p.mort = mort;
   p.bgrade = bgrade;
   p.bait = bait;
+  p.bait2 = bait2;
   p.drugOn = drugOn;
   p.drug = drug;
   p.drugAmt = drugAmt;
@@ -1763,7 +1849,7 @@ function saveRecord() {
   }
 
   closeRecordPanelDirect();
-  buildHome(state.homeArea);
+  buildHome(currentHomeArea);
 }
 function recNavGo(tab) {
   closeRecordPanelDirect();
@@ -1896,7 +1982,7 @@ function saveFeedList() {
   var subMsg = state.feedArea + 'エリア ' + saved + '基を保存しました';
   if (flaggedRows.length > 0) subMsg += '\n⚑ 要確認：' + flaggedRows.join(', ');
   document.getElementById('feedDoneSub').textContent = subMsg;
-  buildHome(state.homeArea);
+  buildHome(currentHomeArea);
   document.getElementById('feed-list-view').style.display = 'none';
   var doneEl = document.getElementById('feed-done');
   doneEl.style.display = 'flex';
@@ -2217,7 +2303,8 @@ function setAiMode(on, save) {
 
 // ===== INIT =====
 initAiMode();
-buildHome('団地');
+initAreaFilter();
+buildHome(null);
 buildFeedList('団地');
 renderCalendar();
 buildMoveGrids();
