@@ -580,7 +580,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div class="tab-pane" id="orders-tp-ship">
     <div class="filter-row">
       <span class="filter-label">出荷日：</span>
-      <input type="date" id="shipDate" value="2026-04-30">
+      <input type="date" id="shipDate">
       <select id="shipBuyerSel">
         <option>ニチモウ</option><option>信源</option><option>オーシャン</option>
         <option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option>
@@ -668,13 +668,13 @@ body.ai-mode-on .ai-element-flex{display:flex}
 <!-- ══ SCREEN 3: INVENTORY ══ -->
 <div class="screen" id="s-inventory">
   <div class="page-header">
-    <div><h2>在庫一覧</h2><div class="phsub">総在庫 284,500尾 ／ 65基</div></div>
+    <div><h2>在庫一覧</h2><div class="phsub" id="invPageSub">読み込み中...</div></div>
   </div>
   <div class="inv-summary">
     <div class="tbl-wrap">
       <table class="inv-summary-table">
         <thead><tr>
-          <th>エリア</th><th>正常</th><th>未記録</th><th>要確認</th><th>要対応</th><th>合計</th>
+          <th>エリア</th><th>完了</th><th>未記録</th><th>要確認</th><th>空き</th><th>合計</th>
         </tr></thead>
         <tbody id="invSummaryBody"></tbody>
       </table>
@@ -683,20 +683,23 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div class="filter-row">
     <select id="invArea" onchange="renderInv()">
       <option value="all">全エリア</option>
-      <option value="団地">団地</option><option value="楠森">楠森</option>
-      <option value="葛崎">葛崎</option><option value="横島">横島</option>
+      <option value="団地">団地</option><option value="太喜">太喜</option>
+      <option value="瀬後の浦">瀬後の浦</option><option value="横島">横島</option>
+      <option value="楠森">楠森</option><option value="葛崎">葛崎</option>
     </select>
     <select id="invSp" onchange="renderInv()">
       <option value="all">全魚種</option><option>マダイ</option><option>カンパチ</option><option>シマアジ</option>
     </select>
     <select id="invSt" onchange="renderInv()">
-      <option value="all">全状態</option><option value="ok">OK</option><option value="warn">要確認</option><option value="alert">要対応</option><option value="pending">記録待ち</option>
+      <option value="all">全状態</option>
+      <option value="todo">未記録</option><option value="done">完了</option>
+      <option value="alert">要確認</option><option value="skip">空き</option>
     </select>
   </div>
   <div class="tbl-wrap">
     <table><thead><tr>
       <th>いけす</th><th>形状</th><th>魚種</th><th style="text-align:right">在庫尾数</th>
-      <th>推計サイズ</th><th>最終給餌</th><th>状態</th><th>ロット</th><th></th>
+      <th>給餌実績</th><th>状態</th><th></th>
     </tr></thead>
     <tbody id="invBody"></tbody></table>
   </div>
@@ -716,6 +719,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <button class="tab-btn active" onclick="swTabDiary('diary','daily',this)">📝 日別マトリクス（今日の記録）</button>
     <button class="tab-btn" onclick="swTabDiary('diary','monthly',this)">📅 月別マトリクス（月次集計）</button>
     <button class="tab-btn" onclick="swTabDiary('diary','cards',this)">🗂 いけすカード</button>
+    <button class="tab-btn" onclick="swTabDiary('diary','fishmap',this);drawAdminFishMap()">🗺 漁場図</button>
   </div>
 
   <!-- 日別マトリクス -->
@@ -774,6 +778,11 @@ body.ai-mode-on .ai-element-flex{display:flex}
       <button class="atab" onclick="filterCardArea('横島',this)">横島</button>
     </div>
     <div id="tankCardGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:4px"></div>
+  </div>
+
+  <!-- 漁場図 -->
+  <div class="tab-pane" id="diary-tp-fishmap" style="flex:1;overflow:auto;padding:12px">
+    <svg id="adminFishMapSvg" viewBox="0 0 640 1460" style="width:640px;max-width:100%;display:block;background:#eef4fb;border-radius:8px;" xmlns="http://www.w3.org/2000/svg"></svg>
   </div>
 </div><!-- /s-diary -->
 
@@ -1144,6 +1153,173 @@ body.ai-mode-on .ai-element-flex{display:flex}
 // ══════════════════════════════════════════
 const BUYERS=['ニチモウ','信源','オーシャン','龍ヶ岳','和潮','紀勝','大海水産'];
 const AREA_CNT={団地:18,楠森:14,葛崎:16,横島:17};
+const POND_CONFIG=[
+  {id:'団地-01',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-02',area:'団地',sh:'sq',species:'シマアジ',stock:2500, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-03',area:'団地',sh:'sq',species:'シマアジ',stock:3000, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-04',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-05',area:'団地',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-06',area:'団地',sh:'sq',species:'シマアジ',stock:10000,bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-07',area:'団地',sh:'sq',species:'シマアジ',stock:10000,bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-08',area:'団地',sh:'sq',species:'シマアジ',stock:10000,bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-09',area:'団地',sh:'sq',species:'マダイ',  stock:20000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-10',area:'団地',sh:'sq',species:'マダイ',  stock:20000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-11',area:'団地',sh:'sq',species:'マダイ',  stock:20000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-12',area:'団地',sh:'sq',species:'マダイ',  stock:20000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-13',area:'団地',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-14',area:'団地',sh:'sq',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'団地-15',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-16',area:'団地',sh:'sq',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'団地-17',area:'団地',sh:'sq',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'団地-18',area:'団地',sh:'sq',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'団地-19',area:'団地',sh:'sq',species:'マダイ',  stock:12300,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-20',area:'団地',sh:'sq',species:'マダイ',  stock:12500,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-21',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-22',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-23',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-24',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-25',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'団地-26',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-01',area:'楠森',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-02',area:'楠森',sh:'ci',species:'マダイ',  stock:11000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-03',area:'楠森',sh:'ci',species:'マダイ',  stock:12300,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-04',area:'楠森',sh:'sq',species:'カンパチ',stock:3345, bait:'チェリー9',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-05',area:'楠森',sh:'sq',species:'カンパチ',stock:3360, bait:'チェリー9',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-06',area:'楠森',sh:'sq',species:'マダイ',  stock:11500,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-07',area:'楠森',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-08',area:'楠森',sh:'sq',species:'マダイ',  stock:6000, bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-09',area:'楠森',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-10',area:'楠森',sh:'sq',species:'マダイ',  stock:11000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-11',area:'楠森',sh:'sq',species:'マダイ',  stock:11000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-12',area:'楠森',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-13',area:'楠森',sh:'sq',species:'マダイ',  stock:13000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-14',area:'楠森',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-15',area:'楠森',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-16',area:'楠森',sh:'ci',species:'マダイ',  stock:11800,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-17',area:'楠森',sh:'sq',species:'カンパチ',stock:3300, bait:'チェリー9',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-18',area:'楠森',sh:'sq',species:'カンパチ',stock:3320, bait:'チェリー9',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-19',area:'楠森',sh:'sq',species:'カンパチ',stock:3500, bait:'チェリー9',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-20',area:'楠森',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-21',area:'楠森',sh:'ci',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'楠森-22',area:'楠森',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'楠森-23',area:'楠森',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'葛崎-01',area:'葛崎',sh:'sq',species:'マダイ',  stock:11500,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'葛崎-02',area:'葛崎',sh:'sq',species:'マダイ',  stock:7000, bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'葛崎-03',area:'葛崎',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'葛崎-04',area:'葛崎',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'葛崎-05',area:'葛崎',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'葛崎-06',area:'葛崎',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'葛崎-07',area:'葛崎',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'葛崎-08',area:'葛崎',sh:'sq',species:'マダイ',  stock:10500,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-01',area:'横島',sh:'ci',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'横島-02',area:'横島',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-03',area:'横島',sh:'sq',species:'マダイ',  stock:15000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-04',area:'横島',sh:'sq',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'横島-05',area:'横島',sh:'sq',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'横島-06',area:'横島',sh:'sq',species:'カンパチ',stock:3500, bait:'チェリー9',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-07',area:'横島',sh:'sq',species:'カンパチ',stock:2500, bait:'チェリー9',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-08',area:'横島',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-09',area:'横島',sh:'ci',species:'マダイ',  stock:11400,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-10',area:'横島',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-11',area:'横島',sh:'sq',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'横島-12',area:'横島',sh:'sq',species:'シマアジ',stock:4500, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-13',area:'横島',sh:'sq',species:'シマアジ',stock:9000, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-14',area:'横島',sh:'sq',species:'シマアジ',stock:9000, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-15',area:'横島',sh:'sq',species:'マダイ',  stock:13000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-16',area:'横島',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-17',area:'横島',sh:'ci',species:'マダイ',  stock:12500,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-18',area:'横島',sh:'ci',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-19',area:'横島',sh:'sq',species:'シマアジ',stock:4500, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-20',area:'横島',sh:'sq',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'横島-21',area:'横島',sh:'sq',species:'シマアジ',stock:3900, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-22',area:'横島',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-23',area:'横島',sh:'sq',species:'マダイ',  stock:10000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-24',area:'横島',sh:'sq',species:'シマアジ',stock:4000, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-25',area:'横島',sh:'sq',species:'シマアジ',stock:4000, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-26',area:'横島',sh:'sq',species:'シマアジ',stock:1000, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-27',area:'横島',sh:'sq',species:'シマアジ',stock:2900, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'横島-28',area:'横島',sh:'sq',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'太喜-01',area:'太喜',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'太喜-02',area:'太喜',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'太喜-03',area:'太喜',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'太喜-04',area:'太喜',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'太喜-05',area:'太喜',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'太喜-06',area:'太喜',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'太喜-07',area:'太喜',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'太喜-08',area:'太喜',sh:'sq',species:'',        stock:0,    bait:'',             status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'瀬後の浦-01',area:'瀬後の浦',sh:'ci',species:'マダイ',stock:12000,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'瀬後の浦-02',area:'瀬後の浦',sh:'sq',species:'マダイ',stock:25000,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'瀬後の浦-03',area:'瀬後の浦',sh:'sq',species:'マダイ',stock:25000,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'瀬後の浦-04',area:'瀬後の浦',sh:'sq',species:'マダイ',stock:25000,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'瀬後の浦-05',area:'瀬後の浦',sh:'sq',species:'マダイ',stock:25000,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'瀬後の浦-06',area:'瀬後の浦',sh:'sq',species:'マダイ',stock:13000,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'瀬後の浦-07',area:'瀬後の浦',sh:'sq',species:'マダイ',stock:17000,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'瀬後の浦-08',area:'瀬後の浦',sh:'sq',species:'',      stock:0,    bait:'',         status:'skip',feed:0,mort:0,bgrade:0},
+  {id:'瀬後の浦-09',area:'瀬後の浦',sh:'sq',species:'マダイ',stock:12300,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
+  {id:'瀬後の浦-10',area:'瀬後の浦',sh:'sq',species:'マダイ',stock:12000,bait:'ひめ桜 s7',status:'todo',feed:0,mort:0,bgrade:0},
+];
+var CAGE_MAP={
+  '楠森-01':{x:10,y:40,sh:'ci'},'楠森-02':{x:10,y:68,sh:'ci'},
+  '楠森-03':{x:10,y:96,sh:'ci'},'楠森-04':{x:10,y:132,sh:'sq'},
+  '楠森-05':{x:10,y:160,sh:'sq'},'楠森-06':{x:10,y:188,sh:'sq'},
+  '楠森-07':{x:10,y:216,sh:'sq'},'楠森-08':{x:10,y:244,sh:'sq'},
+  '楠森-09':{x:10,y:272,sh:'sq'},'楠森-10':{x:10,y:300,sh:'sq'},
+  '楠森-11':{x:10,y:328,sh:'sq'},'楠森-12':{x:10,y:356,sh:'sq'},
+  '楠森-13':{x:10,y:384,sh:'sq'},'楠森-14':{x:10,y:412,sh:'sq'},
+  '楠森-15':{x:10,y:454,sh:'ci'},'楠森-16':{x:42,y:132,sh:'ci'},
+  '楠森-17':{x:42,y:188,sh:'sq'},'楠森-18':{x:42,y:216,sh:'sq'},
+  '楠森-19':{x:42,y:244,sh:'sq'},'楠森-20':{x:42,y:300,sh:'ci'},
+  '楠森-21':{x:42,y:328,sh:'ci'},'楠森-22':{x:42,y:356,sh:'ci'},
+  '楠森-23':{x:42,y:384,sh:'ci'},
+  '団地-01':{x:90,y:36,sh:'sq'},'団地-02':{x:90,y:64,sh:'sq'},
+  '団地-03':{x:90,y:92,sh:'sq'},'団地-04':{x:90,y:120,sh:'sq'},
+  '団地-05':{x:120,y:8,sh:'ci'},'団地-06':{x:120,y:36,sh:'sq'},
+  '団地-07':{x:120,y:64,sh:'sq'},'団地-08':{x:120,y:92,sh:'sq'},
+  '団地-09':{x:120,y:120,sh:'sq'},'団地-10':{x:120,y:148,sh:'sq'},
+  '団地-11':{x:120,y:176,sh:'sq'},'団地-12':{x:120,y:204,sh:'sq'},
+  '団地-13':{x:90,y:176,sh:'ci'},'団地-14':{x:90,y:244,sh:'sq'},
+  '団地-15':{x:90,y:272,sh:'sq'},'団地-16':{x:90,y:300,sh:'sq'},
+  '団地-17':{x:90,y:328,sh:'sq'},'団地-18':{x:90,y:356,sh:'sq'},
+  '団地-19':{x:150,y:244,sh:'sq'},'団地-20':{x:150,y:272,sh:'sq'},
+  '団地-21':{x:150,y:300,sh:'sq'},'団地-22':{x:120,y:244,sh:'sq'},
+  '団地-23':{x:120,y:272,sh:'sq'},'団地-24':{x:120,y:300,sh:'sq'},
+  '団地-25':{x:120,y:328,sh:'sq'},'団地-26':{x:120,y:356,sh:'sq'},
+  '太喜-01':{x:200,y:10,sh:'sq'},'太喜-02':{x:200,y:38,sh:'sq'},
+  '太喜-03':{x:200,y:66,sh:'sq'},'太喜-04':{x:200,y:94,sh:'sq'},
+  '太喜-05':{x:200,y:122,sh:'sq'},'太喜-06':{x:200,y:150,sh:'sq'},
+  '太喜-07':{x:200,y:178,sh:'sq'},'太喜-08':{x:200,y:206,sh:'sq'},
+  '瀬後の浦-01':{x:256,y:10,sh:'ci'},'瀬後の浦-02':{x:256,y:44,sh:'sq'},
+  '瀬後の浦-03':{x:256,y:72,sh:'sq'},'瀬後の浦-04':{x:256,y:100,sh:'sq'},
+  '瀬後の浦-05':{x:256,y:128,sh:'sq'},'瀬後の浦-06':{x:256,y:156,sh:'sq'},
+  '瀬後の浦-07':{x:256,y:184,sh:'sq'},'瀬後の浦-08':{x:256,y:212,sh:'sq'},
+  '瀬後の浦-09':{x:256,y:240,sh:'sq'},'瀬後の浦-10':{x:256,y:268,sh:'sq'},
+  '横島-01':{x:88,y:500,sh:'ci'},'横島-02':{x:88,y:532,sh:'sq'},
+  '横島-03':{x:88,y:560,sh:'sq'},'横島-04':{x:88,y:588,sh:'sq'},
+  '横島-05':{x:88,y:616,sh:'sq'},'横島-06':{x:88,y:644,sh:'sq'},
+  '横島-07':{x:88,y:672,sh:'sq'},'横島-08':{x:128,y:500,sh:'ci'},
+  '横島-09':{x:160,y:500,sh:'ci'},'横島-10':{x:192,y:500,sh:'ci'},
+  '横島-11':{x:112,y:572,sh:'sq'},'横島-12':{x:112,y:600,sh:'sq'},
+  '横島-13':{x:112,y:628,sh:'sq'},'横島-14':{x:112,y:656,sh:'sq'},
+  '横島-15':{x:112,y:684,sh:'sq'},'横島-16':{x:128,y:532,sh:'ci'},
+  '横島-17':{x:160,y:532,sh:'ci'},'横島-18':{x:192,y:532,sh:'ci'},
+  '横島-19':{x:144,y:572,sh:'sq'},'横島-20':{x:144,y:600,sh:'sq'},
+  '横島-21':{x:144,y:628,sh:'sq'},'横島-22':{x:144,y:656,sh:'sq'},
+  '横島-23':{x:144,y:684,sh:'sq'},'横島-24':{x:176,y:572,sh:'sq'},
+  '横島-25':{x:176,y:600,sh:'sq'},'横島-26':{x:176,y:628,sh:'sq'},
+  '横島-27':{x:176,y:656,sh:'sq'},'横島-28':{x:176,y:684,sh:'sq'},
+  '葛崎-01':{x:248,y:512,sh:'sq'},'葛崎-02':{x:248,y:540,sh:'sq'},
+  '葛崎-03':{x:248,y:568,sh:'sq'},'葛崎-04':{x:248,y:596,sh:'sq'},
+  '葛崎-05':{x:278,y:512,sh:'ci'},'葛崎-06':{x:278,y:544,sh:'sq'},
+  '葛崎-07':{x:278,y:572,sh:'sq'},'葛崎-08':{x:278,y:600,sh:'sq'}
+};
+var AREA_BOXES_PC=[
+  {area:'楠森',    lx:8,  ly:34, bx:5,  by:37, bw:63, bh:444},
+  {area:'団地',    lx:88, ly:4,  bx:86, by:5,  bw:92, bh:382},
+  {area:'太喜',    lx:198,ly:6,  bx:196,by:6,  bw:30, bh:230},
+  {area:'瀬後の浦',lx:252,ly:6,  bx:250,by:6,  bw:34, bh:292},
+  {area:'横島',    lx:86, ly:494,bx:84, by:496,bw:120,bh:220},
+  {area:'葛崎',    lx:246,ly:506,bx:244,by:508,bw:62, bh:120}
+];
 const PENDING_IDS=['団地-03','団地-11','楠森-07','楠森-12','葛崎-04','葛崎-09','横島-08','横島-15','団地-17','楠森-02','葛崎-13','横島-01','団地-05','楠森-10','葛崎-16'];
 const ALERT_IDS=['葛崎-12','楠森-08','横島-19'];
 const pendingSet=new Set(PENDING_IDS);
@@ -1236,9 +1412,9 @@ const calOrders={};
 });
 
 var shipRows=[
-  {no:1,species:'鯛',qty:6,gross:18.9,futa:0.5,mizu:0.9,price:1650,lot:'Lot.43,5,1〜2'},
-  {no:2,species:'鯛',qty:8,gross:20.0,futa:0.6,mizu:1.2,price:1600,lot:''},
-  {no:3,species:'鯛',qty:10,gross:24.5,futa:0.7,mizu:1.4,price:1700,lot:''},
+  {no:1,species:'鯛',qty:6,gross:18.9,futa:0.5,mizu:0.9,price:'',lot:'Lot.43,5,1〜2'},
+  {no:2,species:'鯛',qty:8,gross:20.0,futa:0.6,mizu:1.2,price:'',lot:''},
+  {no:3,species:'鯛',qty:10,gross:24.5,futa:0.7,mizu:1.4,price:'',lot:''},
 ];
 
 var calYear=2026,calMonth=5;
@@ -1303,6 +1479,9 @@ function setDate(){
   var d=new Date();
   var days=['日','月','火','水','木','金','土'];
   document.getElementById('hdate').textContent=d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日（'+days[d.getDay()]+'）';
+  var y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+  var today=y+'-'+m+'-'+day;
+  document.getElementById('shipDate').value=today;
 }
 
 // ══════════════════════════════════════════
@@ -1586,7 +1765,7 @@ function calcShip(){
   document.getElementById('shipTotalAmt').textContent='¥'+totAmt.toLocaleString();
 }
 function addShipRow(){
-  shipRows.push({no:shipRows.length+1,species:'鯛',qty:0,gross:0,futa:0,mizu:0,price:1600,lot:''});
+  shipRows.push({no:shipRows.length+1,species:'鯛',qty:0,gross:0,futa:0,mizu:0,price:'',lot:''});
   renderShipTable();
 }
 
@@ -1620,33 +1799,81 @@ function renderLedger(buyer){
 }
 
 // ══════════════════════════════════════════
+// FISH MAP (diary tab)
+// ══════════════════════════════════════════
+function fishInitial(fish){
+  var map={'マダイ':'タイ','カンパチ':'カンパチ','シマアジ':'シマアジ'};
+  return map[fish]||fish;
+}
+function drawAdminFishMap(){
+  var svg=document.getElementById('adminFishMapSvg');
+  if(!svg)return;
+  var SC=2,SZ=22*SC,R=11*SC;
+  var FF='"Hiragino Kaku Gothic Pro","Yu Gothic",sans-serif';
+  var parts=[];
+  AREA_BOXES_PC.forEach(function(ab){
+    parts.push('<rect x="'+(ab.bx*SC)+'" y="'+(ab.by*SC)+'" width="'+(ab.bw*SC)+'" height="'+(ab.bh*SC)+'" rx="8" fill="#e8f4fd" stroke="#93c5fd" stroke-width="1.5"/>');
+    parts.push('<text x="'+(ab.lx*SC)+'" y="'+((ab.ly-4)*SC)+'" font-size="16" font-weight="700" fill="#1e40af" font-family='+FF+'>'+ab.area+'</text>');
+  });
+  POND_CONFIG.forEach(function(p){
+    var cm=CAGE_MAP[p.id];
+    if(!cm)return;
+    var cx=cm.x*SC+R,cy=cm.y*SC+R;
+    var st=p.status;
+    var f=st==='done'?'#dcfce7':st==='alert'?'#fff7ed':st==='skip'?'#f8fafc':'#fef2f2';
+    var k=st==='done'?'#22c55e':st==='alert'?'#d97706':st==='skip'?'#e2e8f0':'#ef4444';
+    var t=st==='done'?'#166534':st==='alert'?'#7c2d12':st==='skip'?'#94a3b8':'#991b1b';
+    if(p.sh==='ci'){
+      parts.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"/>');
+    }else{
+      parts.push('<rect x="'+(cm.x*SC)+'" y="'+(cm.y*SC)+'" width="'+SZ+'" height="'+SZ+'" rx="3" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"/>');
+    }
+    if(st!=='skip'){
+      var lbl=fishInitial(p.species);
+      parts.push('<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" font-size="13" font-weight="700" fill="'+t+'" font-family='+FF+'>'+lbl+'</text>');
+    }
+    if(st==='done'&&p.feedKg){
+      parts.push('<text x="'+cx+'" y="'+(cy+R+14)+'" text-anchor="middle" font-size="10" fill="#166534" font-family='+FF+'>'+p.feedKg+'k</text>');
+    }
+  });
+  svg.innerHTML=parts.join('');
+}
+
+// ══════════════════════════════════════════
 // INVENTORY
 // ══════════════════════════════════════════
 function renderInvSummary(){
-  var areas=['団地','楠森','葛崎','横島'];
+  var areas=['団地','太喜','瀬後の浦','横島','楠森','葛崎'];
   var rows=areas.map(function(area){
-    var at=tanks.filter(function(t){return t.area===area;});
-    var ok=at.filter(function(t){return t.status==='ok';}).length;
-    var pending=at.filter(function(t){return t.status==='pending';}).length;
-    var warn=at.filter(function(t){return t.status==='warn';}).length;
-    var alert=at.filter(function(t){return t.status==='alert';}).length;
-    return '<tr><td>'+area+'</td><td><span style="color:var(--green);font-weight:700">'+ok+'</span></td><td><span style="color:var(--orange)">'+pending+'</span></td><td><span style="color:var(--orange)">'+warn+'</span></td><td><span style="color:var(--red)">'+alert+'</span></td><td style="font-weight:700">'+at.length+'</td></tr>';
+    var ap=POND_CONFIG.filter(function(p){return p.area===area;});
+    var done=ap.filter(function(p){return p.status==='done';}).length;
+    var todo=ap.filter(function(p){return p.status==='todo';}).length;
+    var alert=ap.filter(function(p){return p.status==='alert';}).length;
+    var skip=ap.filter(function(p){return p.status==='skip';}).length;
+    return '<tr><td>'+area+'</td><td><span style="color:var(--green);font-weight:700">'+done+'</span></td><td><span style="color:var(--orange)">'+todo+'</span></td><td><span style="color:var(--red)">'+alert+'</span></td><td style="color:var(--sub)">'+skip+'</td><td style="font-weight:700">'+ap.length+'</td></tr>';
   });
-  var totOk=tanks.filter(function(t){return t.status==='ok';}).length;
-  var totPend=tanks.filter(function(t){return t.status==='pending';}).length;
-  var totWarn=tanks.filter(function(t){return t.status==='warn';}).length;
-  var totAlert=tanks.filter(function(t){return t.status==='alert';}).length;
-  rows.push('<tr class="inv-summary-total"><td>合計</td><td><span style="color:var(--green);font-weight:700">'+totOk+'</span></td><td><span style="color:var(--orange)">'+totPend+'</span></td><td><span style="color:var(--orange)">'+totWarn+'</span></td><td><span style="color:var(--red)">'+totAlert+'</span></td><td style="font-weight:700">'+tanks.length+'</td></tr>');
+  var totDone=POND_CONFIG.filter(function(p){return p.status==='done';}).length;
+  var totTodo=POND_CONFIG.filter(function(p){return p.status==='todo';}).length;
+  var totAlert=POND_CONFIG.filter(function(p){return p.status==='alert';}).length;
+  var totSkip=POND_CONFIG.filter(function(p){return p.status==='skip';}).length;
+  var totalStock=POND_CONFIG.reduce(function(s,p){return s+(p.stock||0);},0);
+  rows.push('<tr class="inv-summary-total"><td>合計</td><td><span style="color:var(--green);font-weight:700">'+totDone+'</span></td><td><span style="color:var(--orange)">'+totTodo+'</span></td><td><span style="color:var(--red)">'+totAlert+'</span></td><td style="color:var(--sub)">'+totSkip+'</td><td style="font-weight:700">'+POND_CONFIG.length+'</td></tr>');
   document.getElementById('invSummaryBody').innerHTML=rows.join('');
+  var sub=document.getElementById('invPageSub');
+  if(sub)sub.textContent='総在庫 '+totalStock.toLocaleString()+'尾 ／ '+POND_CONFIG.length+'基';
 }
 
 function renderInv(){
   var af=document.getElementById('invArea').value;
   var sf=document.getElementById('invSp').value;
   var stf=document.getElementById('invSt').value;
-  var list=tanks.filter(function(t){return(af==='all'||t.area===af)&&(sf==='all'||t.species===sf)&&(stf==='all'||t.status===stf);});
-  document.getElementById('invBody').innerHTML=list.map(function(t){
-    return '<tr class="clickable" onclick="openTankDetail(tanks.find(function(x){return x.id===\''+t.id+'\';}))"><td><strong>'+t.id+'</strong></td><td>'+(t.shape==='円'?'● 円':'■ 四角')+'</td><td>'+t.species+'</td><td style="text-align:right">'+t.count.toLocaleString()+'</td><td>'+t.sizeEst+'</td><td style="color:'+(t.status==='pending'?'var(--orange)':'var(--sub)')+'">'+(t.status==='pending'?'⚠ 未記録':t.feedHours+'時間前')+'</td><td><span class="badge '+(t.status==='ok'?'b-ok':t.status==='warn'?'b-warn':t.status==='alert'?'b-alert':'b-pending')+'">'+(t.status==='ok'?'OK':t.status==='warn'?'要確認':t.status==='alert'?'要対応':'記録待ち')+'</span></td><td><span class="chip chip-blue" style="font-size:10px">'+t.lot+'</span></td><td><span class="action-link" onclick="event.stopPropagation();openM(\'mInvEdit\');document.getElementById(\'mInvEditTitle\').textContent=\'在庫修正 — '+t.id+'\';document.getElementById(\'mInvEditCount\').value='+t.count+'">修正</span></td></tr>';
+  var stLabel={todo:'未記録',done:'完了',alert:'要確認',skip:'空き'};
+  var stBadge={todo:'b-pending',done:'b-ok',alert:'b-alert',skip:'b-gray'};
+  var list=POND_CONFIG.filter(function(p){return(af==='all'||p.area===af)&&(sf==='all'||p.species===sf)&&(stf==='all'||p.status===stf);});
+  document.getElementById('invBody').innerHTML=list.map(function(p){
+    var sh=p.sh==='ci'?'● 円':'■ 四角';
+    var feedStr=p.feedKg?p.feedKg+'kg':(p.feed>0?p.feed+'kg':'—');
+    return '<tr><td><strong>'+p.id+'</strong></td><td>'+sh+'</td><td>'+p.species+'</td><td style="text-align:right">'+(p.stock?p.stock.toLocaleString():'—')+'</td><td>'+feedStr+'</td><td><span class="badge '+(stBadge[p.status]||'b-pending')+'">'+(stLabel[p.status]||p.status)+'</span></td><td><span class="action-link">詳細</span></td></tr>';
   }).join('');
 }
 

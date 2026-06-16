@@ -1099,6 +1099,32 @@ body.ai-mode-on .ai-home-banner{display:flex}
 }
 
 /* ===== 実装②：テンキートグルボタン ===== */
+.feed-date-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  flex-shrink: 0;
+}
+.feed-date-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink2);
+  white-space: nowrap;
+}
+.feed-date-input {
+  flex: 1;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--ink);
+  outline: none;
+  background: #f8fafc;
+}
 .feed-toolbar {
   display: flex;
   align-items: center;
@@ -1156,6 +1182,52 @@ body.ai-mode-on .ai-home-banner{display:flex}
   touch-action: manipulation;
 }
 .flag-btn.on { color: #d97706; }
+.order-panel-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); z-index: 200;
+  align-items: flex-end; justify-content: center;
+}
+.order-panel-overlay.open { display: flex; }
+.order-panel {
+  background: #fff; border-radius: 16px 16px 0 0;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto;
+}
+.order-panel-title { font-size: 15px; font-weight: 700; text-align: center; margin-bottom: 14px; color: var(--ink); }
+.order-field { margin-bottom: 12px; }
+.order-label { font-size: 11px; font-weight: 700; color: var(--ink2); margin-bottom: 4px; letter-spacing:.04em; }
+.order-input, .order-select {
+  width: 100%; height: 42px; border: 2px solid var(--border); border-radius: 8px;
+  font-size: 14px; font-family: inherit; padding: 0 10px; color: var(--ink);
+  background: #fff; appearance: none; -webkit-appearance: none; box-sizing: border-box;
+}
+.order-input:focus, .order-select:focus { border-color: var(--blue); outline: none; }
+.order-status-row { display: flex; gap: 8px; }
+.order-status-btn {
+  flex: 1; height: 40px; border: 2px solid var(--border); border-radius: 8px;
+  font-size: 13px; font-weight: 700; font-family: inherit; background: #fff;
+  color: var(--ink2); cursor: pointer; touch-action: manipulation;
+}
+.order-status-btn.act-conf { background: #1b3a5c; border-color: #1b3a5c; color: #fff; }
+.order-status-btn.act-tent { background: #d97706; border-color: #d97706; color: #fff; }
+.order-save-btn {
+  width: 100%; height: 48px; background: #1b3a5c; color: #fff; border: none;
+  border-radius: 10px; font-size: 15px; font-weight: 700; font-family: inherit;
+  cursor: pointer; touch-action: manipulation; margin-top: 4px;
+}
+.order-cancel-btn {
+  width: 100%; height: 40px; background: none; border: none;
+  font-size: 13px; color: var(--ink2); font-family: inherit;
+  cursor: pointer; touch-action: manipulation; margin-top: 6px;
+}
+.cal-add-fab {
+  display: flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; border-radius: 50%; background: #1b3a5c;
+  color: #fff; font-size: 26px; border: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer;
+  touch-action: manipulation; position: sticky; bottom: 12px;
+  margin: 8px 16px 4px auto;
+}
 .hdr-pc-link {
   font-size: 11px;
   font-weight: 700;
@@ -1204,6 +1276,10 @@ body.ai-mode-on .ai-home-banner{display:flex}
   <!-- リスト画面 -->
   <div id="feed-list-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
     <div class="area-tabs" id="feedAreaTabs"></div>
+    <div class="feed-date-bar">
+      <span class="feed-date-label">給餌日</span>
+      <input type="date" class="feed-date-input" id="feedDateInput">
+    </div>
     <div id="feedScrollArea" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:16px;">
       <div class="feed-toolbar">
         <button class="numpad-toggle-btn" id="numpadToggleBtn" onclick="toggleNumpad()">⌨ テンキー表示</button>
@@ -1285,11 +1361,62 @@ body.ai-mode-on .ai-home-banner{display:flex}
   </div>
   <div class="orders-divider">受注一覧</div>
   <div class="orders-list" id="ordersList"></div>
+  <button class="cal-add-fab" onclick="openOrderPanel(null)">＋</button>
 </section>
+
+<div class="order-panel-overlay" id="orderPanelOverlay"
+  onclick="if(event.target===this)closeOrderPanel()">
+  <div class="order-panel">
+    <div class="order-panel-title">📋 受注を追加</div>
+    <div class="order-field">
+      <div class="order-label">日付</div>
+      <input type="date" id="orderDate" class="order-input">
+    </div>
+    <div class="order-field">
+      <div class="order-label">取引先</div>
+      <select id="orderBuyer" class="order-select">
+        <option value="">選択してください</option>
+        <option>ニチモウ</option><option>信源</option><option>オーシャン</option>
+        <option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option>
+      </select>
+    </div>
+    <div class="order-field">
+      <div class="order-label">魚種</div>
+      <select id="orderFish" class="order-select">
+        <option value="">選択してください</option>
+        <option>マダイ</option><option>カンパチ</option><option>シマアジ</option>
+      </select>
+    </div>
+    <div class="order-field">
+      <div class="order-label">サイズ</div>
+      <select id="orderSize" class="order-select">
+        <option value="">選択してください</option>
+        <option>0.8kg〜</option><option>1.0kg〜</option><option>1.0〜1.5kg</option>
+        <option>1.5〜2.0kg</option><option>2.0kg〜</option>
+        <option>2.5kg〜</option><option>3.0kg〜</option>
+      </select>
+    </div>
+    <div class="order-field">
+      <div class="order-label">数量（尾）</div>
+      <input type="number" id="orderCount" class="order-input" inputmode="numeric" placeholder="例：100">
+    </div>
+    <div class="order-field">
+      <div class="order-label">ステータス</div>
+      <div class="order-status-row">
+        <button class="order-status-btn act-conf" id="orderBtnConf"
+          onclick="setOrderStatus('confirmed')">✅ 確定</button>
+        <button class="order-status-btn" id="orderBtnTent"
+          onclick="setOrderStatus('tentative')">🔶 仮</button>
+      </div>
+    </div>
+    <button class="order-save-btn" onclick="saveNewOrder()">保存する</button>
+    <button class="order-cancel-btn" onclick="closeOrderPanel()">キャンセル</button>
+  </div>
+</div>
 
 <!-- ══ MOVE ══ -->
 <section class="tab-content" id="tab-move">
-  <!-- Step 1 -->
+  <!-- Step 1：移動元 + 移動尾数 -->
   <div id="move-s1" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
     <div class="scroll">
       <div class="section" style="margin-top:14px;">
@@ -1298,24 +1425,23 @@ body.ai-mode-on .ai-home-banner{display:flex}
         <div class="pond-grid" style="padding:10px 0;" id="moveFromGrid"></div>
         <button class="choice-btn full" id="moveFromExternal" style="margin-top:4px;font-size:15px;height:52px;border:2px solid var(--border);border-radius:8px;background:#fff;font-family:inherit;font-weight:700;color:var(--ink);cursor:pointer;" onclick="selectFromExternal()">外部（種苗業者）から受入</button>
       </div>
-      <div class="section">
-        <div class="sec-label">移動先 <span class="badge-req">必須</span></div>
-        <div class="area-tabs" id="moveToTabs" style="margin:0 -16px;border-radius:0;border-top:2px solid var(--border);"></div>
-        <div class="pond-grid" style="padding:10px 0;" id="moveToGrid"></div>
-      </div>
-      <div class="section">
+      <div class="section" style="margin-top:12px;">
         <div class="sec-label">移動尾数 <span class="badge-req">必須</span></div>
         <div class="num-wrap"><input class="num-input" id="moveCount" type="number" inputmode="numeric" min="1" placeholder="0" oninput="moveCheck()"><span class="num-unit">尾</span></div>
-        <div id="movePreview" class="move-preview" style="display:none;"></div>
         <div id="moveWarn" class="move-warn"></div>
       </div>
     </div>
     <div class="footer"><button class="btn-primary" id="moveBtn1" disabled onclick="moveGoS2()">次へ</button></div>
   </div>
-  <!-- Step 2 -->
+  <!-- Step 2：移動先 + 移動理由 -->
   <div id="move-s2" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
     <div class="scroll">
       <div class="section" style="margin-top:14px;">
+        <div class="sec-label">移動先 <span class="badge-req">必須</span></div>
+        <div class="area-tabs" id="moveToTabs" style="margin:0 -16px;border-radius:0;border-top:2px solid var(--border);"></div>
+        <div class="pond-grid" style="padding:10px 0;" id="moveToGrid"></div>
+      </div>
+      <div class="section" style="margin-top:12px;">
         <div class="sec-label">移動理由 <span class="badge-req">必須</span></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="moveReasonBtns">
           <button class="choice-btn" data-v="間引き" onclick="selectMoveReason(this)" style="height:64px;border:2px solid var(--border);border-radius:8px;background:#fff;font-size:16px;font-weight:700;font-family:inherit;color:var(--ink);cursor:pointer;">間引き</button>
@@ -1436,7 +1562,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
 </div><!-- /phone -->
 <script>
 // ===== MASTER DATA =====
-const AREAS = ['団地', '楠森', '葛崎', '横島', '太喜', '瀬後の浦'];
+const AREAS = ['団地', '太喜', '瀬後の浦', '横島', '楠森', '葛崎'];
 
 const POND_CONFIG = [
   // ===== 団地 (26基) =====
@@ -1567,7 +1693,7 @@ const DRUGS = [
   'マラカイトグリーン','ホルマリン','その他'
 ];
 
-const ORDERS = [
+var ORDERS = [
   {date:'2026-05-02',buyer:'ニチモウ',   fish:'マダイ',   spec:'2.0kg〜 120尾', status:'confirmed'},
   {date:'2026-05-05',buyer:'信源',       fish:'マダイ',   spec:'1.5〜2.0kg 80尾',status:'confirmed'},
   {date:'2026-05-07',buyer:'オーシャン', fish:'カンパチ', spec:'2.0kg〜 60尾',  status:'confirmed'},
@@ -1586,6 +1712,13 @@ const ORDERS = [
   {date:'2026-06-09',buyer:'ニチモウ',   fish:'マダイ',   spec:'2.0kg〜 130尾', status:'tentative'},
   {date:'2026-06-11',buyer:'大海水産',   fish:'カンパチ', spec:'2.5kg〜 60尾',  status:'tentative'},
 ];
+
+var USER_ORDERS_KEY = 'onoue_user_orders';
+function loadUserOrders() {
+  try { return JSON.parse(localStorage.getItem(USER_ORDERS_KEY) || '[]'); } catch(e) { return []; }
+}
+function saveUserOrders(orders) { localStorage.setItem(USER_ORDERS_KEY, JSON.stringify(orders)); }
+function getAllOrders() { return ORDERS.concat(loadUserOrders()); }
 
 // ===== SVG MAP DATA =====
 var CAGE_MAP = {
@@ -1677,8 +1810,8 @@ function getPondArea(id) {
   return p ? p.area : null;
 }
 function fishInitial(fish) {
-  var map = {'マダイ':'鯛','カンパチ':'勘','シマアジ':'縞'};
-  return map[fish] || fish.charAt(0);
+  var map = {'マダイ':'タイ','カンパチ':'カンパチ','シマアジ':'シマアジ'};
+  return map[fish] || fish;
 }
 
 // ===== HEADER =====
@@ -1826,7 +1959,7 @@ function drawFishMap(areaFilter) {
 }
 
 function initAreaFilter() {
-  var areas = ['全て', '楠森', '団地', '葛崎', '横島', '太喜', '瀬後の浦'];
+  var areas = ['全て', '団地', '太喜', '瀬後の浦', '横島', '楠森', '葛崎'];
   var wrap = document.getElementById('areaFilterWrap');
   if (!wrap) return;
   wrap.innerHTML = areas.map(function(a) {
@@ -1957,6 +2090,7 @@ function saveRecord() {
   var memo = document.getElementById('recMemo').value.trim();
 
   p.feed = feed;
+  if (feed > 0) p.feedKg = feed;
   p.mort = mort;
   p.bgrade = bgrade;
   p.bait = bait;
@@ -2017,6 +2151,14 @@ function buildFeedList(area) {
   if (!area) area = state.feedArea;
   state.feedArea = area;
   buildAreaTabs('feedAreaTabs', area, 'feedSelectArea');
+  var dateInput = document.getElementById('feedDateInput');
+  if (dateInput && !dateInput.value) {
+    var now = new Date();
+    var y = now.getFullYear();
+    var m = String(now.getMonth()+1).padStart(2,'0');
+    var d = String(now.getDate()).padStart(2,'0');
+    dateInput.value = y + '-' + m + '-' + d;
+  }
   var ponds = POND_CONFIG.filter(function(p){ return p.area === area && p.status !== 'skip'; });
   var el = document.getElementById('feedList');
   if (!el) return;
@@ -2105,7 +2247,8 @@ function saveFeedList() {
     p.status = 'done';
     saved++;
   });
-  var subMsg = state.feedArea + 'エリア ' + saved + '基を保存しました';
+  var feedDateVal = (document.getElementById('feedDateInput') || {}).value || '';
+  var subMsg = (feedDateVal ? feedDateVal + ' ' : '') + state.feedArea + 'エリア ' + saved + '基を保存しました';
   if (flaggedRows.length > 0) subMsg += '\n⚑ 要確認：' + flaggedRows.join(', ');
   document.getElementById('feedDoneSub').textContent = subMsg;
   drawFishMap(currentHomeArea);
@@ -2247,8 +2390,9 @@ function renderCalendar() {
   var daysInMonth = new Date(yr, mo, 0).getDate();
   var today = new Date();
   var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  var allOrd = getAllOrders();
   var orderMap = {};
-  ORDERS.forEach(function(o) {
+  allOrd.forEach(function(o) {
     if (!orderMap[o.date]) orderMap[o.date] = [];
     orderMap[o.date].push(o);
   });
@@ -2271,12 +2415,12 @@ function renderCalendar() {
         chips += '<span class="cal-order-chip ' + (o.status==='confirmed'?'chip-confirmed':'chip-tentative') + '">' + o.buyer + '</span>';
       });
     }
-    cells += '<div class="cal-cell' + cellCls + '">' + numContent + chips + '</div>';
+    cells += '<div class="cal-cell' + cellCls + '" onclick="openOrderPanel(\'' + dateStr + '\')">' + numContent + chips + '</div>';
   }
   document.getElementById('calGrid').innerHTML = cells;
   var moStr = String(mo).padStart(2,'0');
-  var monthOrders = ORDERS.filter(function(o){ return o.date.startsWith(yr+'-'+moStr) || o.date.startsWith(yr+'-0'+mo+'-') || o.date.startsWith(yr+'-'+moStr+'-'); });
-  var allOrders = ORDERS.filter(function(o){ return o.date >= yr+'-'+moStr; }).sort(function(a,b){ return a.date > b.date ? 1 : -1; });
+  var monthOrders = allOrd.filter(function(o){ return o.date.startsWith(yr+'-'+moStr) || o.date.startsWith(yr+'-0'+mo+'-') || o.date.startsWith(yr+'-'+moStr+'-'); });
+  var allOrders = allOrd.filter(function(o){ return o.date >= yr+'-'+moStr; }).sort(function(a,b){ return a.date > b.date ? 1 : -1; });
   var listHtml = allOrders.slice(0, 12).map(function(o) {
     var d2 = new Date(o.date);
     var mm = d2.getMonth()+1;
@@ -2291,6 +2435,45 @@ function renderCalendar() {
   }).join('');
   document.getElementById('ordersList').innerHTML = listHtml || '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:14px;">受注データはありません</div>';
 }
+var orderPanelStatus = 'confirmed';
+
+function openOrderPanel(dateStr) {
+  document.getElementById('orderPanelOverlay').classList.add('open');
+  document.getElementById('orderDate').value =
+    dateStr || new Date().toISOString().slice(0,10);
+  document.getElementById('orderBuyer').value = '';
+  document.getElementById('orderFish').value = '';
+  document.getElementById('orderSize').value = '';
+  document.getElementById('orderCount').value = '';
+  setOrderStatus('confirmed');
+}
+function closeOrderPanel() {
+  document.getElementById('orderPanelOverlay').classList.remove('open');
+}
+function setOrderStatus(status) {
+  orderPanelStatus = status;
+  document.getElementById('orderBtnConf').className =
+    'order-status-btn' + (status === 'confirmed' ? ' act-conf' : '');
+  document.getElementById('orderBtnTent').className =
+    'order-status-btn' + (status === 'tentative' ? ' act-tent' : '');
+}
+function saveNewOrder() {
+  var date  = document.getElementById('orderDate').value;
+  var buyer = document.getElementById('orderBuyer').value;
+  var fish  = document.getElementById('orderFish').value;
+  var size  = document.getElementById('orderSize').value;
+  var count = document.getElementById('orderCount').value;
+  if (!date || !buyer || !fish || !size || !count) {
+    alert('すべての項目を入力してください'); return;
+  }
+  var userOrders = loadUserOrders();
+  userOrders.push({date:date, buyer:buyer, fish:fish,
+    spec:size + ' ' + count + '尾', status:orderPanelStatus});
+  saveUserOrders(userOrders);
+  closeOrderPanel();
+  renderCalendar();
+}
+
 function calMove(dir) {
   state.calMonth += dir;
   if (state.calMonth > 12) { state.calMonth = 1; state.calYear++; }
@@ -2333,7 +2516,7 @@ function moveSelectFrom(id) {
 function moveSelectTo(id) {
   state.mv.to = id;
   buildGrid('moveToGrid', state.moveToArea, id, 'moveSelectTo', true, false, true);
-  moveCheck();
+  moveCheckS2();
 }
 function selectFromExternal() {
   state.mv.external = !state.mv.external;
@@ -2345,39 +2528,43 @@ function selectFromExternal() {
 function moveCheck() {
   state.mv.count = parseInt(document.getElementById('moveCount').value) || null;
   var fromOk = state.mv.from;
-  var toOk = state.mv.to;
   var countOk = state.mv.count && state.mv.count > 0;
-  var sameWarn = fromOk && toOk && state.mv.from === state.mv.to;
-  var warn = document.getElementById('moveWarn');
-  var prev = document.getElementById('movePreview');
-  if (sameWarn) { warn.textContent = '移動元と移動先が同じいけすです'; warn.style.display='block'; }
-  else { warn.style.display='none'; }
-  if (fromOk && toOk && countOk && !sameWarn) {
-    var fromP = state.mv.external ? null : getPond(state.mv.from);
-    var toP = getPond(state.mv.to);
-    var fromStock = fromP ? fromP.stock : 0;
-    var toStock = toP ? toP.stock : 0;
-    prev.innerHTML = '<span>' + state.mv.from + '</span><span style="font-size:20px;font-weight:700;color:var(--ink)">' + fromStock.toLocaleString() + '</span><span>→</span><span style="font-size:20px;font-weight:700;color:var(--ink)">' + (fromStock - state.mv.count).toLocaleString() + '</span>　　<span>' + state.mv.to + '</span><span style="font-size:20px;font-weight:700;color:var(--ink)">' + toStock.toLocaleString() + '</span><span>→</span><span style="font-size:20px;font-weight:700;color:var(--ink)">' + (toStock + state.mv.count).toLocaleString() + '</span>';
-    prev.style.display = 'flex'; prev.style.flexWrap = 'wrap'; prev.style.gap = '8px';
-  } else { prev.style.display='none'; }
-  document.getElementById('moveBtn1').disabled = !(fromOk && toOk && countOk && !sameWarn);
+  document.getElementById('moveBtn1').disabled = !(fromOk && countOk);
 }
 function moveGoS2() {
-  var fromLabel = state.mv.external ? '外部（種苗業者）' : state.mv.from;
-  var fromP = state.mv.external ? null : getPond(state.mv.from);
-  var toP = getPond(state.mv.to);
-  document.getElementById('moveSummary').innerHTML = [
-    {k:'移動元', v:fromLabel + (fromP?' '+fromP.species:'')},
-    {k:'移動先', v:state.mv.to + (toP?' '+toP.species:'')},
-    {k:'移動尾数', v:(state.mv.count||0).toLocaleString()+'尾'},
-  ].map(function(r){ return '<div class="confirm-row"><div class="confirm-key">'+r.k+'</div><div class="confirm-val">'+r.v+'</div></div>'; }).join('');
+  state.mv.to = null;
+  state.mv.reason = null;
+  document.querySelectorAll('#moveReasonBtns .choice-btn').forEach(function(b){ b.classList.remove('selected'); });
+  buildGrid('moveToGrid', state.moveToArea, null, 'moveSelectTo', true, false, true);
+  document.getElementById('moveBtn2').disabled = true;
+  document.getElementById('moveSummary').innerHTML = '';
   state.moveStep = 2; showMoveStep(2);
+}
+function moveCheckS2() {
+  var toOk = state.mv.to;
+  var reasonOk = state.mv.reason;
+  var btn2 = document.getElementById('moveBtn2');
+  if (toOk && reasonOk) {
+    var fromLabel = state.mv.external ? '外部（種苗業者）' : state.mv.from;
+    var fromP = state.mv.external ? null : getPond(state.mv.from);
+    var toP = getPond(state.mv.to);
+    document.getElementById('moveSummary').innerHTML = [
+      {k:'移動元', v:fromLabel + (fromP?' '+fromP.species:'')},
+      {k:'移動先', v:state.mv.to + (toP?' '+toP.species:'')},
+      {k:'移動尾数', v:(state.mv.count||0).toLocaleString()+'尾'},
+      {k:'移動理由', v:state.mv.reason},
+    ].map(function(r){ return '<div class="confirm-row"><div class="confirm-key">'+r.k+'</div><div class="confirm-val">'+r.v+'</div></div>'; }).join('');
+    btn2.disabled = false;
+  } else {
+    document.getElementById('moveSummary').innerHTML = '';
+    btn2.disabled = true;
+  }
 }
 function selectMoveReason(btn) {
   document.querySelectorAll('#moveReasonBtns .choice-btn').forEach(function(b){ b.classList.remove('selected'); });
   btn.classList.add('selected');
   state.mv.reason = btn.dataset.v;
-  document.getElementById('moveBtn2').disabled = false;
+  moveCheckS2();
 }
 function showMoveStep(n) {
   ['move-s1','move-s2','move-done'].forEach(function(id){
