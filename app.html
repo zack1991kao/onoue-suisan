@@ -1944,14 +1944,12 @@ function drawFishMap(areaFilter) {
   if (areaFilter) {
     var filtered = ponds.map(function(p) { return CAGE_MAP[p.id]; }).filter(Boolean);
     if (filtered.length) {
-      var xs = filtered.map(function(c) { return c.x; });
-      var ys = filtered.map(function(c) { return c.y; });
-      var pad = 24;
-      var minX = Math.min.apply(null, xs) - pad;
-      var minY = Math.min.apply(null, ys) - pad;
-      var maxX = Math.max.apply(null, xs) + SZ + pad;
-      var maxY = Math.max.apply(null, ys) + SZ + pad;
-      svg.setAttribute('viewBox', minX + ' ' + minY + ' ' + (maxX - minX) + ' ' + (maxY - minY));
+      var xs = filtered.map(function(c) { return c.x + SVG_R; });
+      var ys = filtered.map(function(c) { return c.y + SVG_R; });
+      var cx = (Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2;
+      var cy = (Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2;
+      var VW = 200, VH = 500;
+      svg.setAttribute('viewBox', (cx - VW/2) + ' ' + (cy - VH/2) + ' ' + VW + ' ' + VH);
     }
   } else {
     svg.setAttribute('viewBox', '0 0 310 730');
