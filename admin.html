@@ -364,6 +364,18 @@ body.ai-mode-on .ai-element-flex{display:flex}
 .ai-temp-status{font-size:13px;font-weight:700;margin-bottom:8px}
 .ai-temp-comment{font-size:12px;color:#475569;line-height:1.7}
 .ai-sim-note{font-size:11px;color:var(--gray);margin-top:8px;font-style:italic}
+.hdr-sp-link {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.8);
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 14px;
+  padding: 4px 12px;
+  white-space: nowrap;
+  margin-left: 10px;
+}
+.hdr-sp-link:hover { color: #fff; border-color: #fff; }
 </style>
 </head>
 <body>
@@ -372,6 +384,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
 <header>
   <h1>🐟 尾上水産 養殖管理システム</h1>
   <span class="hdate" id="hdate"></span>
+  <a href="./staff.html" class="hdr-sp-link">📱 スマホ版</a>
   <button id="aiToggleBtn" class="ai-toggle-btn" onclick="toggleAiMode()">🔘 AI OFF</button>
 </header>
 

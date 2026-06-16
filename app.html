@@ -1156,6 +1156,19 @@ body.ai-mode-on .ai-home-banner{display:flex}
   touch-action: manipulation;
 }
 .flag-btn.on { color: #d97706; }
+.hdr-pc-link {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.8);
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 12px;
+  padding: 3px 9px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+.hdr-pc-link:hover { color: #fff; border-color: #fff; }
 </style>
 </head>
 <body>
@@ -1166,6 +1179,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
   <button class="hdr-back" id="hdrBack" onclick="doBack()">← 戻る</button>
   <div class="hdr-title" id="hdrTitle">尾上水産</div>
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+    <a href="./index.html" class="hdr-pc-link">PC版</a>
     <button id="aiToggleBtnSp" class="ai-toggle-sp" onclick="toggleAiMode()">　AI OFF</button>
     <div class="hdr-step" id="hdrStep"></div>
   </div>
