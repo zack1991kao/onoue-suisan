@@ -1620,6 +1620,7 @@ function buildGrid(containerId, area, selectedId, onSelect, extra, showStatus, i
     var isEmpty = p.status === 'skip';
     var sel = selectedId === p.id ? ' selected' : '';
     var statusCls = showStatus && p.status ? ' ' + p.status : '';
+    if (p.status === 'skip' && includeEmpty) statusCls = ' skip';
     return '<div class="pond-cell square' + sel + statusCls + '" onclick="' + onSelect + '(\'' + p.id + '\')">' +
       '<div class="pond-num">' + p.id.split('-')[1] + '</div>' +
       '<div class="pond-fish">' + (isEmpty ? '空き' : fishInitial(p.species)) + '</div>' +
@@ -1753,9 +1754,9 @@ function saveRecord() {
   p.drugAmt = drugAmt;
   p.memo = memo;
 
-  if (flagOn) {
+  if (flagOn || mort > 0) {
     p.status = 'alert';
-  } else if (feed > 0 || mort > 0 || bgrade > 0 || drugOn) {
+  } else if (feed > 0 || bgrade > 0 || drugOn) {
     p.status = 'done';
   } else {
     p.status = 'todo';
