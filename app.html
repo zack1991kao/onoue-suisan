@@ -193,6 +193,14 @@ body {
 .area-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
 .area-count { display: block; font-size: 10px; font-weight: 500; color: #94a3b8; }
 
+/* ===== MAP SCROLL ===== */
+.map-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ===== AREA FILTER (漁場図) ===== */
 .area-filter-wrap {
   display: flex;
@@ -1167,24 +1175,13 @@ body.ai-mode-on .ai-home-banner{display:flex}
 
 <!-- ══ HOME：漁場図 ══ -->
 <section class="tab-content active" id="tab-home">
-  <!-- AIバナー -->
-  <div class="ai-home-banner ai-element" id="aiHomeBanner">
-    <div class="ai-home-banner-icon">🟣</div>
-    <div class="ai-home-banner-body">
-      <div class="ai-home-banner-title">AIモード ON</div>
-      <div class="ai-home-banner-sub">給餌入力画面でAI参考値が確認できます</div>
-    </div>
-  </div>
   <div class="area-filter-wrap" id="areaFilterWrap"></div>
-  <div id="homeSummary" style="display:flex;gap:12px;padding:6px 16px;background:#f8fafc;border-bottom:1px solid var(--border);font-size:13px;color:var(--ink2);flex-shrink:0;"></div>
-  <div class="home-legend">
-    <div class="legend-item"><div class="legend-dot ld-todo"></div>未記録</div>
-    <div class="legend-item"><div class="legend-dot ld-alert"></div>要確認</div>
-    <div class="legend-item"><div class="legend-dot ld-done"></div>記録済</div>
-    <div class="legend-item"><div class="legend-dot ld-skip"></div>対象外</div>
-  </div>
-  <div class="scroll no-pad" style="padding:0;">
-    <div class="pond-grid" id="homeGrid"></div>
+  <div class="map-scroll" id="mapScrollArea">
+    <svg id="fishMapSvg"
+      viewBox="0 0 310 730"
+      style="width:100%;display:block;background:#eef4fb;"
+      xmlns="http://www.w3.org/2000/svg">
+    </svg>
   </div>
 </section>
 
@@ -1576,6 +1573,76 @@ const ORDERS = [
   {date:'2026-06-11',buyer:'大海水産',   fish:'カンパチ', spec:'2.5kg〜 60尾',  status:'tentative'},
 ];
 
+// ===== SVG MAP DATA =====
+var CAGE_MAP = {
+  '楠森-01':{x:10,y:40,sh:'ci'},'楠森-02':{x:10,y:68,sh:'ci'},
+  '楠森-03':{x:10,y:96,sh:'ci'},'楠森-04':{x:10,y:132,sh:'sq'},
+  '楠森-05':{x:10,y:160,sh:'sq'},'楠森-06':{x:10,y:188,sh:'sq'},
+  '楠森-07':{x:10,y:216,sh:'sq'},'楠森-08':{x:10,y:244,sh:'sq'},
+  '楠森-09':{x:10,y:272,sh:'sq'},'楠森-10':{x:10,y:300,sh:'sq'},
+  '楠森-11':{x:10,y:328,sh:'sq'},'楠森-12':{x:10,y:356,sh:'sq'},
+  '楠森-13':{x:10,y:384,sh:'sq'},'楠森-14':{x:10,y:412,sh:'sq'},
+  '楠森-15':{x:10,y:454,sh:'ci'},'楠森-16':{x:42,y:132,sh:'ci'},
+  '楠森-17':{x:42,y:188,sh:'sq'},'楠森-18':{x:42,y:216,sh:'sq'},
+  '楠森-19':{x:42,y:244,sh:'sq'},'楠森-20':{x:42,y:300,sh:'ci'},
+  '楠森-21':{x:42,y:328,sh:'ci'},'楠森-22':{x:42,y:356,sh:'ci'},
+  '楠森-23':{x:42,y:384,sh:'ci'},
+
+  '団地-01':{x:90,y:36,sh:'sq'},'団地-02':{x:90,y:64,sh:'sq'},
+  '団地-03':{x:90,y:92,sh:'sq'},'団地-04':{x:90,y:120,sh:'sq'},
+  '団地-05':{x:120,y:8,sh:'ci'},'団地-06':{x:120,y:36,sh:'sq'},
+  '団地-07':{x:120,y:64,sh:'sq'},'団地-08':{x:120,y:92,sh:'sq'},
+  '団地-09':{x:120,y:120,sh:'sq'},'団地-10':{x:120,y:148,sh:'sq'},
+  '団地-11':{x:120,y:176,sh:'sq'},'団地-12':{x:120,y:204,sh:'sq'},
+  '団地-13':{x:90,y:176,sh:'ci'},'団地-14':{x:90,y:244,sh:'sq'},
+  '団地-15':{x:90,y:272,sh:'sq'},'団地-16':{x:90,y:300,sh:'sq'},
+  '団地-17':{x:90,y:328,sh:'sq'},'団地-18':{x:90,y:356,sh:'sq'},
+  '団地-19':{x:150,y:244,sh:'sq'},'団地-20':{x:150,y:272,sh:'sq'},
+  '団地-21':{x:150,y:300,sh:'sq'},'団地-22':{x:120,y:244,sh:'sq'},
+  '団地-23':{x:120,y:272,sh:'sq'},'団地-24':{x:120,y:300,sh:'sq'},
+  '団地-25':{x:120,y:328,sh:'sq'},'団地-26':{x:120,y:356,sh:'sq'},
+
+  '太喜-01':{x:200,y:10,sh:'sq'},'太喜-02':{x:200,y:38,sh:'sq'},
+  '太喜-03':{x:200,y:66,sh:'sq'},'太喜-04':{x:200,y:94,sh:'sq'},
+  '太喜-05':{x:200,y:122,sh:'sq'},'太喜-06':{x:200,y:150,sh:'sq'},
+  '太喜-07':{x:200,y:178,sh:'sq'},'太喜-08':{x:200,y:206,sh:'sq'},
+
+  '瀬後の浦-01':{x:256,y:10,sh:'ci'},'瀬後の浦-02':{x:256,y:44,sh:'sq'},
+  '瀬後の浦-03':{x:256,y:72,sh:'sq'},'瀬後の浦-04':{x:256,y:100,sh:'sq'},
+  '瀬後の浦-05':{x:256,y:128,sh:'sq'},'瀬後の浦-06':{x:256,y:156,sh:'sq'},
+  '瀬後の浦-07':{x:256,y:184,sh:'sq'},'瀬後の浦-08':{x:256,y:212,sh:'sq'},
+  '瀬後の浦-09':{x:256,y:240,sh:'sq'},'瀬後の浦-10':{x:256,y:268,sh:'sq'},
+
+  '横島-01':{x:88,y:500,sh:'ci'},'横島-02':{x:88,y:532,sh:'sq'},
+  '横島-03':{x:88,y:560,sh:'sq'},'横島-04':{x:88,y:588,sh:'sq'},
+  '横島-05':{x:88,y:616,sh:'sq'},'横島-06':{x:88,y:644,sh:'sq'},
+  '横島-07':{x:88,y:672,sh:'sq'},'横島-08':{x:128,y:500,sh:'ci'},
+  '横島-09':{x:160,y:500,sh:'ci'},'横島-10':{x:192,y:500,sh:'ci'},
+  '横島-11':{x:112,y:572,sh:'sq'},'横島-12':{x:112,y:600,sh:'sq'},
+  '横島-13':{x:112,y:628,sh:'sq'},'横島-14':{x:112,y:656,sh:'sq'},
+  '横島-15':{x:112,y:684,sh:'sq'},'横島-16':{x:128,y:532,sh:'ci'},
+  '横島-17':{x:160,y:532,sh:'ci'},'横島-18':{x:192,y:532,sh:'ci'},
+  '横島-19':{x:144,y:572,sh:'sq'},'横島-20':{x:144,y:600,sh:'sq'},
+  '横島-21':{x:144,y:628,sh:'sq'},'横島-22':{x:144,y:656,sh:'sq'},
+  '横島-23':{x:144,y:684,sh:'sq'},'横島-24':{x:176,y:572,sh:'sq'},
+  '横島-25':{x:176,y:600,sh:'sq'},'横島-26':{x:176,y:628,sh:'sq'},
+  '横島-27':{x:176,y:656,sh:'sq'},'横島-28':{x:176,y:684,sh:'sq'},
+
+  '葛崎-01':{x:248,y:512,sh:'sq'},'葛崎-02':{x:248,y:540,sh:'sq'},
+  '葛崎-03':{x:248,y:568,sh:'sq'},'葛崎-04':{x:248,y:596,sh:'sq'},
+  '葛崎-05':{x:278,y:512,sh:'ci'},'葛崎-06':{x:278,y:544,sh:'sq'},
+  '葛崎-07':{x:278,y:572,sh:'sq'},'葛崎-08':{x:278,y:600,sh:'sq'}
+};
+
+var AREA_BOXES = [
+  {area:'楠森',     lx:8,  ly:34, bx:5,  by:37, bw:63, bh:444},
+  {area:'団地',     lx:88, ly:4,  bx:86, by:5,  bw:92, bh:382},
+  {area:'太喜',     lx:198,ly:6,  bx:196,by:6,  bw:30, bh:230},
+  {area:'瀬後の浦', lx:252,ly:6,  bx:250,by:6,  bw:34, bh:292},
+  {area:'横島',     lx:86, ly:494,bx:84, by:496,bw:120,bh:220},
+  {area:'葛崎',     lx:246,ly:506,bx:244,by:508,bw:62, bh:120}
+];
+
 // ===== GLOBAL STATE =====
 const state = {
   tab: 'home',
@@ -1621,7 +1688,7 @@ function switchTab(tab) {
   if (btnEl) btnEl.classList.add('active');
   if (tab === 'home') {
     updateHeader('尾上水産', '', false);
-    buildHome(currentHomeArea);
+    drawFishMap(currentHomeArea);
   }
   if (tab === 'feed') {
     updateHeader('給餌入力', '', false);
@@ -1678,48 +1745,93 @@ function buildGrid(containerId, area, selectedId, onSelect, extra, showStatus, i
   }).join('');
 }
 
-// ===== HOME：漁場図 =====
-var currentHomeArea = null; // null = 全て
+// ===== HOME：漁場図 SVG =====
+var currentHomeArea = null;
+var SZ = 22, R = 11;
+var FF = "font-family='Yu Gothic,Hiragino Kaku Gothic Pro,sans-serif'";
+
+function svgStatusStyle(s) {
+  if (s === 'done')  return {f:'#dcfce7', k:'#22c55e', t:'#166534'};
+  if (s === 'todo')  return {f:'#fef2f2', k:'#ef4444', t:'#991b1b'};
+  if (s === 'alert') return {f:'#fff7ed', k:'#d97706', t:'#7c2d12'};
+  return {f:'#f8fafc', k:'#e2e8f0', t:'#94a3b8'};
+}
+
+function drawFishMap(areaFilter) {
+  var svg = document.getElementById('fishMapSvg');
+  if (!svg) return;
+  var ponds = POND_CONFIG.filter(function(p) {
+    return areaFilter ? p.area === areaFilter : true;
+  });
+  var html = '';
+  AREA_BOXES.forEach(function(b) {
+    if (areaFilter && b.area !== areaFilter) return;
+    html += "<rect x='" + b.bx + "' y='" + b.by + "' width='" + b.bw + "' height='" + b.bh + "'"
+          + " rx='5' fill='rgba(255,255,255,0.55)' stroke='#90a4b8'"
+          + " stroke-width='1' stroke-dasharray='5,3'/>";
+    html += "<text x='" + b.lx + "' y='" + b.ly + "' font-size='10' fill='#334155'"
+          + " font-weight='700' " + FF + ">" + b.area + "</text>";
+  });
+  ponds.forEach(function(p) {
+    var cm = CAGE_MAP[p.id];
+    if (!cm) return;
+    var st = svgStatusStyle(p.status);
+    var num = parseInt(p.id.split('-')[1]).toString();
+    var cx = cm.x + R, cy = cm.y + R;
+    var tap = "onclick=\"homeSelectPond('" + p.id + "')\" style='cursor:pointer'";
+    if (cm.sh === 'ci') {
+      html += "<circle cx='" + cx + "' cy='" + cy + "' r='" + R + "'"
+            + " fill='" + st.f + "' stroke='" + st.k + "' stroke-width='1.5' " + tap + "/>";
+      html += "<text x='" + cx + "' y='" + (cy + 4) + "' text-anchor='middle'"
+            + " font-size='9' font-weight='700' fill='" + st.t + "' " + FF
+            + " pointer-events='none'>" + num + "</text>";
+    } else {
+      html += "<rect x='" + cm.x + "' y='" + cm.y + "' width='" + SZ + "' height='" + SZ + "'"
+            + " rx='2.5' fill='" + st.f + "' stroke='" + st.k + "' stroke-width='1.5' " + tap + "/>";
+      html += "<text x='" + cx + "' y='" + (cy + 4) + "' text-anchor='middle'"
+            + " font-size='9' font-weight='700' fill='" + st.t + "' " + FF
+            + " pointer-events='none'>" + num + "</text>";
+    }
+  });
+  svg.innerHTML = html;
+  if (areaFilter) {
+    var filtered = ponds.map(function(p) { return CAGE_MAP[p.id]; }).filter(Boolean);
+    if (filtered.length) {
+      var xs = filtered.map(function(c) { return c.x; });
+      var ys = filtered.map(function(c) { return c.y; });
+      var pad = 24;
+      var minX = Math.min.apply(null, xs) - pad;
+      var minY = Math.min.apply(null, ys) - pad;
+      var maxX = Math.max.apply(null, xs) + SZ + pad;
+      var maxY = Math.max.apply(null, ys) + SZ + pad;
+      svg.setAttribute('viewBox', minX + ' ' + minY + ' ' + (maxX - minX) + ' ' + (maxY - minY));
+    }
+  } else {
+    svg.setAttribute('viewBox', '0 0 310 730');
+  }
+}
 
 function initAreaFilter() {
-  var areas = ['全て'].concat(AREAS);
+  var areas = ['全て', '楠森', '団地', '葛崎', '横島', '太喜', '瀬後の浦'];
   var wrap = document.getElementById('areaFilterWrap');
   if (!wrap) return;
   wrap.innerHTML = areas.map(function(a) {
-    return '<button class="area-filter-btn' + (a === '全て' ? ' active' : '') +
-      '" id="areaBtn-' + a + '" onclick="selectArea(\'' + a + '\')">' + a + '</button>';
+    return '<button class="area-filter-btn' + (a === '全て' ? ' active' : '') + '"'
+      + ' id="areaBtn-' + a + '"'
+      + ' onclick="selectHomeArea(\'' + a + '\')">' + a + '</button>';
   }).join('');
 }
 
-function selectArea(area) {
+function selectHomeArea(area) {
   currentHomeArea = (area === '全て') ? null : area;
   document.querySelectorAll('.area-filter-btn').forEach(function(b) { b.classList.remove('active'); });
-  document.getElementById('areaBtn-' + area).classList.add('active');
-  buildHome(currentHomeArea);
+  var btn = document.getElementById('areaBtn-' + area);
+  if (btn) btn.classList.add('active');
+  drawFishMap(currentHomeArea);
 }
 
-function buildHome(area) {
-  var el = document.getElementById('homeGrid');
-  if (!el) return;
-  var ponds = area
-    ? POND_CONFIG.filter(function(p){ return p.area === area && p.status !== 'skip'; })
-    : POND_CONFIG.filter(function(p){ return p.status !== 'skip'; });
-  el.innerHTML = ponds.map(function(p) {
-    return '<div class="pond-cell square ' + p.status + '" onclick="homeSelectPond(\'' + p.id + '\')">' +
-      '<div class="pond-num">' + p.id.split('-')[1] + '</div>' +
-      '<div class="pond-fish">' + fishInitial(p.species) + '</div>' +
-      '</div>';
-  }).join('');
-  var total = POND_CONFIG.length;
-  var active = POND_CONFIG.filter(function(p){ return p.status !== 'skip'; }).length;
-  var totalStock = POND_CONFIG.reduce(function(s,p){ return s + (p.stock||0); }, 0);
-  var sumEl = document.getElementById('homeSummary');
-  if (sumEl) {
-    sumEl.innerHTML =
-      '<span>総いけす <b>' + total + '基</b></span>' +
-      '<span>稼働中 <b>' + active + '基</b></span>' +
-      '<span>総在庫 <b>' + Math.round(totalStock/10000) + '万尾</b></span>';
-  }
+function buildHome() {
+  drawFishMap(currentHomeArea);
 }
 function homeSelectPond(id) {
   var p = getPond(id);
@@ -1849,7 +1961,7 @@ function saveRecord() {
   }
 
   closeRecordPanelDirect();
-  buildHome(currentHomeArea);
+  drawFishMap(currentHomeArea);
 }
 function recNavGo(tab) {
   closeRecordPanelDirect();
@@ -1982,7 +2094,7 @@ function saveFeedList() {
   var subMsg = state.feedArea + 'エリア ' + saved + '基を保存しました';
   if (flaggedRows.length > 0) subMsg += '\n⚑ 要確認：' + flaggedRows.join(', ');
   document.getElementById('feedDoneSub').textContent = subMsg;
-  buildHome(currentHomeArea);
+  drawFishMap(currentHomeArea);
   document.getElementById('feed-list-view').style.display = 'none';
   var doneEl = document.getElementById('feed-done');
   doneEl.style.display = 'flex';
@@ -2304,7 +2416,7 @@ function setAiMode(on, save) {
 // ===== INIT =====
 initAiMode();
 initAreaFilter();
-buildHome(null);
+drawFishMap(null);
 buildFeedList('団地');
 renderCalendar();
 buildMoveGrids();
