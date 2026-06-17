@@ -2113,7 +2113,7 @@ function toggleRecordFlag() {
   document.getElementById('recFlagPill').style.background = on ? '#b91c1c' : 'var(--dis-bg)';
   document.getElementById('recFlagLabel').textContent = on ? '⚠ 異常あり' : '⚠ 異常フラグ';
 }
-function saveRecord() {
+async function saveRecord() {
   var id = state.sheetIkesu;
   var p = getPond(id);
   if (!p) return;
@@ -2128,6 +2128,7 @@ function saveRecord() {
   var flagOn = document.getElementById('recFlagRow').classList.contains('on');
   var memo = document.getElementById('recMemo').value.trim();
 
+  // メモリ更新（既存ロジック）
   p.feed = feed;
   if (feed > 0) p.feedKg = feed;
   p.mort = mort;
@@ -2147,8 +2148,42 @@ function saveRecord() {
     p.status = 'todo';
   }
 
+  // 画面反映は即時（オフラインでも操作継続可能）
   closeRecordPanelDirect();
   drawFishMap(currentHomeArea);
+
+  // DB write（楽観的UI: 画面更新後に書き込み）
+  var d = new Date();
+  var logDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  try {
+    var r1 = await sb.from('ponds').update({
+      status:     p.status,
+      feed_kg:    p.feedKg || 0,
+      mort:       p.mort || 0,
+      bgrade:     p.bgrade || 0,
+      bait:       p.bait,
+      bait2:      p.bait2 || '',
+      updated_at: new Date().toISOString()
+    }).eq('id', p.id);
+    if (r1.error) throw r1.error;
+    var r2 = await sb.from('feed_logs').insert({
+      pond_id:  p.id,
+      log_date: logDate,
+      feed_kg:  feed,
+      bait:     p.bait,
+      bait2:    p.bait2 || '',
+      mort:     mort,
+      bgrade:   bgrade,
+      drug:     drugOn ? drug : null,
+      drug_amt: drugOn ? drugAmt : null,
+      flag:     flagOn,
+      memo:     memo
+    });
+    if (r2.error) throw r2.error;
+  } catch (e) {
+    console.error('[Supabase] saveRecord failed:', e);
+    alert('保存に失敗しました。通信を確認してください');
+  }
 }
 function recNavGo(tab) {
   closeRecordPanelDirect();
@@ -2257,37 +2292,40 @@ function feedListCheck() {
   var countEl = document.getElementById('feedSaveCount');
   if (countEl) countEl.textContent = '入力済み: ' + count + '基';
 }
-function saveFeedList() {
-  // 実装②：当日入力値を localStorage に保存
+async function saveFeedList() {
+  // localStorage に前回値を保存
   var prevData = {};
   document.querySelectorAll('#feedList .feed-kg-input:not([disabled])').forEach(function(el) {
     if (el.value) prevData[el.dataset.pond] = el.value;
   });
   localStorage.setItem('onoue_prev_feed', JSON.stringify(prevData));
-  // 実装④：フラグ付き行を収集して完了画面に表示
+
   var flaggedRows = [];
   document.querySelectorAll('#feedList .flag-btn.on').forEach(function(btn) {
     flaggedRows.push(btn.dataset.pond);
   });
-  // テンキー非表示
+
   var numpad = document.getElementById('numpad');
   if (numpad) numpad.classList.remove('active');
   numpadTarget = null;
+
+  // メモリ更新 + 保存対象を収集
+  var savedPonds = [];
   var inputs = document.querySelectorAll('#feedList .feed-kg-input:not([disabled])');
-  var saved = 0;
   inputs.forEach(function(inp) {
     var pondId = inp.dataset.pond;
     var kg = parseFloat(inp.value);
     if (!pondId || !(kg > 0)) return;
     var p = getPond(pondId);
-    if (!p) return;
+    if (!p || p.status === 'skip') return;
     var baitSel = document.querySelector('#feedList .feed-bait-select[data-pond="' + pondId + '"]');
     if (baitSel) p.bait = baitSel.value;
     p.status = 'done';
-    saved++;
+    savedPonds.push({ p: p, kg: kg });
   });
+
   var feedDateVal = (document.getElementById('feedDateInput') || {}).value || '';
-  var subMsg = (feedDateVal ? feedDateVal + ' ' : '') + state.feedArea + 'エリア ' + saved + '基を保存しました';
+  var subMsg = (feedDateVal ? feedDateVal + ' ' : '') + state.feedArea + 'エリア ' + savedPonds.length + '基を保存しました';
   if (flaggedRows.length > 0) subMsg += '\n⚑ 要確認：' + flaggedRows.join(', ');
   document.getElementById('feedDoneSub').textContent = subMsg;
   drawFishMap(currentHomeArea);
@@ -2296,6 +2334,47 @@ function saveFeedList() {
   doneEl.style.display = 'flex';
   doneEl.style.flexDirection = 'column';
   updateHeader('保存完了', '', false);
+
+  if (!savedPonds.length) return;
+
+  // DB write（楽観的UI: 完了画面表示後に書き込み）
+  var d = new Date();
+  var logDate = feedDateVal || (d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+  try {
+    // feed_logs 一括 insert
+    var logRows = savedPonds.map(function(item) {
+      return {
+        pond_id:  item.p.id,
+        log_date: logDate,
+        feed_kg:  item.kg,
+        bait:     item.p.bait,
+        bait2:    item.p.bait2 || '',
+        mort:     0,
+        bgrade:   0,
+        drug:     null,
+        drug_amt: null,
+        flag:     false,
+        memo:     ''
+      };
+    });
+    var r1 = await sb.from('feed_logs').insert(logRows);
+    if (r1.error) throw r1.error;
+    // ponds 並列 update
+    var updates = savedPonds.map(function(item) {
+      return sb.from('ponds').update({
+        status:     'done',
+        feed_kg:    item.kg,
+        bait:       item.p.bait,
+        updated_at: new Date().toISOString()
+      }).eq('id', item.p.id);
+    });
+    var results = await Promise.all(updates);
+    var updateErr = results.find(function(r) { return r.error; });
+    if (updateErr) throw updateErr.error;
+  } catch (e) {
+    console.error('[Supabase] saveFeedList failed:', e);
+    alert('保存に失敗しました。通信を確認してください');
+  }
 }
 function feedDoneRestart() {
   document.getElementById('feed-list-view').style.display = 'flex';
