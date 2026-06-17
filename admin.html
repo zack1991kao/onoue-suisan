@@ -401,7 +401,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <button class="nav-btn" onclick="navAi('ai',this)"><span class="nav-icon">🤖</span>AI機能</button>
   </nav>
   <div class="sidebar-footer">
-    <p>最終更新: 2026/05/20 17:00</p>
+    <p id="lastUpdated">最終更新: 読み込み中...</p>
     <p class="credit">kaoiri</p>
   </div>
 </aside>
@@ -447,10 +447,10 @@ body.ai-mode-on .ai-element-flex{display:flex}
       <div class="ssub">記録済 / 全基</div>
       <div class="progress-wrap"><div class="progress-fill" style="width:85%"></div></div>
     </div>
-    <div class="scard red">
+    <div class="scard" id="dashAlertCard">
       <div class="slabel">要対応のいけす</div>
-      <div class="sval">3</div>
-      <div class="ssub" style="color:var(--red)">葛崎-12 / 楠森-08 / 横島-19</div>
+      <div class="sval" id="dashAlertVal">—</div>
+      <div class="ssub" id="dashAlertSub">読み込み中...</div>
     </div>
     <div class="scard" id="costCard">
       <button class="eye-btn" onclick="toggleCost()" title="表示切替">👁</button>
@@ -1159,7 +1159,6 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // DATA
 // ══════════════════════════════════════════
 const BUYERS=['ニチモウ','信源','オーシャン','龍ヶ岳','和潮','紀勝','大海水産'];
-const AREA_CNT={団地:18,楠森:14,葛崎:16,横島:17};
 const POND_CONFIG=[
   {id:'団地-01',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
   {id:'団地-02',area:'団地',sh:'sq',species:'シマアジ',stock:2500, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
@@ -1355,39 +1354,6 @@ var AREA_BOXES_PC=[
   {area:'横島',    lx:86, ly:494,bx:84, by:496,bw:120,bh:220},
   {area:'葛崎',    lx:246,ly:506,bx:244,by:508,bw:62, bh:120}
 ];
-const PENDING_IDS=['団地-03','団地-11','楠森-07','楠森-12','葛崎-04','葛崎-09','横島-08','横島-15','団地-17','楠森-02','葛崎-13','横島-01','団地-05','楠森-10','葛崎-16'];
-const ALERT_IDS=['葛崎-12','楠森-08','横島-19'];
-const pendingSet=new Set(PENDING_IDS);
-
-// Generate tanks with full properties including feed/mort/bgrade for diary
-const tanks=[];
-Object.entries(AREA_CNT).forEach(function([area,cnt]){
-  for(var i=1;i<=cnt;i++){
-    var id=area+'-'+String(i).padStart(2,'0');
-    var spIdx=i%10;
-    var species=spIdx<=6?'マダイ':spIdx<=8?'カンパチ':'シマアジ';
-    var shape=i%3===0?'円':'四角';
-    var count=Math.floor(Math.random()*26000)+2000;
-    var feedHours=Math.floor(Math.random()*7)+1;
-    var status='ok';
-    if(pendingSet.has(id))status='pending';
-    else if(ALERT_IDS.includes(id))status='alert';
-    else if(i%11===0)status='alert';
-    else if(i%7===0)status='warn';
-    var lotId=['2024-04-A','2024-05-A','2024-06-A'][i%3];
-    var sizes=['〜1.0kg','1.0〜1.5kg','1.5〜2.0kg','2.0kg〜'];
-    var sizeEst=sizes[i%4];
-    // feed/mort/bgrade for diary matrix
-    var feedBase=(status==='pending')?0:Math.floor(Math.random()*80)+20;
-    var mort=Math.floor(Math.random()*3);
-    var bgrade=Math.floor(Math.random()*2);
-    tanks.push({id,area,species,shape,count,feedHours,status,lot:'Lot.'+lotId,sizeEst,feed:feedBase,mort,bgrade});
-  }
-});
-
-// Alias for diary compatibility
-var TANKS=tanks;
-
 const orders=[
   {date:'5/20',buyer:'ニチモウ',species:'マダイ',size:'1.0〜1.5kg',qty:50,shipDate:'5/22',route:'LINE',status:'pending'},
   {date:'5/20',buyer:'信源',species:'カンパチ',size:'1.5〜2.0kg',qty:80,shipDate:'5/23',route:'電話',status:'pending'},
@@ -1498,9 +1464,16 @@ async function loadPonds() {
     if (res.data && res.data.length > 0) {
       POND_CONFIG.length = 0;
       res.data.forEach(function(row) { POND_CONFIG.push(row); });
+      var d=new Date();
+      var ts=d.getFullYear()+'/'+(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getDate().toString().padStart(2,'0')
+        +' '+d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+      var el=document.getElementById('lastUpdated');
+      if(el)el.textContent='DBと同期済: '+ts;
     }
   } catch (e) {
     console.warn('[Supabase] loadPonds failed, using fallback:', e.message);
+    var el=document.getElementById('lastUpdated');
+    if(el)el.textContent='最終更新: フォールバック（DB接続失敗）';
   }
 }
 
@@ -1613,17 +1586,22 @@ function openDetail(title,html,actions){
 // ══════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════
+function pondStatusInfo(st){
+  if(st==='done')  return {cls:'b-ok',    lbl:'給餌済', hm:'hm-ok'};
+  if(st==='alert') return {cls:'b-alert', lbl:'要対応', hm:'hm-alert'};
+  return               {cls:'b-pending',lbl:'記録待ち',hm:'hm-pending'};
+}
+
 function renderPending(){
+  var todo=POND_CONFIG.filter(function(p){return p.status==='todo';});
   var bar=document.getElementById('pendingBar');
-  bar.innerHTML='<div class="plabel">⚠ 本日未記録のいけす — '+PENDING_IDS.length+'基</div><div class="pending-scroll" id="pscroll"></div>';
+  bar.innerHTML='<div class="plabel">⚠ 本日未記録のいけす — '+todo.length+'基</div><div class="pending-scroll" id="pscroll"></div>';
   var sc=document.getElementById('pscroll');
-  PENDING_IDS.forEach(function(id){
-    var t=tanks.find(function(x){return x.id===id;});
-    if(!t)return;
+  todo.forEach(function(p){
     var div=document.createElement('div');
     div.className='pcard';
-    div.innerHTML='<div class="pid">'+t.id+'</div><div class="psp">'+t.species+'</div><div class="pct">'+t.count.toLocaleString()+'<small style="font-size:10px;font-weight:400;color:var(--sub)">尾</small></div>';
-    div.onclick=function(){openTankDetail(t);};
+    div.innerHTML='<div class="pid">'+p.id+'</div><div class="psp">'+p.species+'</div><div class="pct">'+(p.stock||0).toLocaleString()+'<small style="font-size:10px;font-weight:400;color:var(--sub)">尾</small></div>';
+    div.onclick=function(){openTankDetail(p);};
     sc.appendChild(div);
   });
 }
@@ -1637,14 +1615,15 @@ function filterArea(area,btn){
 function renderTankGrid(area){
   var grid=document.getElementById('tankGrid');
   grid.innerHTML='';
-  var list=area==='all'?tanks:tanks.filter(function(t){return t.area===area;});
-  list.forEach(function(t){
+  var list=POND_CONFIG.filter(function(p){
+    return p.status!=='skip' && (area==='all'||p.area===area);
+  });
+  list.forEach(function(p){
     var div=document.createElement('div');
-    div.className='tcard st-'+t.status;
-    var bCls=t.status==='ok'?'b-ok':t.status==='warn'?'b-warn':t.status==='alert'?'b-alert':'b-pending';
-    var bLbl=t.status==='ok'?'OK':t.status==='warn'?'要確認':t.status==='alert'?'要対応':'記録待ち';
-    div.innerHTML='<div class="tid">'+t.id+'</div><div class="tsp">'+t.species+' / '+t.shape+'</div><div class="tcnt">'+t.count.toLocaleString()+'<small>尾</small></div><div class="tfeed">'+(t.status==='pending'?'⚠ 未記録':t.feedHours+'時間前')+'</div><span class="badge '+bCls+'">'+bLbl+'</span>';
-    div.onclick=function(){openTankDetail(t);};
+    var si=pondStatusInfo(p.status);
+    div.className='tcard st-'+(p.status==='done'?'ok':p.status==='alert'?'alert':'pending');
+    div.innerHTML='<div class="tid">'+p.id+'</div><div class="tsp">'+p.species+'</div><div class="tcnt">'+(p.stock||0).toLocaleString()+'<small>尾</small></div><div class="tfeed">未記録</div><span class="badge '+si.cls+'">'+si.lbl+'</span>';
+    div.onclick=function(){openTankDetail(p);};
     grid.appendChild(div);
   });
 }
@@ -1652,33 +1631,35 @@ function renderTankGrid(area){
 function renderHeatmap(){
   var hm=document.getElementById('heatmap');
   hm.innerHTML='';
-  tanks.slice(0,65).forEach(function(t){
+  POND_CONFIG.filter(function(p){return p.status!=='skip';}).forEach(function(p){
     var div=document.createElement('div');
-    div.className='hm-cell hm-'+t.status;
-    div.setAttribute('data-tip',t.id+': '+(t.status==='ok'?'OK':t.status==='warn'?'要確認':t.status==='alert'?'要対応':'記録待ち'));
-    div.onclick=function(){openTankDetail(t);};
+    var si=pondStatusInfo(p.status);
+    div.className='hm-cell '+si.hm;
+    div.setAttribute('data-tip',p.id+': '+si.lbl);
+    div.onclick=function(){openTankDetail(p);};
     hm.appendChild(div);
   });
 }
 
 function renderAlertList(){
   var el=document.getElementById('alertList');
-  var alertItems=[
-    {id:'葛崎-12',desc:'死亡数が急増（本日12尾）',time:'2時間前',level:'red'},
-    {id:'楠森-08',desc:'3日間給餌記録なし',time:'72時間前',level:'red'},
-    {id:'横島-19',desc:'水温異常（27.8℃）',time:'30分前',level:'red'},
-    {id:'団地-07',desc:'給餌量が平均の50%以下',time:'5時間前',level:'orange'},
-    {id:'楠森-11',desc:'今日まだ記録なし',time:'未記録',level:'orange'},
-  ];
-  el.innerHTML=alertItems.map(function(a){
-    return '<div class="alert-item" style="cursor:pointer" onclick="openTankDetail(tanks.find(function(t){return t.id===\''+a.id+'\';})||tanks[0])"><div class="aleft"><div class="alert-dot dot-'+a.level+'"></div><div><div class="alert-id">'+a.id+'</div><div class="alert-desc">'+a.desc+'</div></div></div><div class="alert-time">'+a.time+'</div></div>';
+  var alerts=POND_CONFIG.filter(function(p){return p.status==='alert';});
+  if(alerts.length===0){
+    el.innerHTML='<div style="padding:16px;text-align:center;color:var(--sub);font-size:13px;">アラートなし</div>';
+    return;
+  }
+  el.innerHTML=alerts.map(function(p){
+    return '<div class="alert-item" style="cursor:pointer" onclick="openTankDetail(POND_CONFIG.find(function(x){return x.id===\''+p.id+'\';}))"><div class="aleft"><div class="alert-dot dot-red"></div><div><div class="alert-id">'+p.id+'</div><div class="alert-desc">'+p.species+' — 要対応</div></div></div><div class="alert-time">要対応</div></div>';
   }).join('');
 }
 
 function renderLotMini(){
   var el=document.getElementById('lotMini');
-  el.innerHTML=lots.filter(function(l){return l.status==='育成中';}).map(function(l){
-    return '<div class="lot-bar-row"><div class="lot-bar-label"><span>'+l.id+' <span style="font-size:11px;color:var(--sub)">'+l.species+'</span></span><span style="font-size:12px;color:'+(l.loss>22?'var(--red)':l.loss>19?'var(--orange)':'var(--green)')+'">ロス '+l.loss+'%</span></div><div class="lot-bar-track"><div class="lot-bar-fill" style="width:'+(100-l.loss)+'%"></div></div></div>';
+  var built=buildLots();
+  el.innerHTML=built.map(function(l){
+    var pct=l.ponds.length>0?Math.round(l.stock/l.ponds.length/15000*100):0;
+    pct=Math.min(pct,100);
+    return '<div class="lot-bar-row"><div class="lot-bar-label"><span>'+l.species+' <span style="font-size:11px;color:var(--sub)">'+l.label+'</span></span><span style="font-size:12px;color:var(--green)">'+l.ponds.length+'基</span></div><div class="lot-bar-track"><div class="lot-bar-fill" style="width:'+pct+'%"></div></div></div>';
   }).join('');
 }
 
@@ -1727,21 +1708,30 @@ function drawMortChart(){
 // ══════════════════════════════════════════
 // TANK DETAIL
 // ══════════════════════════════════════════
-function openTankDetail(t){
-  if(!t)return;
-  var feedRows=[['5/20','EP3','48.5','正常'],['5/19','EP3','47.2','正常'],['5/18','EP2','46.8','正常'],['5/17','EP3','49.1','正常'],['5/16','EP3','47.9','正常']];
-  var feedHTML=feedRows.map(function(r){
-    return '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td style="text-align:right">'+r[2]+'</td><td><span class="badge b-ok">'+r[3]+'</span></td></tr>';
-  }).join('');
+function openTankDetail(p){
+  if(!p)return;
+  var si=pondStatusInfo(p.status);
+  var shapeStr=p.sh==='ci'?'● 円形':'■ 四角';
+  var yr=POND_YR[p.id];
+  var yrLabel=yr?yrToLabel(yr):'―';
+  var baitStr=p.bait+(p.bait2?' / '+p.bait2:'');
+  var stock=(p.stock||0).toLocaleString();
+  var html='<div class="tank-detail-grid">'
+    +'<div class="td-stat"><div class="tds-label">魚種</div><div class="tds-val" style="font-size:18px">'+p.species+'</div></div>'
+    +'<div class="td-stat"><div class="tds-label">在庫尾数</div><div class="tds-val">'+stock+'</div><div class="tds-unit">尾</div></div>'
+    +'<div class="td-stat"><div class="tds-label">形状</div><div class="tds-val" style="font-size:18px">'+shapeStr+'</div></div>'
+    +'<div class="td-stat"><div class="tds-label">年齢</div><div class="tds-val" style="font-size:15px">'+yrLabel+'</div></div>'
+    +'<div class="td-stat"><div class="tds-label">給餌状態</div><div class="tds-val" style="font-size:16px"><span class="badge '+si.cls+'">'+si.lbl+'</span></div></div>'
+    +'<div class="td-stat"><div class="tds-label">餌の種類</div><div class="tds-val" style="font-size:14px">'+baitStr+'</div></div>'
+    +'</div>'
+    +'<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">給餌履歴（feed_logs蓄積後に有効化）</div>'
+    +'<div style="padding:20px;text-align:center;color:var(--sub);font-size:13px;background:var(--bg);border-radius:6px">給餌記録をスマホアプリで入力すると、ここに履歴が表示されます。</div></div>'
+    +'<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">給餌量推移（feed_logs蓄積後に有効化）</div>'
+    +'<div class="chart-wrap"><svg id="tankFeedChart" class="chart-svg" height="90" viewBox="0 0 500 90"></svg></div></div>'
+    +(p.memo?'<div style="margin-bottom:12px;font-size:13px;color:var(--sub)">メモ: '+p.memo+'</div>':'');
 
-  var html='<div class="tank-detail-grid"><div class="td-stat"><div class="tds-label">魚種</div><div class="tds-val" style="font-size:18px">'+t.species+'</div></div><div class="td-stat"><div class="tds-label">在庫尾数</div><div class="tds-val">'+t.count.toLocaleString()+'</div><div class="tds-unit">尾</div></div><div class="td-stat"><div class="tds-label">形状</div><div class="tds-val" style="font-size:18px">'+(t.shape==='円'?'●':'■')+' '+t.shape+'</div></div><div class="td-stat"><div class="tds-label">推計サイズ</div><div class="tds-val" style="font-size:18px">'+t.sizeEst+'</div></div><div class="td-stat"><div class="tds-label">最終給餌</div><div class="tds-val" style="font-size:18px">'+(t.status==='pending'?'未記録':t.feedHours+'h前')+'</div></div><div class="td-stat"><div class="tds-label">状態</div><div class="tds-val" style="font-size:16px"><span class="badge '+(t.status==='ok'?'b-ok':t.status==='warn'?'b-warn':t.status==='alert'?'b-alert':'b-pending')+'">'+(t.status==='ok'?'OK':t.status==='warn'?'要確認':t.status==='alert'?'要対応':'記録待ち')+'</span></div></div></div><div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">直近5日の給餌履歴</div><div class="tbl-wrap"><table><thead><tr><th>日付</th><th>餌の種類</th><th style="text-align:right">投餌量(kg)</th><th>状態</th></tr></thead><tbody>'+feedHTML+'</tbody></table></div></div><div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">給餌量推移（直近10日）</div><div class="chart-wrap"><svg id="tankFeedChart" class="chart-svg" height="90" viewBox="0 0 500 90"></svg></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">直近の死亡記録</div><div class="timeline"><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/18</div><div class="tl-text">3尾</div></div></div><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/15</div><div class="tl-text">1尾</div></div></div><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/11</div><div class="tl-text">2尾</div></div></div></div></div><div><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">移動履歴</div><div class="timeline"><div class="tl-item"><div class="tl-dot"></div><div class="tl-content"><div class="tl-date">2026/4/15</div><div class="tl-text">楠森-03から移動 500尾</div></div></div><div class="tl-item"><div class="tl-dot green"></div><div class="tl-content"><div class="tl-date">2026/3/20</div><div class="tl-text">種苗導入 3,500尾</div></div></div></div></div></div><div class="divider"></div><div><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">ロット情報</div><span class="chip chip-blue">'+t.lot+'</span></div>';
-
-  openDetail(t.id+' 詳細',html,
-    '<button class="btn btn-secondary btn-sm" onclick="openM(\'mInvEdit\');document.getElementById(\'mInvEditTitle\').textContent=\'在庫修正 — '+t.id+'\';document.getElementById(\'mInvEditCount\').value='+t.count+'">在庫修正</button><button class="btn btn-primary btn-sm" style="margin-left:8px" onclick="showToast(\'給餌記録を開きます\')">給餌記録を入力</button>');
-
-  setTimeout(function(){
-    drawLineChart('tankFeedChart',[46.8,47.9,49.1,46.8,47.2,48.5,47.0,48.8,47.5,49.2],'#2563eb',500,90);
-  },50);
+  openDetail(p.id+' 詳細',html,
+    '<button class="btn btn-secondary btn-sm" onclick="openM(\'mInvEdit\');document.getElementById(\'mInvEditTitle\').textContent=\'在庫修正 — '+p.id+'\';document.getElementById(\'mInvEditCount\').value='+(p.stock||0)+'">在庫修正</button>');
 }
 
 // ══════════════════════════════════════════
@@ -1881,7 +1871,14 @@ function calcDashSummary(){
   if(elT)elT.textContent=total;
   var bar=document.getElementById('dashStockBar');
   if(bar)bar.style.width=Math.round(active/total*100)+'%';
-  return {total:total,active:active,skip:skip,totalStock:totalStock,byFish:byFish};
+  var alertPonds=POND_CONFIG.filter(function(p){return p.status==='alert';});
+  var elAV=document.getElementById('dashAlertVal');
+  var elAS=document.getElementById('dashAlertSub');
+  var alertCard=document.getElementById('dashAlertCard');
+  if(elAV)elAV.textContent=alertPonds.length;
+  if(elAS)elAS.textContent=alertPonds.length>0?alertPonds.map(function(p){return p.id;}).join(' / '):'アラートなし';
+  if(alertCard)alertCard.className='scard'+(alertPonds.length>0?' red':'');
+  return {total:total,active:active,skip:skip,totalStock:totalStock,byFish:byFish,alertCount:alertPonds.length};
 }
 
 // ══════════════════════════════════════════
@@ -2055,17 +2052,25 @@ function renderLot(){
 }
 
 function openLotDetail(i){
-  var l=lots[i];
-  var dead=Math.round(l.intro*(l.loss/100));
-  var myTanks=tanks.filter(function(t){return t.lot==='Lot.'+l.id;});
-  var survData=Array.from({length:14},function(_,j){return Math.round(l.intro*(1-(l.loss/100)*(j/13)));});
-
-  var html='<div class="lot-stats-row"><div class="lot-stat"><div class="ls-l">導入尾数</div><div class="ls-v">'+l.intro.toLocaleString()+'</div><div class="ls-u">尾</div></div><div class="lot-stat" style="background:var(--red-bg)"><div class="ls-l">死亡尾数</div><div class="ls-v" style="color:var(--red)">'+dead.toLocaleString()+'</div><div class="ls-u">尾（'+l.loss+'%）</div></div><div class="lot-stat" style="background:'+(l.status==='出荷完了'?'var(--green-bg)':'var(--bg)')+'"><div class="ls-l">'+(l.status==='出荷完了'?'出荷累積':'現在在庫')+'</div><div class="ls-v" style="color:'+(l.status==='出荷完了'?'var(--green)':'var(--text)')+'">'+l.current.toLocaleString()+'</div><div class="ls-u">尾</div></div><div class="lot-stat"><div class="ls-l">ステータス</div><div class="ls-v" style="font-size:14px"><span class="stag '+(l.status==='育成中'?'stag-breeding':'stag-done')+'">'+l.status+'</span></div></div></div><div style="background:var(--bg);border-radius:6px;padding:14px;margin-bottom:16px"><div style="font-size:12px;font-weight:700;margin-bottom:6px">導入 → 出荷 フロー</div><div style="display:flex;align-items:center;gap:8px;font-size:13px"><span><strong>'+l.intro.toLocaleString()+'</strong>尾 導入</span><span style="color:var(--gray)">→</span><span style="color:var(--red)"><strong>-'+dead.toLocaleString()+'</strong>尾 死亡</span><span style="color:var(--gray)">→</span><span style="color:var(--blue)"><strong>'+l.current.toLocaleString()+'</strong>尾 '+(l.status==='育成中'?'現在':'出荷済')+'</span></div><div class="progress-wrap" style="margin-top:8px;height:8px"><div class="progress-fill" style="width:'+(l.current/l.intro*100).toFixed(0)+'%"></div></div><div style="font-size:11px;color:var(--sub);margin-top:4px">生残率 '+(100-l.loss).toFixed(1)+'%</div></div><div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">生残数の推移（想定）</div><div class="chart-wrap"><svg id="lotSurvChart" class="chart-svg" height="110" viewBox="0 0 600 110"></svg></div></div><div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">配置いけす（'+myTanks.length+'基）</div><div style="display:flex;flex-wrap:wrap;gap:5px">'+myTanks.map(function(t){return '<span class="chip chip-blue" style="cursor:pointer" onclick="openTankDetail(tanks.find(function(x){return x.id===\''+t.id+'\';}))">'+t.id+'</span>';}).join('')+'</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">死亡記録（直近）</div><div class="timeline"><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/18</div><div class="tl-text">計12尾（複数いけす）</div></div></div><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/15</div><div class="tl-text">計8尾</div></div></div><div class="tl-item"><div class="tl-dot red"></div><div class="tl-content"><div class="tl-date">2026/5/11</div><div class="tl-text">計15尾</div></div></div></div></div><div><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">ロット基本情報</div><table style="font-size:12px;width:100%"><tr><td style="color:var(--sub);padding:4px 0">ロットID</td><td style="font-weight:700">'+l.id+'</td></tr><tr><td style="color:var(--sub);padding:4px 0">導入日</td><td>'+l.date+'</td></tr><tr><td style="color:var(--sub);padding:4px 0">種苗業者</td><td>'+l.vendor+'</td></tr><tr><td style="color:var(--sub);padding:4px 0">魚種</td><td>'+l.species+'</td></tr><tr><td style="color:var(--sub);padding:4px 0">配置基数</td><td>'+myTanks.length+'基</td></tr></table></div></div>';
-
-  openDetail('ロット詳細 — '+l.id,html,
-    '<button class="btn btn-secondary btn-sm">死亡を記録</button><button class="btn btn-primary btn-sm" style="margin-left:8px" onclick="openM(\'mNewLot\')">新規ロット登録</button>');
-
-  setTimeout(function(){drawLineChart('lotSurvChart',survData,'#2563eb',600,110);},50);
+  var built=buildLots();
+  var l=built[i];
+  if(!l){return;}
+  var myPonds=l.ponds.map(function(id){return POND_CONFIG.find(function(p){return p.id===id;})||null;}).filter(Boolean);
+  var pondChips=myPonds.map(function(p){
+    return '<span class="chip chip-blue" style="cursor:pointer" onclick="openTankDetail(POND_CONFIG.find(function(x){return x.id===\''+p.id+'\';}))">'+p.id+'</span>';
+  }).join('');
+  var html='<div class="lot-stats-row">'
+    +'<div class="lot-stat"><div class="ls-l">魚種</div><div class="ls-v" style="font-size:18px">'+l.species+'</div></div>'
+    +'<div class="lot-stat"><div class="ls-l">年齢</div><div class="ls-v" style="font-size:15px">'+l.label+'</div></div>'
+    +'<div class="lot-stat"><div class="ls-l">現在在庫</div><div class="ls-v">'+l.stock.toLocaleString()+'</div><div class="ls-u">尾</div></div>'
+    +'<div class="lot-stat"><div class="ls-l">配置基数</div><div class="ls-v">'+myPonds.length+'</div><div class="ls-u">基</div></div>'
+    +'</div>'
+    +'<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">配置いけす（'+myPonds.length+'基）</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:5px">'+pondChips+'</div></div>'
+    +'<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">死亡記録・ロス率（feed_logs蓄積後に有効化）</div>'
+    +'<div style="padding:16px;text-align:center;color:var(--sub);font-size:13px;background:var(--bg);border-radius:6px">給餌・死亡記録がDBに蓄積されると、ロス率と推移グラフが表示されます。</div></div>';
+  openDetail(l.species+' '+l.label+' 詳細',html,
+    '<button class="btn btn-primary btn-sm" onclick="openM(\'mNewLot\')">新規ロット登録</button>');
 }
 
 // ══════════════════════════════════════════
@@ -2172,29 +2177,22 @@ function renderMonthlyMatrix(){
   head+='<th style="min-width:56px;text-align:right;background:#0f2540">合計</th></tr></thead>';
 
   var body='<tbody>';
-  ['団地','楠森','葛崎','横島'].forEach(function(area){
+  // TODO: feed_logs 蓄積後に実データ化。現在は入力待ちプレースホルダ
+  ['団地','太喜','瀬後の浦','横島','楠森','葛崎'].forEach(function(area){
+    var ponds=POND_CONFIG.filter(function(p){return p.area===area&&p.status!=='skip';});
+    if(!ponds.length)return;
     body+='<tr class="m-area-sep"><td colspan="'+(days+2)+'">▌ '+area+'エリア</td></tr>';
-    tanks.filter(function(t){return t.area===area;}).forEach(function(t){
-      body+='<tr><td class="row-label">'+t.id+'</td>';
+    ponds.forEach(function(p){
+      body+='<tr><td class="row-label">'+p.id+'</td>';
       var total=0;
       for(var d=1;d<=days;d++){
         if(d>todayDay){
           body+='<td></td>';
-        } else if(d===todayDay&&t.status==='pending'){
+        } else if(d===todayDay&&p.status==='todo'){
           body+='<td class="unfilled"></td>';
         } else {
-          var v;
-          if(dataType==='feed'){
-            var base=t.feed||40;
-            v=(d%3===0&&t.species!=='カンパチ')?0:Math.floor(base*(0.75+Math.random()*0.5));
-          } else if(dataType==='mort'){
-            v=Math.floor(Math.random()*4);
-          } else {
-            v=Math.floor(Math.random()*3);
-          }
-          total+=v;
           var bg2=d===todayDay?'background:#eff6ff;':'';
-          body+='<td style="text-align:center;font-size:11px;'+bg2+'">'+(v>0?v:'')+'</td>';
+          body+='<td style="text-align:center;font-size:11px;'+bg2+'"></td>';
         }
       }
       body+='<td style="text-align:right;font-weight:700;font-size:11px;background:#f8fafc">'+total+'</td></tr>';
@@ -2214,25 +2212,24 @@ function filterCardArea(area,btn){
 }
 
 function renderDiaryCards(area){
-  var filtered=(!area||area==='all')?tanks:tanks.filter(function(t){return t.area===area;});
+  var filtered=POND_CONFIG.filter(function(p){
+    return p.status!=='skip'&&(!area||area==='all'||p.area===area);
+  });
   var stColors={
-    'ok':'border:1px solid #15803d;background:#f0fdf4',
-    'pending':'border:1px solid #d97706;background:#fffbeb',
-    'alert':'border:1px solid #991b1b;background:#fef2f2',
-    'warn':'border:1px solid #d97706;background:#fffbeb'
+    'done': 'border:1px solid #15803d;background:#f0fdf4',
+    'todo': 'border:1px solid #d97706;background:#fffbeb',
+    'alert':'border:1px solid #991b1b;background:#fef2f2'
   };
   var stLabel={
-    'ok':'<span class="badge b-ok">記録済</span>',
-    'pending':'<span class="badge b-warn">未入力</span>',
-    'alert':'<span class="badge b-alert">要対応</span>',
-    'warn':'<span class="badge b-warn">要確認</span>'
+    'done': '<span class="badge b-ok">給餌済</span>',
+    'todo': '<span class="badge b-warn">未入力</span>',
+    'alert':'<span class="badge b-alert">要対応</span>'
   };
   var html='';
-  filtered.forEach(function(t){
-    var st=t.status||'ok';
-    var colStyle=stColors[st]||stColors['ok'];
-    var lbl=stLabel[st]||'';
-    html+='<div style="'+colStyle+';border-radius:4px;padding:10px;cursor:pointer" onclick="openTankDetail(tanks.find(function(x){return x.id===\''+t.id+'\';}))"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-size:11px;font-weight:700;color:var(--sub)">'+t.id+'</div>'+lbl+'</div><div style="font-size:11px;color:var(--sub);margin-bottom:2px">'+t.species+'</div><div style="font-size:18px;font-weight:700">'+t.count.toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--sub)"> 尾</span></div><div style="display:flex;gap:8px;margin-top:4px;font-size:10px;color:var(--sub)"><span>給餌 '+(t.feed||'—')+'kg</span><span>斃死 '+t.mort+'</span><span>B品 '+t.bgrade+'</span></div></div>';
+  filtered.forEach(function(p){
+    var colStyle=stColors[p.status]||stColors['todo'];
+    var lbl=stLabel[p.status]||'';
+    html+='<div style="'+colStyle+';border-radius:4px;padding:10px;cursor:pointer" onclick="openTankDetail(POND_CONFIG.find(function(x){return x.id===\''+p.id+'\';}))"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-size:11px;font-weight:700;color:var(--sub)">'+p.id+'</div>'+lbl+'</div><div style="font-size:11px;color:var(--sub);margin-bottom:2px">'+p.species+'</div><div style="font-size:18px;font-weight:700">'+(p.stock||0).toLocaleString()+'<span style="font-size:10px;font-weight:400;color:var(--sub)"> 尾</span></div><div style="display:flex;gap:8px;margin-top:4px;font-size:10px;color:var(--sub)"><span>給餌 '+(p.feedKg||p.feed||'—')+'kg</span><span>斃死 '+(p.mort||0)+'</span><span>B品 '+(p.bgrade||0)+'</span></div></div>';
   });
   var grid=document.getElementById('tankCardGrid');
   if(grid)grid.innerHTML=html;
