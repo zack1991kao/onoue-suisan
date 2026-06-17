@@ -1242,6 +1242,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
 }
 .hdr-pc-link:hover { color: #fff; border-color: #fff; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div class="phone" id="phone">
@@ -1561,6 +1562,11 @@ body.ai-mode-on .ai-home-banner{display:flex}
 
 </div><!-- /phone -->
 <script>
+// ===== SUPABASE =====
+const SUPABASE_URL = 'https://ssrbmvbcrqrvvgytpirv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzcmJtdmJjcnFydnZneXRwaXJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2OTUyMzAsImV4cCI6MjA5NzI3MTIzMH0.LPdwmWGOXTORuaXDGfVodBOb4sYHg67DPnfGk4V6fHA';
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // ===== MASTER DATA =====
 const AREAS = ['団地', '太喜', '瀬後の浦', '横島', '楠森', '葛崎'];
 
@@ -2647,15 +2653,33 @@ function setAiMode(on, save) {
   if (save) localStorage.setItem(AI_KEY, on ? 'on' : 'off');
 }
 
+// ===== SUPABASE LOAD =====
+async function loadPonds() {
+  try {
+    var res = await sb.from('ponds').select('*');
+    if (res.error) throw res.error;
+    if (res.data && res.data.length > 0) {
+      POND_CONFIG.length = 0;
+      res.data.forEach(function(row) { POND_CONFIG.push(row); });
+    }
+  } catch (e) {
+    console.warn('[Supabase] loadPonds failed, using fallback:', e.message);
+  }
+}
+
 // ===== INIT =====
-initAiMode();
-initAreaFilter();
-drawFishMap(null);
-buildFeedList('団地');
-renderCalendar();
-buildMoveGrids();
-showMoveStep(1);
-updateHeader('尾上水産','',false);
+async function initApp() {
+  await loadPonds();
+  initAiMode();
+  initAreaFilter();
+  drawFishMap(null);
+  buildFeedList('団地');
+  renderCalendar();
+  buildMoveGrids();
+  showMoveStep(1);
+  updateHeader('尾上水産','',false);
+}
+initApp();
 </script>
 </body>
 </html>
