@@ -1257,6 +1257,8 @@ body.ai-mode-on .ai-home-banner{display:flex}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<!-- アプリ内通知バナー（受注・異常などをリアルタイム表示） -->
+<div id="notifBanner" onclick="this.style.display='none'" style="display:none;position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:10000;background:#1b3a5c;color:#fff;padding:12px 16px;font-size:14px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.3);cursor:pointer;display:none;align-items:center;gap:8px;"></div>
 <!-- 簡易ログインゲート（暫定・UX層。真のアクセス制限はSupabase Auth+RLSで実施） -->
 <div id="loginGate" style="position:fixed;inset:0;background:#0f2437;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;">
   <div style="background:#fff;border-radius:16px;padding:32px 24px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
@@ -2997,6 +2999,54 @@ function subscribeRealtime() {
   }
 }
 
+// ===== アプリ内通知バナー（受注・異常をリアルタイム表示）=====
+var _notifTimer = null;
+function showNotifBanner(msg, color) {
+  var el = document.getElementById('notifBanner');
+  if (!el) return;
+  el.innerHTML = msg;
+  el.style.background = color || '#1b3a5c';
+  el.style.display = 'flex';
+  if (_notifTimer) clearTimeout(_notifTimer);
+  _notifTimer = setTimeout(function(){ el.style.display = 'none'; }, 8000);
+  // 端末がProgressive Web App通知に対応していれば、OS通知も試みる（許可済みのみ）
+  try {
+    if (window.Notification && Notification.permission === 'granted') {
+      new Notification('尾上水産', { body: el.textContent });
+    }
+  } catch(e){}
+}
+function subscribeNotifications() {
+  try {
+    // E1: 受注（orders insert）→ 全員のスマホに表示
+    sb.channel('app-orders-notif')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, function(payload) {
+        var o = payload.new || {};
+        showNotifBanner('🗓 新しい受注：' + (o.buyer||'') + '　' + (o.species||'') + ' ' + (o.qty||0) + '尾', '#1d4ed8');
+      })
+      .subscribe();
+    // E2: 異常フラグ（feed_logs で flag=true の insert）→ 表示
+    sb.channel('app-alert-notif')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'feed_logs' }, function(payload) {
+        var f = payload.new || {};
+        if (f.flag === true || (f.mort && f.mort > 0)) {
+          showNotifBanner('⚠ 異常入力がありました：' + (f.pond_id||'') + (f.mort>0?('（死亡 '+f.mort+'）'):''), '#b91c1c');
+        }
+      })
+      .subscribe();
+  } catch (e) {
+    console.warn('[Supabase] subscribeNotifications failed:', e.message);
+  }
+}
+// 通知許可をさりげなく要求（任意・拒否されても動作する）
+function requestNotifyPermission() {
+  try {
+    if (window.Notification && Notification.permission === 'default') {
+      Notification.requestPermission().catch(function(){});
+    }
+  } catch(e){}
+}
+
 // ===== INIT =====
 async function initApp() {
   try { await sb.auth.getSession(); } catch(e){}  // セッション復元（RLS有効化後の認証付きクエリ用）
@@ -3011,6 +3061,8 @@ async function initApp() {
   showMoveStep(1);
   updateHeader('尾上水産','',false);
   subscribeRealtime();
+  subscribeNotifications();
+  requestNotifyPermission();
 }
 initApp();
 
