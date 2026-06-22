@@ -22,9 +22,12 @@ create table if not exists public.inventory_adjustments (
 create table if not exists public.profiles (
   id         uuid primary key references auth.users(id) on delete cascade,
   email      text,
-  role       text not null default 'staff',
+  role       text not null default 'staff',   -- 'staff' か 'admin'
+  active     boolean not null default true,    -- false にすると即ログイン後アクセス不可（退職者の無効化用）
   created_at timestamptz not null default now()
 );
+-- 既存 profiles に active 列が無い場合に追加（再実行時の互換）
+alter table public.profiles add column if not exists active boolean not null default true;
 
 -- 新規 auth ユーザー作成時に profiles を自動作成するトリガ
 create or replace function public.handle_new_user()
@@ -46,12 +49,21 @@ insert into public.profiles (id, email, role)
 select id, email, 'staff' from auth.users
 on conflict (id) do nothing;
 
--- 管理者判定ヘルパー（RLSポリシーから呼ぶ）
+-- 有効ユーザー判定（active=true のログイン済みユーザーか）
+create or replace function public.is_active()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists(
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.active = true
+  );
+$$;
+
+-- 管理者判定ヘルパー（RLSポリシーから呼ぶ。無効化された管理者は不可）
 create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = public as $$
   select exists(
     select 1 from public.profiles p
-    where p.id = auth.uid() and p.role = 'admin'
+    where p.id = auth.uid() and p.role = 'admin' and p.active = true
   );
 $$;
 
@@ -70,23 +82,23 @@ alter table public.profiles               enable row level security;
 -- ponds
 drop policy if exists ponds_rw on public.ponds;
 create policy ponds_rw on public.ponds
-  for all to authenticated using (true) with check (true);
+  for all to authenticated using (public.is_active()) with check (public.is_active());
 -- feed_logs
 drop policy if exists feed_logs_rw on public.feed_logs;
 create policy feed_logs_rw on public.feed_logs
-  for all to authenticated using (true) with check (true);
+  for all to authenticated using (public.is_active()) with check (public.is_active());
 -- move_logs
 drop policy if exists move_logs_rw on public.move_logs;
 create policy move_logs_rw on public.move_logs
-  for all to authenticated using (true) with check (true);
+  for all to authenticated using (public.is_active()) with check (public.is_active());
 -- orders（受注は現場でも入力する）
 drop policy if exists orders_rw on public.orders;
 create policy orders_rw on public.orders
-  for all to authenticated using (true) with check (true);
+  for all to authenticated using (public.is_active()) with check (public.is_active());
 -- inventory_adjustments
 drop policy if exists inv_adj_rw on public.inventory_adjustments;
 create policy inv_adj_rw on public.inventory_adjustments
-  for all to authenticated using (true) with check (true);
+  for all to authenticated using (public.is_active()) with check (public.is_active());
 
 -- 機微データ（管理者のみ）: 出荷（金額あり）・設定
 -- shipments（price/amount を含むため管理者限定）
@@ -112,8 +124,12 @@ notify pgrst, 'reload schema';
 
 -- ============================================================
 -- 実行後にやること（Isaac）:
---   ・経営者/家族のアカウントを管理者にする:
+--   ・経営層アカウントをまとめて管理者にする（kanri で始まるメール）:
+--       update public.profiles set role='admin' where email like 'kanri%@onoue.local';
+--   ・個別に管理者化する場合:
 --       update public.profiles set role='admin' where email='オーナーのメール';
+--   ・退職者などを無効化（削除せずログイン後アクセス不可にする）:
+--       update public.profiles set active=false where email='退職者のメール';
 --   ・確認:
---       select email, role from public.profiles order by role;
+--       select email, role, active from public.profiles order by role, email;
 -- ============================================================
