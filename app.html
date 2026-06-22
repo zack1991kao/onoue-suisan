@@ -2696,10 +2696,45 @@ function showMoveStep(n) {
   else if (n===2) updateHeader('理由・確認','2 / 2',true);
   else updateHeader('移動記録','',false);
 }
-function moveSave() {
+async function moveSave() {
   var fromLabel = state.mv.external ? '外部' : state.mv.from;
-  document.getElementById('moveDoneSub').textContent = fromLabel + ' → ' + state.mv.to + ' / ' + (state.mv.count||0).toLocaleString() + '尾 / ' + state.mv.reason;
+  var cnt = state.mv.count || 0;
+  document.getElementById('moveDoneSub').textContent = fromLabel + ' → ' + state.mv.to + ' / ' + cnt.toLocaleString() + '尾 / ' + state.mv.reason;
   state.moveStep = 99; showMoveStep('done');
+
+  // メモリ更新（在庫の増減）
+  var toP = getPond(state.mv.to);
+  var fromP = state.mv.external ? null : getPond(state.mv.from);
+  if (toP) toP.stock = (toP.stock || 0) + cnt;
+  if (fromP) fromP.stock = Math.max(0, (fromP.stock || 0) - cnt);
+  drawFishMap(currentHomeArea);
+
+  if (cnt <= 0 || !state.mv.to) return;
+
+  // DB write
+  var d = new Date();
+  var logDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  try {
+    var r1 = await sb.from('move_logs').insert({
+      log_date:  logDate,
+      from_pond: state.mv.external ? null : state.mv.from,
+      to_pond:   state.mv.to,
+      count:     cnt,
+      reason:    state.mv.reason,
+      external:  !!state.mv.external
+    });
+    if (r1.error) throw r1.error;
+    // ponds 在庫 update
+    var ups = [];
+    if (toP)   ups.push(sb.from('ponds').update({ stock: toP.stock,   updated_at: new Date().toISOString() }).eq('id', toP.id));
+    if (fromP) ups.push(sb.from('ponds').update({ stock: fromP.stock, updated_at: new Date().toISOString() }).eq('id', fromP.id));
+    var results = await Promise.all(ups);
+    var upErr = results.find(function(r) { return r.error; });
+    if (upErr) throw upErr.error;
+  } catch (e) {
+    console.error('[Supabase] moveSave failed:', e);
+    alert('移動記録の保存に失敗しました。通信を確認してください');
+  }
 }
 function moveRestart() {
   state.mv = {from:null,to:null,count:null,reason:null,external:false};
