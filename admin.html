@@ -605,8 +605,9 @@ body.ai-mode-on .ai-element-flex{display:flex}
         </tr></tfoot>
       </table>
     </div>
-    <div style="margin-top:10px">
+    <div style="margin-top:10px;display:flex;gap:8px">
       <button class="btn btn-secondary btn-sm" onclick="addShipRow()">＋ 明細を追加</button>
+      <button class="btn btn-primary btn-sm" onclick="saveShipment()">💾 出荷を保存</button>
     </div>
   </div>
 
@@ -985,32 +986,32 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <div class="mhd"><h3>新規注文登録</h3><button class="mclose" onclick="closeM('mNewOrder')">✕</button></div>
     <div class="mbody">
       <div class="fr2">
-        <div class="fg"><label>受注日</label><input type="date" class="fc" value="2026-05-20"></div>
-        <div class="fg"><label>出荷予定日</label><input type="date" class="fc" value="2026-05-23"></div>
+        <div class="fg"><label>受注日</label><input type="date" class="fc" id="noDate" value="2026-05-20"></div>
+        <div class="fg"><label>出荷予定日</label><input type="date" class="fc" id="noShipDate" value="2026-05-23"></div>
       </div>
       <div class="fr2">
         <div class="fg"><label>業者名</label>
-          <select class="fc"><option>ニチモウ</option><option>信源</option><option>オーシャン</option><option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option></select>
+          <select class="fc" id="noBuyer"><option>ニチモウ</option><option>信源</option><option>オーシャン</option><option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option></select>
         </div>
-        <div class="fg"><label>魚種</label><select class="fc"><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select></div>
+        <div class="fg"><label>魚種</label><select class="fc" id="noSpecies"><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select></div>
       </div>
       <div class="fr2">
         <div class="fg"><label>サイズ</label>
-          <select class="fc"><option>〜1.0kg</option><option>1.0〜1.5kg</option><option>1.5〜2.0kg</option><option>2.0kg〜</option></select>
+          <select class="fc" id="noSize"><option>〜1.0kg</option><option>1.0〜1.5kg</option><option>1.5〜2.0kg</option><option>2.0kg〜</option></select>
         </div>
-        <div class="fg"><label>数量（尾）</label><input type="number" class="fc" placeholder="例：50"></div>
+        <div class="fg"><label>数量（尾）</label><input type="number" class="fc" id="noQty" placeholder="例：50"></div>
       </div>
       <div class="fr2">
         <div class="fg"><label>受付経路</label>
-          <select class="fc"><option>電話</option><option>LINE</option><option>FAX</option><option>直接</option></select>
+          <select class="fc" id="noRoute"><option>電話</option><option>LINE</option><option>FAX</option><option>直接</option></select>
         </div>
-        <div class="fg"><label>ロット指定</label><input type="text" class="fc" placeholder="例：Lot.43,5,1〜2"></div>
+        <div class="fg"><label>ロット指定</label><input type="text" class="fc" id="noLot" placeholder="例：Lot.43,5,1〜2"></div>
       </div>
-      <div class="fg"><label>備考</label><textarea class="fc" rows="2"></textarea></div>
+      <div class="fg"><label>備考</label><textarea class="fc" id="noMemo" rows="2"></textarea></div>
     </div>
     <div class="mfoot">
       <button class="btn btn-secondary" onclick="closeM('mNewOrder')">キャンセル</button>
-      <button class="btn btn-primary" onclick="closeM('mNewOrder');showToast('注文を登録しました')">登録</button>
+      <button class="btn btn-primary" onclick="saveOrder()">登録</button>
     </div>
   </div>
 </div>
@@ -1477,8 +1478,67 @@ async function loadPonds() {
   }
 }
 
+async function loadOrders() {
+  try {
+    var res = await sb.from('orders').select('*').order('order_date', { ascending: false });
+    if (res.error) throw res.error;
+    if (res.data && res.data.length > 0) {
+      orders.length = 0;
+      res.data.forEach(function(row) {
+        orders.push({
+          date: mdShort(row.order_date), buyer: row.buyer, species: row.species,
+          size: row.size, qty: row.qty, shipDate: mdShort(row.ship_date),
+          route: row.route, status: row.status, lot: row.lot || '', memo: row.memo || ''
+        });
+      });
+    }
+  } catch (e) {
+    console.warn('[Supabase] loadOrders failed, using fallback:', e.message);
+  }
+}
+
+function refreshDashboard(){
+  var ds=calcDashSummary();
+  if(ds){
+    var el1=document.getElementById('dashTotalStock');
+    var el2=document.getElementById('dashActive');
+    var el3=document.getElementById('dashTotal');
+    if(el1)el1.textContent=ds.totalStock.toLocaleString();
+    if(el2)el2.textContent=ds.active;
+    if(el3)el3.textContent=ds.total;
+  }
+  renderPending();
+  renderTankGrid('all');
+  renderHeatmap();
+  renderAlertList();
+  renderLotMini();
+}
+
+function subscribeRealtime(){
+  try{
+    sb.channel('ponds-changes')
+      .on('postgres_changes', { event:'*', schema:'public', table:'ponds' }, async function(){
+        await loadPonds();
+        refreshDashboard();
+        renderInv();
+        renderInvSummary();
+      })
+      .subscribe();
+    sb.channel('orders-changes')
+      .on('postgres_changes', { event:'*', schema:'public', table:'orders' }, async function(){
+        await loadOrders();
+        renderOrderList();
+        renderCalendar();
+      })
+      .subscribe();
+  }catch(e){
+    console.warn('[Supabase] subscribeRealtime failed:', e.message);
+  }
+}
+
 async function init(){
   await loadPonds();
+  await loadOrders();
   initAiMode();
   setDate();
   var ds=calcDashSummary();
@@ -1507,6 +1567,7 @@ async function init(){
   renderLedgerNav();
   renderLedger('ニチモウ');
   renderBuyerMaster();
+  subscribeRealtime();
 }
 
 function setDate(){
@@ -1748,6 +1809,68 @@ function renderOrderList(){
   }).join('');
 }
 
+function mdShort(isoDate){
+  // '2026-05-20' -> '5/20'
+  if(!isoDate)return '';
+  var parts=isoDate.split('-');
+  if(parts.length<3)return isoDate;
+  return parseInt(parts[1],10)+'/'+parseInt(parts[2],10);
+}
+async function saveOrder(){
+  var date=document.getElementById('noDate').value;
+  var shipDate=document.getElementById('noShipDate').value;
+  var buyer=document.getElementById('noBuyer').value;
+  var species=document.getElementById('noSpecies').value;
+  var size=document.getElementById('noSize').value;
+  var qty=parseInt(document.getElementById('noQty').value)||0;
+  var route=document.getElementById('noRoute').value;
+  var lot=document.getElementById('noLot').value;
+  var memo=document.getElementById('noMemo').value;
+  if(!qty){alert('数量を入力してください');return;}
+
+  // メモリ更新（一覧の先頭に追加）
+  var o={date:mdShort(date),buyer:buyer,species:species,size:size,qty:qty,shipDate:mdShort(shipDate),route:route,status:'pending',lot:lot,memo:memo};
+  orders.unshift(o);
+  renderOrderList();
+  closeM('mNewOrder');
+  showToast('注文を登録しました');
+
+  // DB write
+  try{
+    var r=await sb.from('orders').insert({
+      order_date:date||null, ship_date:shipDate||null, buyer:buyer, species:species,
+      size:size, qty:qty, route:route, status:'pending', lot:lot||'', memo:memo||''
+    });
+    if(r.error)throw r.error;
+  }catch(e){
+    console.error('[Supabase] saveOrder failed:',e);
+    alert('注文のDB保存に失敗しました。通信を確認してください');
+  }
+}
+async function saveShipment(){
+  var shipDate=document.getElementById('shipDate').value;
+  var buyer=document.getElementById('shipBuyerSel').value;
+  var rows=shipRows.filter(function(r){return (r.qty>0)||(r.gross>0);});
+  if(!rows.length){alert('保存する明細がありません');return;}
+  showToast('出荷を保存しました ✓');
+
+  // DB write（一括 insert）
+  try{
+    var ins=rows.map(function(r){
+      var net=(r.gross||0)-(r.futa||0)-(r.mizu||0);
+      return {
+        ship_date:shipDate||null, buyer:buyer, species:r.species, qty:r.qty||0,
+        gross:r.gross||0, futa:r.futa||0, mizu:r.mizu||0, net:net,
+        price:parseFloat(r.price)||0, amount:Math.round(net*(parseFloat(r.price)||0)), lot:r.lot||''
+      };
+    });
+    var res=await sb.from('shipments').insert(ins);
+    if(res.error)throw res.error;
+  }catch(e){
+    console.error('[Supabase] saveShipment failed:',e);
+    alert('出荷のDB保存に失敗しました。通信を確認してください');
+  }
+}
 function openOrderDetail(idx){
   var o=orders[idx];
   openDetail('注文詳細 — '+o.buyer+'（'+o.date+'）',
