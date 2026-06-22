@@ -1792,14 +1792,71 @@ function openTankDetail(p){
     +'<div class="td-stat"><div class="tds-label">給餌状態</div><div class="tds-val" style="font-size:16px"><span class="badge '+si.cls+'">'+si.lbl+'</span></div></div>'
     +'<div class="td-stat"><div class="tds-label">餌の種類</div><div class="tds-val" style="font-size:14px">'+baitStr+'</div></div>'
     +'</div>'
-    +'<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">給餌履歴（feed_logs蓄積後に有効化）</div>'
-    +'<div style="padding:20px;text-align:center;color:var(--sub);font-size:13px;background:var(--bg);border-radius:6px">給餌記録をスマホアプリで入力すると、ここに履歴が表示されます。</div></div>'
-    +'<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">給餌量推移（feed_logs蓄積後に有効化）</div>'
-    +'<div class="chart-wrap"><svg id="tankFeedChart" class="chart-svg" height="90" viewBox="0 0 500 90"></svg></div></div>'
+    +'<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">給餌履歴</div>'
+    +'<div id="tankFeedHist" style="padding:20px;text-align:center;color:var(--sub);font-size:13px;background:var(--bg);border-radius:6px">読み込み中...</div></div>'
+    +'<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">給餌量推移</div>'
+    +'<div class="chart-wrap"><svg id="tankFeedChart" class="chart-svg" height="90" viewBox="0 0 500 90"></svg></div>'
+    +'<div id="tankFeedChartEmpty" style="display:none;padding:16px;text-align:center;color:var(--sub);font-size:13px">推移グラフは2日分以上の記録で表示されます</div></div>'
     +(p.memo?'<div style="margin-bottom:12px;font-size:13px;color:var(--sub)">メモ: '+p.memo+'</div>':'');
 
   openDetail(p.id+' 詳細',html,
     '<button class="btn btn-secondary btn-sm" onclick="openM(\'mInvEdit\');document.getElementById(\'mInvEditTitle\').textContent=\'在庫修正 — '+p.id+'\';document.getElementById(\'mInvEditCount\').value='+(p.stock||0)+'">在庫修正</button>');
+
+  loadTankFeedHistory(p.id);
+}
+
+// feed_logs から該当いけすの給餌履歴を取得して表示＋推移グラフ描画
+async function loadTankFeedHistory(pondId){
+  var histEl=document.getElementById('tankFeedHist');
+  var svg=document.getElementById('tankFeedChart');
+  var emptyEl=document.getElementById('tankFeedChartEmpty');
+  try{
+    var res=await sb.from('feed_logs')
+      .select('log_date,feed_kg,bait,mort,bgrade')
+      .eq('pond_id',pondId)
+      .order('log_date',{ascending:false})
+      .limit(60);
+    if(res.error)throw res.error;
+    var rows=res.data||[];
+    if(!histEl)return;
+    if(rows.length===0){
+      histEl.innerHTML='まだ給餌記録がありません。スマホアプリで入力すると、ここに履歴が表示されます。';
+      if(svg)svg.style.display='none';
+      if(emptyEl)emptyEl.style.display='block';
+      return;
+    }
+    // 履歴リスト（新しい順・最大20件）
+    histEl.style.textAlign='left';
+    histEl.style.padding='0';
+    histEl.style.background='transparent';
+    histEl.style.color='var(--ink)';
+    histEl.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +'<thead><tr style="color:var(--sub);font-size:11px;text-align:left"><th style="padding:6px 8px">日付</th><th style="padding:6px 8px;text-align:right">給餌量</th><th style="padding:6px 8px">餌</th><th style="padding:6px 8px;text-align:right">死亡</th></tr></thead><tbody>'
+      +rows.slice(0,20).map(function(r){
+        return '<tr style="border-top:1px solid var(--line)"><td style="padding:6px 8px">'+r.log_date+'</td>'
+          +'<td style="padding:6px 8px;text-align:right;font-weight:700">'+(r.feed_kg||0)+'<span style="font-size:10px;color:var(--sub)">kg</span></td>'
+          +'<td style="padding:6px 8px;color:var(--sub)">'+(r.bait||'')+'</td>'
+          +'<td style="padding:6px 8px;text-align:right;color:'+((r.mort||0)>0?'var(--red)':'var(--sub)')+'">'+(r.mort||0)+'</td></tr>';
+      }).join('')
+      +'</tbody></table>';
+
+    // 推移グラフ：日付ごとに給餌量を合計し、古い順に並べる
+    var byDate={};
+    rows.forEach(function(r){ byDate[r.log_date]=(byDate[r.log_date]||0)+(r.feed_kg||0); });
+    var dates=Object.keys(byDate).sort(); // 昇順
+    var series=dates.map(function(d){return byDate[d];});
+    if(series.length>=2){
+      if(svg)svg.style.display='';
+      if(emptyEl)emptyEl.style.display='none';
+      drawLineChart('tankFeedChart',series.slice(-14),'#2563eb',500,90);
+    }else{
+      if(svg)svg.style.display='none';
+      if(emptyEl)emptyEl.style.display='block';
+    }
+  }catch(e){
+    console.error('[Supabase] loadTankFeedHistory failed:',e);
+    if(histEl)histEl.innerHTML='給餌履歴の読み込みに失敗しました。';
+  }
 }
 
 // ══════════════════════════════════════════
