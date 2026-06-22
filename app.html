@@ -2786,6 +2786,12 @@ async function moveSave() {
   } catch (e) {
     console.warn('[Supabase] move_logs insert failed (在庫は保存済み):', e);
   }
+
+  // ③ DBを正として再取得し、グリッド・漁場図を確実に最新化
+  //    （楽観更新の取りこぼしやリアルタイム競合を打ち消す）
+  await loadPonds();
+  buildMoveGrids();
+  drawFishMap(currentHomeArea);
 }
 function moveRestart() {
   state.mv = {from:null,to:null,count:null,reason:null,external:false};
@@ -2860,14 +2866,35 @@ async function dbUpdatePond(id, fields) {
   }
 }
 
+// 現在表示中のタブを最新の POND_CONFIG で再描画
+function refreshActiveView() {
+  if (state.tab === 'home') {
+    drawFishMap(currentHomeArea);
+  } else if (state.tab === 'move') {
+    // 選択状態(state.mv)は保持したままグリッドの数字を更新
+    buildMoveGrids();
+  }
+  // feedタブは入力中の値を消さないため再描画しない
+}
+
+// リアルタイムイベントが連続発火しても loadPonds の並行実行で
+// 古い状態に上書きされないよう、デバウンスして1回にまとめる
+var _pondReloadTimer = null;
+function scheduleReload() {
+  if (_pondReloadTimer) clearTimeout(_pondReloadTimer);
+  _pondReloadTimer = setTimeout(async function() {
+    _pondReloadTimer = null;
+    await loadPonds();
+    refreshActiveView();
+  }, 250);
+}
+
 // ===== リアルタイム購読（PC版・他端末の変更を自動反映）=====
 function subscribeRealtime() {
   try {
     sb.channel('app-ponds-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ponds' }, async function() {
-        await loadPonds();
-        // 漁場図のみ自動更新（給餌入力中の値を消さないため給餌リストは再描画しない）
-        if (state.tab === 'home') drawFishMap(currentHomeArea);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ponds' }, function() {
+        scheduleReload();
       })
       .subscribe();
   } catch (e) {

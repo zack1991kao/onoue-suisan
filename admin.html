@@ -1530,21 +1530,38 @@ function refreshDashboard(){
   renderLotMini();
 }
 
+// イベント連続発火による loadPonds 並行実行（古い状態での上書き）を防ぐデバウンス
+var _pondReloadTimer=null;
+function schedulePondReload(){
+  if(_pondReloadTimer)clearTimeout(_pondReloadTimer);
+  _pondReloadTimer=setTimeout(async function(){
+    _pondReloadTimer=null;
+    await loadPonds();
+    refreshDashboard();
+    renderInv();
+    renderInvSummary();
+  },250);
+}
+var _orderReloadTimer=null;
+function scheduleOrderReload(){
+  if(_orderReloadTimer)clearTimeout(_orderReloadTimer);
+  _orderReloadTimer=setTimeout(async function(){
+    _orderReloadTimer=null;
+    await loadOrders();
+    renderOrderList();
+    renderCalendar();
+  },250);
+}
 function subscribeRealtime(){
   try{
     sb.channel('ponds-changes')
-      .on('postgres_changes', { event:'*', schema:'public', table:'ponds' }, async function(){
-        await loadPonds();
-        refreshDashboard();
-        renderInv();
-        renderInvSummary();
+      .on('postgres_changes', { event:'*', schema:'public', table:'ponds' }, function(){
+        schedulePondReload();
       })
       .subscribe();
     sb.channel('orders-changes')
-      .on('postgres_changes', { event:'*', schema:'public', table:'orders' }, async function(){
-        await loadOrders();
-        renderOrderList();
-        renderCalendar();
+      .on('postgres_changes', { event:'*', schema:'public', table:'orders' }, function(){
+        scheduleOrderReload();
       })
       .subscribe();
   }catch(e){
