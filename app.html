@@ -3084,7 +3084,7 @@ if ('serviceWorker' in navigator) {
 }
 
 // ===== ログイン（Supabase Auth：メール/パスワード）=====
-function resolveEmail(v){ v=(v||'').trim(); return v.indexOf('@')>=0 ? v : (v + '@onoue.local'); }
+function resolveEmail(v){ v=(v||'').trim().toLowerCase(); return v.indexOf('@')>=0 ? v : (v + '@onoue.local'); }
 async function doLogin() {
   var email = resolveEmail(document.getElementById('lgUser').value);
   var pass  = document.getElementById('lgPass').value;

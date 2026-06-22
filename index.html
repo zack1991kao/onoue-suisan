@@ -162,6 +162,7 @@ body {
   font-size: 12px; color: rgba(255,255,255,0.2);
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -173,7 +174,7 @@ body {
     <p>アクセスにはパスワードが必要です</p>
     <div class="auth-field">
       <label>ユーザー名</label>
-      <input type="text" id="authUser" placeholder="onoue" autocomplete="username">
+      <input type="text" id="authUser" placeholder="例：staff01 / kanri01" autocomplete="username" autocapitalize="off">
     </div>
     <div class="auth-field">
       <label>パスワード</label>
@@ -227,31 +228,34 @@ body {
 <footer class="site-footer">© 2026 尾上水産 / Powered by 株式会社顔入り</footer>
 
 <script>
-var AUTH_KEY = 'onoue_auth_v1';
-var CORRECT_USER = 'onoue';
-var CORRECT_PASS = 'onoue2026';
+// ===== Supabase Auth（app/admin と同一アカウント・セッション共有）=====
+var SUPABASE_URL = 'https://ssrbmvbcrqrvvgytpirv.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzcmJtdmJjcnFydnZneXRwaXJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2OTUyMzAsImV4cCI6MjA5NzI3MTIzMH0.LPdwmWGOXTORuaXDGfVodBOb4sYHg67DPnfGk4V6fHA';
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-function checkAuth() {
-  return sessionStorage.getItem(AUTH_KEY) === 'ok';
+function resolveEmail(v){ v=(v||'').trim().toLowerCase(); return v.indexOf('@')>=0 ? v : (v + '@onoue.local'); }
+function showPortal(){
+  document.getElementById('authOverlay').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'block';
 }
-function doAuth() {
-  var u = document.getElementById('authUser').value.trim();
-  var p = document.getElementById('authPass').value;
-  if (u === CORRECT_USER && p === CORRECT_PASS) {
-    sessionStorage.setItem(AUTH_KEY, 'ok');
-    document.getElementById('authOverlay').style.display = 'none';
-    document.getElementById('mainContent').style.display = 'block';
-    document.getElementById('authErr').style.display = 'none';
-  } else {
+async function doAuth() {
+  var email = resolveEmail(document.getElementById('authUser').value);
+  var pass  = document.getElementById('authPass').value;
+  document.getElementById('authErr').style.display = 'none';
+  try {
+    var res = await sb.auth.signInWithPassword({ email: email, password: pass });
+    if (res.error) throw res.error;
+    showPortal();
+  } catch (e) {
     document.getElementById('authErr').style.display = 'block';
     document.getElementById('authPass').value = '';
     document.getElementById('authPass').focus();
   }
 }
-if (checkAuth()) {
-  document.getElementById('authOverlay').style.display = 'none';
-  document.getElementById('mainContent').style.display = 'block';
-}
+// 既にどこか(app/admin/index)でログイン済みならそのまま入れる（1ログインで全部）
+sb.auth.getSession().then(function(s){
+  if (s && s.data && s.data.session) showPortal();
+});
 // スタッフ共有URL
 var base = location.origin + location.pathname.replace('index.html','').replace(/\/$/, '');
 document.getElementById('staffUrl').textContent = base + '/staff.html';

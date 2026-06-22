@@ -107,34 +107,17 @@ body {
 </div>
 
 <script>
-var AUTH_KEY = 'onoue_auth_v1';
-var CORRECT_USER = 'onoue';
-var CORRECT_PASS = 'onoue2026';
-
-function checkAuth() {
-  return sessionStorage.getItem(AUTH_KEY) === 'ok';
-}
-function doAuth() {
-  var u = document.getElementById('authUser').value.trim();
-  var p = document.getElementById('authPass').value;
-  if (u === CORRECT_USER && p === CORRECT_PASS) {
-    sessionStorage.setItem(AUTH_KEY, 'ok');
-    goToApp();
-  } else {
-    document.getElementById('authErr').style.display = 'block';
-    document.getElementById('authPass').value = '';
-    document.getElementById('authPass').focus();
-  }
-}
-function goToApp() {
-  document.getElementById('authBox').querySelector('button').style.display = 'none';
-  document.getElementById('authErr').style.display = 'none';
-  document.getElementById('loadingWrap').style.display = 'flex';
-  setTimeout(function(){ location.href = 'app.html'; }, 600);
-}
-if (checkAuth()) {
-  goToApp();
-}
+// ログインは app.html（Supabase Auth）に統一。staff.html は転送のみ。
+(function(){
+  var box = document.getElementById('authBox');
+  var btn = box ? box.querySelector('button') : null;
+  if (btn) btn.style.display = 'none';
+  var err = document.getElementById('authErr');
+  if (err) err.style.display = 'none';
+  var lw = document.getElementById('loadingWrap');
+  if (lw) lw.style.display = 'flex';
+  setTimeout(function(){ location.href = 'app.html'; }, 400);
+})();
 
 // ===== PWA: Service Worker 登録 =====
 if ('serviceWorker' in navigator) {

@@ -3037,7 +3037,7 @@ if ('serviceWorker' in navigator) {
 
 // ===== ログイン（Supabase Auth）＋管理者ロール =====
 var ADMIN_KEY='onoue_admin';   // 管理者解除フラグ（profilesのrole=adminで自動セット）
-function resolveEmail(v){ v=(v||'').trim(); return v.indexOf('@')>=0 ? v : (v + '@onoue.local'); }
+function resolveEmail(v){ v=(v||'').trim().toLowerCase(); return v.indexOf('@')>=0 ? v : (v + '@onoue.local'); }
 function isAdmin(){ return sessionStorage.getItem(ADMIN_KEY)==='ok'; }
 
 // ログイン中ユーザーの role を取得し、admin なら自動で管理者解除＋餌代表示
