@@ -287,6 +287,9 @@ body {
 .pond-cell.skip { background: #f8fafc; border-color: #e2e8f0 !important; }
 .pond-cell.skip .pond-num { color: #94a3b8; }
 .pond-cell.skip .pond-fish { color: #cbd5e1; }
+/* 空きいけすを移動先に選択した時も青枠でハイライト（skipの!importantに勝たせる） */
+.pond-cell.skip.selected { background: var(--blue-bg); border-color: var(--blue) !important; border-width: 3px; }
+.pond-cell.skip.selected .pond-num { color: var(--blue); }
 
 /* ===== FORM SECTIONS ===== */
 .section { margin-top: 22px; }
@@ -1397,11 +1400,13 @@ body.ai-mode-on .ai-home-banner{display:flex}
     </div>
     <div class="order-field">
       <div class="order-label">取引先</div>
-      <select id="orderBuyer" class="order-select">
+      <select id="orderBuyer" class="order-select" onchange="onOrderBuyerChange()">
         <option value="">選択してください</option>
         <option>ニチモウ</option><option>信源</option><option>オーシャン</option>
         <option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option>
+        <option>その他</option>
       </select>
+      <input type="text" id="orderBuyerOther" class="order-input" placeholder="取引先名を入力（例：田中商店）" style="display:none;margin-top:8px;">
     </div>
     <div class="order-field">
       <div class="order-label">魚種</div>
@@ -1416,7 +1421,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
         <option value="">選択してください</option>
         <option>0.8kg〜</option><option>1.0kg〜</option><option>1.0〜1.5kg</option>
         <option>1.5〜2.0kg</option><option>2.0kg〜</option>
-        <option>2.5kg〜</option><option>3.0kg〜</option>
+        <option>2.5kg〜</option><option>3.0kg〜</option><option>3.5kg〜</option><option>4.0kg〜</option>
       </select>
     </div>
     <div class="order-field">
@@ -2091,7 +2096,9 @@ function openRecordPanel(id) {
   var p = getPond(id);
   if (!p) return;
   state.sheetIkesu = id;
-  document.getElementById('recName').textContent = id + '　' + p.species;
+  var yr = POND_YR[id];
+  var yrStr = yr ? '　' + yrToLabel(yr) : '';
+  document.getElementById('recName').textContent = id + '　' + p.species + yrStr;
 
   // 餌セレクト構築
   var baitSel = document.getElementById('recBait');
@@ -2657,7 +2664,15 @@ function openOrderPanel(dateStr) {
   document.getElementById('orderFish').value = '';
   document.getElementById('orderSize').value = '';
   document.getElementById('orderCount').value = '';
+  var ob = document.getElementById('orderBuyerOther');
+  if (ob) { ob.value = ''; ob.style.display = 'none'; }
   setOrderStatus('confirmed');
+}
+// 取引先で「その他」を選んだら手打ち欄を表示
+function onOrderBuyerChange() {
+  var v = document.getElementById('orderBuyer').value;
+  var ob = document.getElementById('orderBuyerOther');
+  if (ob) ob.style.display = (v === 'その他') ? 'block' : 'none';
 }
 function closeOrderPanel() {
   document.getElementById('orderPanelOverlay').classList.remove('open');
@@ -2675,6 +2690,12 @@ async function saveNewOrder() {
   var fish  = document.getElementById('orderFish').value;
   var size  = document.getElementById('orderSize').value;
   var count = document.getElementById('orderCount').value;
+  // 「その他」は手打ち必須
+  if (buyer === 'その他') {
+    var other = (document.getElementById('orderBuyerOther').value || '').trim();
+    if (!other) { alert('「その他」の取引先名を入力してください'); return; }
+    buyer = other;
+  }
   if (!date || !buyer || !fish || !size || !count) {
     alert('すべての項目を入力してください'); return;
   }
@@ -2816,7 +2837,15 @@ async function moveSave() {
   // メモリ更新（在庫の増減）
   var toP = getPond(state.mv.to);
   var fromP = state.mv.external ? null : getPond(state.mv.from);
-  if (toP) toP.stock = (toP.stock || 0) + cnt;
+  // 移動先が空きいけすなら有効化（魚種を引き継ぎ・status=todo）
+  var toWasEmpty = toP && toP.status === 'skip';
+  if (toP) {
+    toP.stock = (toP.stock || 0) + cnt;
+    if (toWasEmpty) {
+      toP.status = 'todo';
+      if (!toP.species && fromP && fromP.species) toP.species = fromP.species;
+    }
+  }
   if (fromP) fromP.stock = Math.max(0, (fromP.stock || 0) - cnt);
   drawFishMap(currentHomeArea);
 
@@ -2829,8 +2858,8 @@ async function moveSave() {
   // ① 在庫の更新を最優先（移動の本体。ここを必ず守る）
   var ok = true;
   var nowIso = new Date().toISOString();
-  if (toP)   ok = (await dbUpdatePond(toP.id,   { stock: toP.stock,   updated_at: nowIso })) && ok;
-  if (fromP && ok) ok = (await dbUpdatePond(fromP.id, { stock: fromP.stock, updated_at: nowIso })) && ok;
+  if (toP)   ok = (await dbUpdatePond(toP.id,   { stock: toP.stock, status: toP.status, species: toP.species || '', updated_at: nowIso })) && ok;
+  if (fromP && ok) ok = (await dbUpdatePond(fromP.id, { stock: fromP.stock, status: fromP.status, updated_at: nowIso })) && ok;
   if (!ok) return; // 失敗時は dbUpdatePond 内で警告済み
 
   // ② 移動ログ（補助的。失敗しても在庫保存は成立済み）
