@@ -1259,8 +1259,8 @@ body.ai-mode-on .ai-home-banner{display:flex}
   <div style="background:#fff;border-radius:16px;padding:32px 24px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
     <div style="text-align:center;font-size:40px;margin-bottom:8px;">🐟</div>
     <h2 style="text-align:center;font-size:17px;font-weight:700;color:#0f172a;margin-bottom:4px;">尾上水産 スタッフ</h2>
-    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:20px;">ログインしてください</p>
-    <input id="lgUser" placeholder="ユーザー名" autocomplete="username" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:16px;margin-bottom:10px;outline:none;box-sizing:border-box;">
+    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:20px;">ID（例：staff01）とパスワードでログイン</p>
+    <input id="lgUser" placeholder="ID または メール" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:16px;margin-bottom:10px;outline:none;box-sizing:border-box;">
     <input id="lgPass" type="password" placeholder="パスワード" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:16px;margin-bottom:14px;outline:none;box-sizing:border-box;">
     <button onclick="doLogin()" style="width:100%;padding:14px;background:#1b3a5c;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">ログイン</button>
     <div id="lgErr" style="display:none;color:#b91c1c;font-size:13px;text-align:center;margin-top:10px;">ユーザー名またはパスワードが違います</div>
@@ -1274,6 +1274,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
   <div class="hdr-title" id="hdrTitle">尾上水産</div>
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
     <a href="./index.html" class="hdr-pc-link">PC版</a>
+    <button class="hdr-pc-link" style="border:none;background:none;cursor:pointer;font:inherit;color:inherit;" onclick="doLogout()">ログアウト</button>
     <button id="aiToggleBtnSp" class="ai-toggle-sp" onclick="toggleAiMode()">　AI OFF</button>
     <div class="hdr-step" id="hdrStep"></div>
   </div>
@@ -2964,6 +2965,7 @@ function subscribeRealtime() {
 
 // ===== INIT =====
 async function initApp() {
+  try { await sb.auth.getSession(); } catch(e){}  // セッション復元（RLS有効化後の認証付きクエリ用）
   await loadPonds();
   await loadAppOrders();
   initAiMode();
@@ -2987,23 +2989,34 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ===== 簡易ログインゲート（暫定・UX層）=====
-var AUTH_KEY = 'onoue_auth_v1';
-function doLogin() {
-  var u = document.getElementById('lgUser').value.trim();
-  var p = document.getElementById('lgPass').value;
-  if (u === 'onoue' && p === 'onoue2026') {
-    sessionStorage.setItem(AUTH_KEY, 'ok');
+// ===== ログイン（Supabase Auth：メール/パスワード）=====
+function resolveEmail(v){ v=(v||'').trim(); return v.indexOf('@')>=0 ? v : (v + '@onoue.local'); }
+async function doLogin() {
+  var email = resolveEmail(document.getElementById('lgUser').value);
+  var pass  = document.getElementById('lgPass').value;
+  document.getElementById('lgErr').style.display = 'none';
+  try {
+    var res = await sb.auth.signInWithPassword({ email: email, password: pass });
+    if (res.error) throw res.error;
     document.getElementById('loginGate').style.display = 'none';
-  } else {
+  } catch (e) {
+    console.warn('[Auth] login failed:', e.message);
     document.getElementById('lgErr').style.display = 'block';
     document.getElementById('lgPass').value = '';
   }
 }
+async function doLogout() {
+  try { await sb.auth.signOut(); } catch(e){}
+  location.reload();
+}
+// 既存セッションがあればゲートを出さない（無ければ表示）
 (function() {
-  if (sessionStorage.getItem(AUTH_KEY) !== 'ok') {
+  sb.auth.getSession().then(function(s){
+    var authed = !!(s && s.data && s.data.session);
+    document.getElementById('loginGate').style.display = authed ? 'none' : 'flex';
+  }).catch(function(){
     document.getElementById('loginGate').style.display = 'flex';
-  }
+  });
 })();
 </script>
 </body>

@@ -392,8 +392,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div style="background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
     <div style="text-align:center;font-size:40px;margin-bottom:8px;">🐠</div>
     <h2 style="text-align:center;font-size:18px;font-weight:700;color:#0f172a;margin-bottom:4px;">尾上水産 管理システム</h2>
-    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:22px;">ログインしてください</p>
-    <input id="lgUser" placeholder="ユーザー名" autocomplete="username" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;box-sizing:border-box;">
+    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:22px;">ID（例：kanri01）とパスワードでログイン</p>
+    <input id="lgUser" placeholder="ID または メール" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;box-sizing:border-box;">
     <input id="lgPass" type="password" placeholder="パスワード" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:14px;outline:none;box-sizing:border-box;">
     <button onclick="doLogin()" style="width:100%;padding:14px;background:#1b3a5c;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">ログイン</button>
     <div id="lgErr" style="display:none;color:#b91c1c;font-size:13px;text-align:center;margin-top:10px;">ユーザー名またはパスワードが違います</div>
@@ -422,6 +422,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
   </nav>
   <div class="sidebar-footer">
     <p id="lastUpdated">最終更新: 読み込み中...</p>
+    <button onclick="doLogout()" style="margin:6px 0;padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer;font-family:inherit;color:var(--sub);">ログアウト</button>
     <p class="credit">kaoiri</p>
   </div>
 </aside>
@@ -1616,6 +1617,7 @@ function subscribeRealtime(){
 }
 
 async function init(){
+  try { await sb.auth.getSession(); } catch(e){}  // セッション復元（RLS有効化後の認証付きクエリ用）
   await loadPonds();
   await loadOrders();
   initAiMode();
@@ -2623,21 +2625,43 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ===== 簡易ログインゲート＋管理者ティア（暫定・UX層）=====
-var AUTH_KEY='onoue_auth_v1';     // 入口（スタッフ共通）
-var ADMIN_KEY='onoue_admin';      // 管理者（売上・元帳・設定）
-function doLogin(){
-  var u=document.getElementById('lgUser').value.trim();
-  var p=document.getElementById('lgPass').value;
-  if(u==='onoue' && p==='onoue2026'){
-    sessionStorage.setItem(AUTH_KEY,'ok');
+// ===== ログイン（Supabase Auth）＋管理者ロール =====
+var ADMIN_KEY='onoue_admin';   // 管理者解除フラグ（profilesのrole=adminで自動セット）
+function resolveEmail(v){ v=(v||'').trim(); return v.indexOf('@')>=0 ? v : (v + '@onoue.local'); }
+function isAdmin(){ return sessionStorage.getItem(ADMIN_KEY)==='ok'; }
+
+// ログイン中ユーザーの role を取得し、admin なら自動で管理者解除＋餌代表示
+async function applyRole(){
+  try{
+    var u = await sb.auth.getUser();
+    var uid = (u && u.data && u.data.user) ? u.data.user.id : null;
+    if(!uid) return;
+    var pr = await sb.from('profiles').select('role').eq('id',uid).maybeSingle();
+    if(!pr.error && pr.data && pr.data.role==='admin'){
+      sessionStorage.setItem(ADMIN_KEY,'ok');
+      var cv=document.getElementById('costVal');
+      if(cv){ cv.textContent='¥4,820,000'; costVisible=true; }
+    }
+  }catch(e){ console.warn('[Auth] role fetch skipped:', e.message); }
+}
+async function doLogin(){
+  var email=resolveEmail(document.getElementById('lgUser').value);
+  var pass=document.getElementById('lgPass').value;
+  document.getElementById('lgErr').style.display='none';
+  try{
+    var res=await sb.auth.signInWithPassword({email:email,password:pass});
+    if(res.error)throw res.error;
     document.getElementById('loginGate').style.display='none';
-  }else{
+    await applyRole();
+  }catch(e){
+    console.warn('[Auth] login failed:', e.message);
     document.getElementById('lgErr').style.display='block';
     document.getElementById('lgPass').value='';
   }
 }
-function isAdmin(){ return sessionStorage.getItem(ADMIN_KEY)==='ok'; }
+async function doLogout(){ try{ await sb.auth.signOut(); }catch(e){} sessionStorage.removeItem(ADMIN_KEY); location.reload(); }
+
+// 管理者ガード（role=adminなら自動許可。未設定時はパスワードフォールバック）
 function requireAdmin(){
   if(isAdmin())return true;
   var p=prompt('管理者パスワードを入力してください（売上・元帳・設定の閲覧）');
@@ -2647,15 +2671,18 @@ function requireAdmin(){
 }
 function navSettings(el){ if(!requireAdmin())return; nav('settings',el); }
 function openLedger(el){ if(!requireAdmin())return; swTab('orders','ledger',el); }
+
+// 起動時：セッションが無ければゲート表示。あればrole反映。餌代は既定マスク。
 (function(){
-  if(sessionStorage.getItem(AUTH_KEY)!=='ok'){
+  var cv=document.getElementById('costVal');
+  if(cv && !isAdmin()){ cv.textContent='———'; costVisible=false; }
+  sb.auth.getSession().then(function(s){
+    var authed=!!(s && s.data && s.data.session);
+    document.getElementById('loginGate').style.display = authed ? 'none' : 'flex';
+    if(authed) applyRole();
+  }).catch(function(){
     document.getElementById('loginGate').style.display='flex';
-  }
-  // 餌代は既定マスク（管理者がトグルで解除）
-  if(!isAdmin()){
-    var cv=document.getElementById('costVal');
-    if(cv){ cv.textContent='———'; costVisible=false; }
-  }
+  });
 })();
 </script>
 </body>
