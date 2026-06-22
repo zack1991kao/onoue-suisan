@@ -1987,13 +1987,21 @@ function drawFishMap(areaFilter) {
   if (areaFilter) {
     var filtered = ponds.map(function(p) { return CAGE_MAP[p.id]; }).filter(Boolean);
     if (filtered.length) {
-      var PAD = 30;
+      var PAD = 18;
       var xs = filtered.map(function(c) { return c.x; });
       var ys = filtered.map(function(c) { return c.y; });
       var bMinX = Math.min.apply(null, xs) - PAD;
       var bMinY = Math.min.apply(null, ys) - PAD;
       var bMaxX = Math.max.apply(null, xs) + SVG_SZ + PAD;
       var bMaxY = Math.max.apply(null, ys) + SVG_SZ + PAD;
+      // エリア枠とラベルが切れないよう、該当エリアBOXの範囲も内包する
+      var ab = AREA_BOXES.find(function(b) { return b.area === areaFilter; });
+      if (ab) {
+        bMinX = Math.min(bMinX, ab.bx - 4, ab.lx - 4);
+        bMinY = Math.min(bMinY, ab.by - 4, ab.ly - 12); // ラベルは baseline 基準のため上に余白
+        bMaxX = Math.max(bMaxX, ab.bx + ab.bw + 4);
+        bMaxY = Math.max(bMaxY, ab.by + ab.bh + 4);
+      }
       var vw = Math.max(bMaxX - bMinX, 120);
       var vh = Math.max(bMaxY - bMinY, 300);
       var cx = (bMinX + bMaxX) / 2;
@@ -2178,17 +2186,21 @@ async function saveRecord() {
   // DB write（楽観的UI: 画面更新後に書き込み）
   var d = new Date();
   var logDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+
+  // ① 在庫・状態の更新を最優先（ログ保存が失敗してもここは守る）
+  var ok = await dbUpdatePond(p.id, {
+    status:     p.status,
+    feed_kg:    p.feedKg || 0,
+    mort:       p.mort || 0,
+    bgrade:     p.bgrade || 0,
+    bait:       p.bait,
+    bait2:      p.bait2 || '',
+    updated_at: new Date().toISOString()
+  });
+  if (!ok) return; // 失敗時は dbUpdatePond 内で警告済み
+
+  // ② 給餌ログ（補助的。失敗しても在庫保存は成立済み）
   try {
-    var r1 = await sb.from('ponds').update({
-      status:     p.status,
-      feed_kg:    p.feedKg || 0,
-      mort:       p.mort || 0,
-      bgrade:     p.bgrade || 0,
-      bait:       p.bait,
-      bait2:      p.bait2 || '',
-      updated_at: new Date().toISOString()
-    }).eq('id', p.id);
-    if (r1.error) throw r1.error;
     var r2 = await sb.from('feed_logs').insert({
       pond_id:  p.id,
       log_date: logDate,
@@ -2204,8 +2216,7 @@ async function saveRecord() {
     });
     if (r2.error) throw r2.error;
   } catch (e) {
-    console.error('[Supabase] saveRecord failed:', e);
-    alert('保存に失敗しました。通信を確認してください');
+    console.warn('[Supabase] feed_logs insert failed (在庫は保存済み):', e);
   }
 }
 function recNavGo(tab) {
@@ -2367,8 +2378,28 @@ async function saveFeedList() {
   // DB write（楽観的UI: 完了画面表示後に書き込み）
   var d = new Date();
   var logDate = feedDateVal || (d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+
+  // ① 状態・給餌量の更新を最優先（ログ保存が失敗しても守る）
+  var nowIso = new Date().toISOString();
+  var updates = savedPonds.map(function(item) {
+    return sb.from('ponds').update({
+      status:     'done',
+      feed_kg:    item.kg,
+      bait:       item.p.bait,
+      updated_at: nowIso
+    }).eq('id', item.p.id).select('id');
+  });
+  var results = await Promise.all(updates);
+  var hardErr = results.find(function(r) { return r.error; });
+  var silentFail = results.some(function(r) { return !r.error && (!r.data || r.data.length === 0); });
+  if (hardErr || silentFail) {
+    console.error('[Supabase] saveFeedList ponds update failed:', hardErr || '0 rows (権限/RLS)');
+    alert('⚠ DBに保存できませんでした\n（Supabaseの書き込み権限をご確認ください）\n※画面の表示は保持されています');
+    return;
+  }
+
+  // ② 給餌ログ一括 insert（補助的。失敗しても在庫保存は成立済み）
   try {
-    // feed_logs 一括 insert
     var logRows = savedPonds.map(function(item) {
       return {
         pond_id:  item.p.id,
@@ -2386,21 +2417,8 @@ async function saveFeedList() {
     });
     var r1 = await sb.from('feed_logs').insert(logRows);
     if (r1.error) throw r1.error;
-    // ponds 並列 update
-    var updates = savedPonds.map(function(item) {
-      return sb.from('ponds').update({
-        status:     'done',
-        feed_kg:    item.kg,
-        bait:       item.p.bait,
-        updated_at: new Date().toISOString()
-      }).eq('id', item.p.id);
-    });
-    var results = await Promise.all(updates);
-    var updateErr = results.find(function(r) { return r.error; });
-    if (updateErr) throw updateErr.error;
   } catch (e) {
-    console.error('[Supabase] saveFeedList failed:', e);
-    alert('保存に失敗しました。通信を確認してください');
+    console.warn('[Supabase] feed_logs insert failed (在庫は保存済み):', e);
   }
 }
 function feedDoneRestart() {
@@ -2745,6 +2763,15 @@ async function moveSave() {
   // DB write
   var d = new Date();
   var logDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+
+  // ① 在庫の更新を最優先（移動の本体。ここを必ず守る）
+  var ok = true;
+  var nowIso = new Date().toISOString();
+  if (toP)   ok = (await dbUpdatePond(toP.id,   { stock: toP.stock,   updated_at: nowIso })) && ok;
+  if (fromP && ok) ok = (await dbUpdatePond(fromP.id, { stock: fromP.stock, updated_at: nowIso })) && ok;
+  if (!ok) return; // 失敗時は dbUpdatePond 内で警告済み
+
+  // ② 移動ログ（補助的。失敗しても在庫保存は成立済み）
   try {
     var r1 = await sb.from('move_logs').insert({
       log_date:  logDate,
@@ -2755,16 +2782,8 @@ async function moveSave() {
       external:  !!state.mv.external
     });
     if (r1.error) throw r1.error;
-    // ponds 在庫 update
-    var ups = [];
-    if (toP)   ups.push(sb.from('ponds').update({ stock: toP.stock,   updated_at: new Date().toISOString() }).eq('id', toP.id));
-    if (fromP) ups.push(sb.from('ponds').update({ stock: fromP.stock, updated_at: new Date().toISOString() }).eq('id', fromP.id));
-    var results = await Promise.all(ups);
-    var upErr = results.find(function(r) { return r.error; });
-    if (upErr) throw upErr.error;
   } catch (e) {
-    console.error('[Supabase] moveSave failed:', e);
-    alert('移動記録の保存に失敗しました。通信を確認してください');
+    console.warn('[Supabase] move_logs insert failed (在庫は保存済み):', e);
   }
 }
 function moveRestart() {
@@ -2812,6 +2831,40 @@ async function loadPonds() {
   }
 }
 
+// ponds の更新を実行し、成否を返す（RLS等による「0件更新の静かな失敗」も検知）
+async function dbUpdatePond(id, fields) {
+  try {
+    var res = await sb.from('ponds').update(fields).eq('id', id).select('id');
+    if (res.error) throw res.error;
+    if (!res.data || res.data.length === 0) {
+      // エラーは無いが1件も更新されていない＝書き込み権限不足（RLS/GRANT）
+      console.error('[Supabase] dbUpdatePond: 0 rows updated for', id, '(権限/RLS の可能性)');
+      alert('⚠ DBに保存できませんでした\n（Supabaseの書き込み権限をご確認ください）\n※画面の表示は保持されています');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[Supabase] dbUpdatePond failed:', e);
+    alert('保存に失敗しました。通信を確認してください');
+    return false;
+  }
+}
+
+// ===== リアルタイム購読（PC版・他端末の変更を自動反映）=====
+function subscribeRealtime() {
+  try {
+    sb.channel('app-ponds-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ponds' }, async function() {
+        await loadPonds();
+        // 漁場図のみ自動更新（給餌入力中の値を消さないため給餌リストは再描画しない）
+        if (state.tab === 'home') drawFishMap(currentHomeArea);
+      })
+      .subscribe();
+  } catch (e) {
+    console.warn('[Supabase] subscribeRealtime failed:', e.message);
+  }
+}
+
 // ===== INIT =====
 async function initApp() {
   await loadPonds();
@@ -2823,6 +2876,7 @@ async function initApp() {
   buildMoveGrids();
   showMoveStep(1);
   updateHeader('尾上水産','',false);
+  subscribeRealtime();
 }
 initApp();
 
