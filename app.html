@@ -7,6 +7,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0f2437">
 <link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="尾上水産">
@@ -1992,8 +1993,8 @@ function drawFishMap(areaFilter) {
       var ys = filtered.map(function(c) { return c.y; });
       var bMinX = Math.min.apply(null, xs) - PAD;
       var bMinY = Math.min.apply(null, ys) - PAD;
-      var bMaxX = Math.max.apply(null, xs) + SVG_SZ + PAD;
-      var bMaxY = Math.max.apply(null, ys) + SVG_SZ + PAD;
+      var bMaxX = Math.max.apply(null, xs) + SZ + PAD;
+      var bMaxY = Math.max.apply(null, ys) + SZ + PAD;
       // エリア枠とラベルが切れないよう、該当エリアBOXの範囲も内包する
       var ab = AREA_BOXES.find(function(b) { return b.area === areaFilter; });
       if (ab) {
