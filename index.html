@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>尾上水産 養殖管理システム</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f2437">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="尾上水産">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -248,6 +254,15 @@ if (checkAuth()) {
 // スタッフ共有URL
 var base = location.origin + location.pathname.replace('index.html','').replace(/\/$/, '');
 document.getElementById('staffUrl').textContent = base + '/staff.html';
+
+// ===== PWA: Service Worker 登録 =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('sw.js').catch(function(e) {
+      console.warn('[PWA] SW register failed:', e.message);
+    });
+  });
+}
 </script>
 </body>
 </html>

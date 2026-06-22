@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f2437"/>
+  <rect x="56" y="56" width="400" height="400" rx="64" fill="#1b3a5c"/>
+  <g transform="translate(256 268)">
+    <!-- fish body -->
+    <ellipse cx="-10" cy="0" rx="120" ry="78" fill="#38bdf8"/>
+    <!-- tail -->
+    <path d="M100 0 L188 -70 L160 0 L188 70 Z" fill="#0ea5e9"/>
+    <!-- eye -->
+    <circle cx="-70" cy="-18" r="18" fill="#0f2437"/>
+    <circle cx="-64" cy="-24" r="6" fill="#fff"/>
+    <!-- fin -->
+    <path d="M-10 -78 Q30 -120 70 -86 Q30 -70 -10 -78 Z" fill="#0ea5e9"/>
+    <!-- gill line -->
+    <path d="M-30 -52 Q-50 0 -30 52" stroke="#0ea5e9" stroke-width="10" fill="none" stroke-linecap="round"/>
+  </g>
+  <text x="256" y="430" font-family="Hiragino Kaku Gothic Pro, sans-serif" font-size="60" font-weight="700" fill="#e0f2fe" text-anchor="middle">尾上水産</text>
+</svg>

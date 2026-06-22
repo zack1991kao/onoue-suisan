@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>尾上水産 養殖管理アプリ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f2437">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="尾上水産">
 <style>
 /* ===== RESET & BASE ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -33,7 +39,7 @@ body {
 }
 @media (max-width: 500px) {
   body { padding: 0; background: #fff; }
-  .phone { height: 100vh; max-width: 100%; border-radius: 0; box-shadow: none; }
+  .phone { height: 100vh; height: 100dvh; max-width: 100%; border-radius: 0; box-shadow: none; }
 }
 @media (min-width: 501px) {
   .phone { border-radius: 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
@@ -99,7 +105,7 @@ body {
 .tab-content.active { display: flex; }
 
 /* ===== SCROLL ===== */
-.scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 16px 20px; }
+.scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 0 16px 20px; }
 .scroll.no-pad { padding: 0 0 20px; }
 
 /* ===== TAB BAR ===== */
@@ -659,6 +665,7 @@ body {
   z-index: 50;
   display: flex;
   align-items: flex-end;
+  overscroll-behavior: contain;
 }
 .sheet-overlay.hidden { display: none; }
 .sheet {
@@ -702,7 +709,7 @@ body {
 }
 
 /* ===== RECORD PANEL ===== */
-.rec-sheet { background: #fff; border-radius: 16px 16px 0 0; padding: 20px 16px 32px; width: 100%; max-height: 85vh; overflow-y: auto; }
+.rec-sheet { background: #fff; border-radius: 16px 16px 0 0; padding: 20px 16px 32px; width: 100%; max-height: 88dvh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
 .rec-title { font-size: 13px; font-weight: 700; color: var(--ink2); margin-bottom: 4px; letter-spacing: 0.5px; }
 .rec-name { font-size: 18px; font-weight: 700; color: var(--ink); margin-bottom: 16px; }
 .rec-field { margin-bottom: 12px; }
@@ -986,7 +993,7 @@ body {
   text-transform: uppercase;
   flex-shrink: 0;
 }
-.orders-list { flex: 1; overflow-y: auto; padding: 0 16px 20px; }
+.orders-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 0 16px 20px; }
 .order-item {
   display: flex;
   align-items: center;
@@ -1191,7 +1198,8 @@ body.ai-mode-on .ai-home-banner{display:flex}
 .order-panel {
   background: #fff; border-radius: 16px 16px 0 0;
   padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
-  width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto;
+  width: 100%; max-width: 480px; max-height: 88dvh; overflow-y: auto;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
 }
 .order-panel-title { font-size: 15px; font-weight: 700; text-align: center; margin-bottom: 14px; color: var(--ink); }
 .order-field { margin-bottom: 12px; }
@@ -2084,8 +2092,23 @@ function openRecordPanel(id) {
   document.getElementById('recFlagPill').style.background = flagOn ? '#b91c1c' : 'var(--dis-bg)';
   document.getElementById('recFlagLabel').textContent = flagOn ? '⚠ 異常あり' : '⚠ 異常フラグ';
 
-  document.getElementById('recordPanel').classList.remove('hidden');
+  var rp = document.getElementById('recordPanel');
+  rp.classList.remove('hidden');
+  var sheet = rp.querySelector('.rec-sheet');
+  if (sheet) sheet.scrollTop = 0;
 }
+// 入力フォーカス時、OSキーボードに隠れないよう対象を画面内へスクロール
+document.addEventListener('focusin', function(e) {
+  var panel = document.getElementById('recordPanel');
+  if (!panel || panel.classList.contains('hidden')) return;
+  if (!panel.contains(e.target)) return;
+  var tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+    setTimeout(function() {
+      e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+  }
+});
 function closeRecordPanel(e) {
   if (e.target === document.getElementById('recordPanel')) closeRecordPanelDirect();
 }
@@ -2308,6 +2331,10 @@ async function saveFeedList() {
   var numpad = document.getElementById('numpad');
   if (numpad) numpad.classList.remove('active');
   numpadTarget = null;
+  var saveBar0 = document.querySelector('.feed-save-bar');
+  if (saveBar0) saveBar0.style.display = '';
+  var toggleBtn0 = document.getElementById('numpadToggleBtn');
+  if (toggleBtn0) { toggleBtn0.textContent = '⌨ テンキー表示'; toggleBtn0.classList.remove('active'); }
 
   // メモリ更新 + 保存対象を収集
   var savedPonds = [];
@@ -2444,14 +2471,18 @@ function toggleNumpad() {
   var isActive = numpad.classList.toggle('active');
   btn.textContent = isActive ? '⌨ テンキー非表示' : '⌨ テンキー表示';
   var scroll = document.getElementById('feedScrollArea');
+  var saveBar = document.querySelector('.feed-save-bar');
   if (isActive) {
     btn.classList.add('active');
     if (scroll) scroll.style.paddingBottom =
       'calc(280px + env(safe-area-inset-bottom))';
+    // テンキー内に保存ボタンがあるため、隠れる下部の保存バーは非表示
+    if (saveBar) saveBar.style.display = 'none';
   } else {
     btn.classList.remove('active');
     numpadTarget = null;
     if (scroll) scroll.style.paddingBottom = '16px';
+    if (saveBar) saveBar.style.display = '';
     // 行のハイライトを解除
     document.querySelectorAll('.feed-list-row').forEach(function(r) {
       r.style.background = '';
@@ -2794,6 +2825,15 @@ async function initApp() {
   updateHeader('尾上水産','',false);
 }
 initApp();
+
+// ===== PWA: Service Worker 登録 =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('sw.js').catch(function(e) {
+      console.warn('[PWA] SW register failed:', e.message);
+    });
+  });
+}
 </script>
 </body>
 </html>

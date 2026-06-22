@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>尾上水産 養殖管理システム</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f2437">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="尾上水産 管理">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'游ゴシック','Yu Gothic','メイリオ',Meiryo,'ヒラギノ角ゴ Pro W3',sans-serif;background:#f8fafc;color:#0f172a;font-size:14px;line-height:1.6;overflow:hidden}
@@ -2362,6 +2368,15 @@ function renderDiaryCards(area){
 // BOOT
 // ══════════════════════════════════════════
 init();
+
+// ===== PWA: Service Worker 登録 =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('sw.js').catch(function(e) {
+      console.warn('[PWA] SW register failed:', e.message);
+    });
+  });
+}
 </script>
 </body>
 </html>
