@@ -1142,13 +1142,13 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <div class="mbody">
       <div class="fg"><label>在庫尾数</label><input type="number" class="fc" id="mInvEditCount"></div>
       <div class="fg"><label>修正理由</label>
-        <select class="fc"><option>棚卸</option><option>間引き反映</option><option>死亡更新</option><option>その他</option></select>
+        <select class="fc" id="mInvEditReason"><option>棚卸</option><option>間引き反映</option><option>死亡更新</option><option>その他</option></select>
       </div>
-      <div class="fg"><label>備考</label><textarea class="fc" rows="2"></textarea></div>
+      <div class="fg"><label>備考</label><textarea class="fc" id="mInvEditMemo" rows="2"></textarea></div>
     </div>
     <div class="mfoot">
       <button class="btn btn-secondary" onclick="closeM('mInvEdit')">キャンセル</button>
-      <button class="btn btn-primary" onclick="closeM('mInvEdit');showToast('在庫を更新しました')">更新</button>
+      <button class="btn btn-primary" onclick="saveInvEdit()">更新</button>
     </div>
   </div>
 </div>
@@ -1826,7 +1826,7 @@ function openTankDetail(p){
     +(p.memo?'<div style="margin-bottom:12px;font-size:13px;color:var(--sub)">メモ: '+p.memo+'</div>':'');
 
   openDetail(p.id+' 詳細',html,
-    '<button class="btn btn-secondary btn-sm" onclick="openM(\'mInvEdit\');document.getElementById(\'mInvEditTitle\').textContent=\'在庫修正 — '+p.id+'\';document.getElementById(\'mInvEditCount\').value='+(p.stock||0)+'">在庫修正</button>');
+    '<button class="btn btn-secondary btn-sm" onclick="invEditPondId=\''+p.id+'\';openM(\'mInvEdit\');document.getElementById(\'mInvEditTitle\').textContent=\'在庫修正 — '+p.id+'\';document.getElementById(\'mInvEditCount\').value='+(p.stock||0)+'">在庫修正</button>');
 
   loadTankFeedHistory(p.id);
 }
@@ -1883,6 +1883,46 @@ async function loadTankFeedHistory(pondId){
     console.error('[Supabase] loadTankFeedHistory failed:',e);
     if(histEl)histEl.innerHTML='給餌履歴の読み込みに失敗しました。';
   }
+}
+
+// ══════════════════════════════════════════
+// 在庫修正
+// ══════════════════════════════════════════
+var invEditPondId=null;
+async function saveInvEdit(){
+  var id=invEditPondId;
+  if(!id){closeM('mInvEdit');return;}
+  var newCount=parseInt(document.getElementById('mInvEditCount').value);
+  if(isNaN(newCount)||newCount<0){alert('在庫尾数を正しく入力してください');return;}
+  var p=POND_CONFIG.find(function(x){return x.id===id;});
+  if(!p){alert('対象のいけすが見つかりません');return;}
+
+  // DB更新（.select('id')で0件更新＝権限不足を検知）
+  try{
+    var res=await sb.from('ponds').update({
+      stock:newCount,
+      updated_at:new Date().toISOString()
+    }).eq('id',id).select('id');
+    if(res.error)throw res.error;
+    if(!res.data||res.data.length===0){
+      alert('⚠ DBに保存できませんでした（Supabaseの書き込み権限をご確認ください）');
+      return;
+    }
+  }catch(e){
+    console.error('[Supabase] saveInvEdit failed:',e);
+    alert('在庫の保存に失敗しました。通信を確認してください');
+    return;
+  }
+
+  // メモリ更新＋再描画
+  p.stock=newCount;
+  closeM('mInvEdit');
+  showToast('在庫を更新しました');
+  refreshDashboard();
+  renderInv();
+  renderInvSummary();
+  // 詳細パネルを開いている場合は在庫尾数表示も更新
+  openTankDetail(p);
 }
 
 // ══════════════════════════════════════════
