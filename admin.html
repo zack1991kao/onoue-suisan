@@ -482,7 +482,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
     </div>
   </div>
 
-  <div class="pending-bar" id="pendingBar"></div>
+  <!-- 本日未記録バーは非表示（毎日入力前提でないため。ヒートマップ＋いけす状況で代替）-->
+  <div class="pending-bar" id="pendingBar" style="display:none"></div>
 
   <div class="dash-grid">
     <div class="dash-left">
@@ -706,7 +707,14 @@ body.ai-mode-on .ai-element-flex{display:flex}
       </table>
     </div>
   </div>
-  <div class="filter-row">
+  <div style="display:flex;gap:8px;margin:8px 0">
+    <button class="btn btn-secondary btn-sm" id="invViewMapBtn" onclick="setInvView('map')">🗺 漁場図</button>
+    <button class="btn btn-secondary btn-sm" id="invViewListBtn" onclick="setInvView('list')">📋 リスト</button>
+  </div>
+  <div id="invMapWrap" style="text-align:center;overflow:auto;background:#eef4fb;border-radius:8px;padding:8px;margin-bottom:12px">
+    <svg id="invFishMapSvg" viewBox="0 0 640 1460" style="width:640px;max-width:100%;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div class="filter-row" id="invListControls">
     <select id="invArea" onchange="renderInv()">
       <option value="all">全エリア</option>
       <option value="団地">団地</option><option value="太喜">太喜</option>
@@ -722,7 +730,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
       <option value="alert">要確認</option><option value="skip">空き</option>
     </select>
   </div>
-  <div class="tbl-wrap">
+  <div class="tbl-wrap" id="invListTable">
     <table><thead><tr>
       <th>いけす</th><th>魚種</th><th>年齢</th>
       <th style="text-align:right">在庫尾数</th><th>状態</th>
@@ -1817,6 +1825,7 @@ async function init(){
   renderShipTable();
   renderInv();
   renderInvSummary();
+  setInvView('map');  // 在庫一覧は漁場図ビューを既定に
   renderLotTable();
   renderLotSummary();
   renderLedgerNav();
@@ -2457,8 +2466,8 @@ function fishInitial(fish){
   var map={'マダイ':'タイ','カンパチ':'カンパチ','シマアジ':'シマアジ'};
   return map[fish]||fish;
 }
-function drawAdminFishMap(){
-  var svg=document.getElementById('adminFishMapSvg');
+function drawAdminFishMap(svgId){
+  var svg=document.getElementById(svgId||'adminFishMapSvg');
   if(!svg)return;
   var SC=2,SZ=22*SC,R=11*SC;
   var FF='"Hiragino Kaku Gothic Pro","Yu Gothic",sans-serif';
@@ -2494,6 +2503,28 @@ function drawAdminFishMap(){
 // ══════════════════════════════════════════
 // INVENTORY
 // ══════════════════════════════════════════
+var invView='map';
+function setInvView(mode){
+  invView=mode;
+  var map=document.getElementById('invMapWrap');
+  var ctl=document.getElementById('invListControls');
+  var tbl=document.getElementById('invListTable');
+  var mb=document.getElementById('invViewMapBtn');
+  var lb=document.getElementById('invViewListBtn');
+  if(mode==='map'){
+    if(map)map.style.display='block';
+    if(ctl)ctl.style.display='none';
+    if(tbl)tbl.style.display='none';
+    if(mb)mb.classList.add('btn-primary'); if(lb)lb.classList.remove('btn-primary');
+    drawAdminFishMap('invFishMapSvg');
+  }else{
+    if(map)map.style.display='none';
+    if(ctl)ctl.style.display='flex';
+    if(tbl)tbl.style.display='block';
+    if(lb)lb.classList.add('btn-primary'); if(mb)mb.classList.remove('btn-primary');
+    renderInv();
+  }
+}
 function renderInvSummary(){
   var areas=['団地','太喜','瀬後の浦','横島','楠森','葛崎'];
   var rows=areas.map(function(area){
