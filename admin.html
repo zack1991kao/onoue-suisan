@@ -1282,7 +1282,8 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // ══════════════════════════════════════════
 // DATA
 // ══════════════════════════════════════════
-const BUYERS=['ニチモウ','信源','オーシャン','龍ヶ岳','和潮','紀勝','大海水産'];
+// 売掛金(152)取引先マスタ（PCA補助科目に対応。表示名はbuyerSub()でコード変換される）
+const BUYERS=['大道漁協','大海水産','ニチモウ','太喜水産','宮木水産','天草漁協 本渡','山家','脇川水産','県海水養殖漁協','吉中水産','松島センター','ＫＴＲ','天草漁協 高戸','五十嵐水産','よしやホテル','陣内鮮魚店','オーシャンプロテック','その他'];
 const POND_CONFIG=[
   {id:'団地-01',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
   {id:'団地-02',area:'団地',sh:'sq',species:'シマアジ',stock:2500, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
@@ -1770,13 +1771,35 @@ async function savePayment(){
 // 会計用CSV出力（仕訳取込フォーマット・22列）
 // ══════════════════════════════════════════
 // 固定コード（仮）。会計士が一貫名で変換する前提（ひな形の注記より）。
+// ── PCA実コード（会計士提供マスタ準拠。PCAはコードがキー）──
 var ACCT = {
-  uriage:   {code:'500', name:'売上高'},     // 貸方（軽減8%売上）
-  urikake:  {code:'135', name:'売掛金'},     // 借方/貸方
-  yokin:    {code:'111', name:'普通預金'},   // 借方（振込入金）
-  genkin:   {code:'100', name:'現金'}        // 借方（現金入金）
+  uriage:   {code:'511', name:'魚売上高'},   // 貸方（魚の売上・軽減8% → 区分B6）
+  esa:      {code:'512', name:'餌売上'},      // 貸方（餌販売時のみ・通常未使用）
+  urikake:  {code:'152', name:'売掛金'},      // 借方/貸方（補助＝取引先コード）
+  genkin:   {code:'111', name:'現金'}         // 借方（現金入金）
 };
-var TAX = { sale8:'軽減8%売上', none:'対象外' }; // 消費税情報（会計士が実コードへ変換）
+// 入金先の普通預金口座（PCA: 131天信/132農協/133天信漁協/134肥後銀行/135熊本銀行）
+// ※当面は肥後銀行を既定。口座を分けて記帳する場合は入金画面にDB列(bank等)を追加して切替。
+var BANK_DEPOSIT = {code:'134', name:'肥後銀行 普通'};
+// 消費税情報＝PCA消費税区分コード（テキスト不可）。B6:売上8%軽 / 00:対象外
+var TAX = { sale8:'B6', none:'00' };
+
+// 取引先 → 売掛金(152)の補助科目コード変換（会計士マスタ準拠）
+var BUYER_SUB = {
+  '大道漁協':'117','大海水産':'118','ニチモウ':'278','太喜水産':'285',
+  '宮木水産':'292','天草漁協 本渡':'313','山家':'339','脇川水産':'365',
+  '県海水養殖漁協':'402','吉中水産':'438','松島センター':'477','ＫＴＲ':'486',
+  '天草漁協 高戸':'561','五十嵐水産':'586','よしやホテル':'587','陣内鮮魚店':'588',
+  'オーシャンプロテック':'589','その他':'999'
+};
+function buyerSub(name){
+  if(!name) return '999';
+  var n=String(name).trim();
+  if(BUYER_SUB[n]) return BUYER_SUB[n];
+  // 部分一致フォールバック（旧データ「オーシャン」「㈱ニチモウ」等を吸収）
+  for(var k in BUYER_SUB){ if(k!=='その他' && (n.indexOf(k)>=0 || k.indexOf(n)>=0)) return BUYER_SUB[k]; }
+  return '999';
+}
 
 function ymd8(dstr){ return dstr ? String(dstr).replace(/-/g,'').slice(0,8) : ''; }
 function inPeriod(dstr, mode){
@@ -1837,7 +1860,7 @@ function exportAccountingCsv(){
       var tax=Math.round(amt*8/108);
       no++;
       rows.push(journalRow(no, s.ship_date,
-        {bumon:0, code:ACCT.urikake.code, name:ACCT.urikake.name, subname:s.buyer||'', taxinfo:TAX.none, amount:amt, tax:0},
+        {bumon:0, code:ACCT.urikake.code, name:ACCT.urikake.name, subcode:buyerSub(s.buyer), subname:s.buyer||'', taxinfo:TAX.none, amount:amt, tax:0},
         {bumon:0, code:ACCT.uriage.code,  name:ACCT.uriage.name,  taxinfo:TAX.sale8, amount:amt, tax:tax},
         (s.buyer||'')+' '+(s.species||'')+' '+(s.qty||0)+'尾 売上'));
     });
@@ -1846,11 +1869,11 @@ function exportAccountingCsv(){
     .sort(function(a,b){ return (a.pay_date||'').localeCompare(b.pay_date||''); })
     .forEach(function(p){
       var amt=Math.round(p.amount||0); if(amt<=0) return;
-      var dr = (p.method==='現金') ? ACCT.genkin : ACCT.yokin;
+      var dr = (p.method==='現金') ? ACCT.genkin : BANK_DEPOSIT;  // 現金→111 / 振込等→既定銀行
       no++;
       rows.push(journalRow(no, p.pay_date,
         {bumon:0, code:dr.code, name:dr.name, taxinfo:TAX.none, amount:amt, tax:0},
-        {bumon:0, code:ACCT.urikake.code, name:ACCT.urikake.name, subname:p.buyer||'', taxinfo:TAX.none, amount:amt, tax:0},
+        {bumon:0, code:ACCT.urikake.code, name:ACCT.urikake.name, subcode:buyerSub(p.buyer), subname:p.buyer||'', taxinfo:TAX.none, amount:amt, tax:0},
         (p.buyer||'')+' 入金'+(p.method?'（'+p.method+'）':'')));
     });
   if(no===0){ alert('対象期間に出力できる売上・入金データがありません'); return; }
