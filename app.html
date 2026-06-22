@@ -2034,6 +2034,13 @@ function drawFishMap(areaFilter) {
             + " font-size='9' font-weight='700' fill='" + st.t + "' " + FF
             + " pointer-events='none'>" + num + "</text>";
     }
+    // A4: 給餌済みのいけすは入力した給餌量(kg)を下に小さく表示（エリア絞り込み時のみ）
+    if (areaFilter && p.status === 'done' && (p.feedKg || p.feed_kg || p.feed)) {
+      var kg = p.feedKg || p.feed_kg || p.feed;
+      html += "<text x='" + cx + "' y='" + (cm.y + SZ + 7) + "' text-anchor='middle'"
+            + " font-size='7' font-weight='700' fill='#166534' " + FF
+            + " pointer-events='none'>" + kg + "kg</text>";
+    }
   });
   svg.innerHTML = html;
   if (areaFilter) {
@@ -2418,6 +2425,7 @@ async function saveFeedList() {
     var baitSel = document.querySelector('#feedList .feed-bait-select[data-pond="' + pondId + '"]');
     if (baitSel) p.bait = baitSel.value;
     p.status = 'done';
+    p.feed = kg; p.feedKg = kg;   // A4: 入力した給餌量を即時反映（漁場図にkg表示）
     savedPonds.push({ p: p, kg: kg });
   });
 
