@@ -2037,7 +2037,7 @@ function drawFishMap(areaFilter) {
   if (areaFilter) {
     var filtered = ponds.map(function(p) { return CAGE_MAP[p.id]; }).filter(Boolean);
     if (filtered.length) {
-      var PAD = 18;
+      var PAD = 22;
       var xs = filtered.map(function(c) { return c.x; });
       var ys = filtered.map(function(c) { return c.y; });
       var bMinX = Math.min.apply(null, xs) - PAD;
@@ -2047,13 +2047,18 @@ function drawFishMap(areaFilter) {
       // エリア枠とラベルが切れないよう、該当エリアBOXの範囲も内包する
       var ab = AREA_BOXES.find(function(b) { return b.area === areaFilter; });
       if (ab) {
-        bMinX = Math.min(bMinX, ab.bx - 4, ab.lx - 4);
-        bMinY = Math.min(bMinY, ab.by - 4, ab.ly - 12); // ラベルは baseline 基準のため上に余白
-        bMaxX = Math.max(bMaxX, ab.bx + ab.bw + 4);
-        bMaxY = Math.max(bMaxY, ab.by + ab.bh + 4);
+        bMinX = Math.min(bMinX, ab.bx - 6, ab.lx - 6);
+        bMinY = Math.min(bMinY, ab.by - 6, ab.ly - 14); // ラベルは baseline 基準のため上に余白
+        bMaxX = Math.max(bMaxX, ab.bx + ab.bw + 6);
+        bMaxY = Math.max(bMaxY, ab.by + ab.bh + 6);
       }
-      var vw = Math.max(bMaxX - bMinX, 120);
-      var vh = Math.max(bMaxY - bMinY, 300);
+      // 拡大しすぎ防止：viewBoxに下限を設け、縦長の携帯比率(約0.62)を保って中央寄せ
+      var vw = bMaxX - bMinX;
+      var vh = bMaxY - bMinY;
+      vw = Math.max(vw, 190);
+      vh = Math.max(vh, vw / 0.62, 470);
+      // 横が縦に対して広すぎる場合は縦を合わせる（携帯比率維持）
+      if (vw / vh < 0.62) vw = vh * 0.62;
       var cx = (bMinX + bMaxX) / 2;
       var cy = (bMinY + bMaxY) / 2;
       svg.setAttribute('viewBox', (cx - vw/2) + ' ' + (cy - vh/2) + ' ' + vw + ' ' + vh);
