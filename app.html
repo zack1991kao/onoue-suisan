@@ -1789,7 +1789,7 @@ var dbOrders = [];
 function orderKey(o){ return (o.date||'')+'|'+(o.buyer||'')+'|'+(o.fish||'')+'|'+(o.spec||''); }
 async function loadAppOrders() {
   try {
-    var res = await sb.from('orders').select('order_date,buyer,species,size,qty,status').order('order_date',{ascending:false}).limit(300);
+    var res = await sb.from('orders').select('order_date,buyer,species,size,qty,status,memo').order('order_date',{ascending:false}).limit(300);
     if (res.error) throw res.error;
     dbOrders = (res.data||[]).map(function(r){
       return {
@@ -1797,7 +1797,8 @@ async function loadAppOrders() {
         buyer: r.buyer,
         fish: r.species,
         spec: (r.size||'') + ' ' + (r.qty||0) + '尾',
-        status: 'confirmed'
+        // 仮/確定は memo('仮'/'確定') に保存しているので往復で復元（既定は確定）
+        status: (r.memo==='仮') ? 'tentative' : 'confirmed'
       };
     });
   } catch (e) {
@@ -2717,8 +2718,8 @@ async function saveNewOrder() {
   }
   var qty = parseInt(count) || 0;
 
-  // メモリ即時反映（カレンダー表示用）
-  dbOrders.unshift({ date:date, buyer:buyer, fish:fish, spec:size + ' ' + qty + '尾', status:'confirmed' });
+  // メモリ即時反映（カレンダー表示用・仮/確定を保持）
+  dbOrders.unshift({ date:date, buyer:buyer, fish:fish, spec:size + ' ' + qty + '尾', status:orderPanelStatus });
   closeOrderPanel();
   renderCalendar();
 

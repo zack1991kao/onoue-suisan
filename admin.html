@@ -1923,6 +1923,18 @@ function scheduleOrderReload(){
     renderCalendar();
   },250);
 }
+// 入金/出荷の変更（別端末の入金消込等）を反映。管理者のみ意味を持つ（staffはRLSで空）
+var _payReloadTimer=null;
+function schedulePaymentsReload(){
+  if(_payReloadTimer)clearTimeout(_payReloadTimer);
+  _payReloadTimer=setTimeout(async function(){
+    _payReloadTimer=null;
+    if(!isAdmin()) return;                 // staffは購読しても0件・再描画不要
+    await loadShipments(); await loadPayments();
+    var sc=document.getElementById('s-payments');
+    if(sc && sc.classList.contains('active')) renderPaymentsScreen();  // 表示中のみ再描画
+  },300);
+}
 function subscribeRealtime(){
   try{
     sb.channel('ponds-changes')
@@ -1933,6 +1945,17 @@ function subscribeRealtime(){
     sb.channel('orders-changes')
       .on('postgres_changes', { event:'*', schema:'public', table:'orders' }, function(){
         scheduleOrderReload();
+      })
+      .subscribe();
+    // payments / shipments（管理者のみRLSで配信。要 supabase_realtime publication 追加＝03 SQL）
+    sb.channel('payments-changes')
+      .on('postgres_changes', { event:'*', schema:'public', table:'payments' }, function(){
+        schedulePaymentsReload();
+      })
+      .subscribe();
+    sb.channel('shipments-changes')
+      .on('postgres_changes', { event:'*', schema:'public', table:'shipments' }, function(){
+        schedulePaymentsReload();
       })
       .subscribe();
   }catch(e){
@@ -2410,10 +2433,12 @@ async function saveInvEdit(){
     return;
   }
 
-  // 在庫修正履歴を記録（best-effort。テーブル未作成でもアプリは止めない）
+  // 在庫修正履歴を記録（操作者emailも残す。best-effort。テーブル未作成でもアプリは止めない）
   try{
+    var _u=await sb.auth.getUser();
+    var uemail=(_u && _u.data && _u.data.user) ? _u.data.user.email : null;
     var ia=await sb.from('inventory_adjustments').insert({
-      pond_id:id, before_qty:beforeQty, after_qty:newCount, reason:reason, memo:memo
+      pond_id:id, before_qty:beforeQty, after_qty:newCount, reason:reason, memo:memo, user_email:uemail
     });
     if(ia.error)console.warn('[Supabase] inventory_adjustments insert skipped:', ia.error.message);
   }catch(e){ console.warn('[Supabase] inventory_adjustments skipped:', e); }
@@ -2462,22 +2487,28 @@ async function saveOrder(){
   var memo=document.getElementById('noMemo').value;
   if(!qty){alert('数量を入力してください');return;}
 
-  // メモリ更新（一覧の先頭に追加）
+  // メモリ更新（一覧の先頭に追加・楽観UI）
   var o={date:mdShort(date),buyer:buyer,species:species,size:size,qty:qty,shipDate:mdShort(shipDate),route:route,status:'pending',lot:lot,memo:memo};
   orders.unshift(o);
   renderOrderList();
   closeM('mNewOrder');
-  showToast('注文を登録しました');
 
-  // DB write
+  // DB write（.select('id')で0件挿入＝RLS/権限の静かな失敗を検知）
   try{
     var r=await sb.from('orders').insert({
       order_date:date||null, ship_date:shipDate||null, buyer:buyer, species:species,
       size:size, qty:qty, route:route, status:'pending', lot:lot||'', memo:memo||''
-    });
+    }).select('id');
     if(r.error)throw r.error;
+    if(!r.data || r.data.length===0){
+      orders.shift(); renderOrderList();   // 楽観UIを巻き戻し
+      alert('⚠ 注文をDBに保存できませんでした（書き込み権限をご確認ください）');
+      return;
+    }
+    showToast('注文を登録しました');
   }catch(e){
     console.error('[Supabase] saveOrder failed:',e);
+    orders.shift(); renderOrderList();      // 楽観UIを巻き戻し
     alert('注文のDB保存に失敗しました。通信を確認してください');
   }
 }
@@ -2486,9 +2517,8 @@ async function saveShipment(){
   var buyer=document.getElementById('shipBuyerSel').value;
   var rows=shipRows.filter(function(r){return (r.qty>0)||(r.gross>0);});
   if(!rows.length){alert('保存する明細がありません');return;}
-  showToast('出荷を保存しました ✓');
 
-  // DB write（一括 insert）
+  // DB write（一括 insert・.select('id')で0件挿入＝RLS/権限の静かな失敗を検知）
   try{
     var ins=rows.map(function(r){
       var net=(r.gross||0)-(r.futa||0)-(r.mizu||0);
@@ -2498,8 +2528,13 @@ async function saveShipment(){
         price:parseFloat(r.price)||0, amount:Math.round(net*(parseFloat(r.price)||0)), lot:r.lot||''
       };
     });
-    var res=await sb.from('shipments').insert(ins);
+    var res=await sb.from('shipments').insert(ins).select('id');
     if(res.error)throw res.error;
+    if(!res.data || res.data.length===0){
+      alert('⚠ 出荷をDBに保存できませんでした（出荷は管理者のみ書込可。権限をご確認ください）');
+      return;
+    }
+    showToast('出荷を保存しました ✓');
   }catch(e){
     console.error('[Supabase] saveShipment failed:',e);
     alert('出荷のDB保存に失敗しました。通信を確認してください');
@@ -3203,12 +3238,12 @@ async function doLogin(){
 }
 async function doLogout(){ try{ await sb.auth.signOut(); }catch(e){} sessionStorage.removeItem(ADMIN_KEY); location.reload(); }
 
-// 管理者ガード（role=adminなら自動許可。未設定時はパスワードフォールバック）
+// 管理者ガード：サーバー真実（profiles.role=admin）のみで判定。
+// クライアント側パスワードは原理的に迂回可能なため廃止。データ自体はRLS(is_admin())で保護。
 function requireAdmin(){
   if(isAdmin())return true;
-  var p=prompt('管理者パスワードを入力してください（売上・元帳・設定の閲覧）');
-  if(p==='onoue-kanri2026'){ sessionStorage.setItem(ADMIN_KEY,'ok'); return true; }
-  if(p!==null) alert('管理者パスワードが違います');
+  applyRole();  // セッション復元直後等でrole未反映の可能性 → 再取得（fire-and-forget）
+  alert('この内容は管理者のみ閲覧できます。\n管理者アカウントでログインし直すか、少し待って再度お試しください。');
   return false;
 }
 function navSettings(el){ if(!requireAdmin())return; nav('settings',el); }
