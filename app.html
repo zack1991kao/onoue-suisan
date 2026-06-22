@@ -1254,6 +1254,18 @@ body.ai-mode-on .ai-home-banner{display:flex}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<!-- 簡易ログインゲート（暫定・UX層。真のアクセス制限はSupabase Auth+RLSで実施） -->
+<div id="loginGate" style="position:fixed;inset:0;background:#0f2437;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:16px;padding:32px 24px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+    <div style="text-align:center;font-size:40px;margin-bottom:8px;">🐟</div>
+    <h2 style="text-align:center;font-size:17px;font-weight:700;color:#0f172a;margin-bottom:4px;">尾上水産 スタッフ</h2>
+    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:20px;">ログインしてください</p>
+    <input id="lgUser" placeholder="ユーザー名" autocomplete="username" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:16px;margin-bottom:10px;outline:none;box-sizing:border-box;">
+    <input id="lgPass" type="password" placeholder="パスワード" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:16px;margin-bottom:14px;outline:none;box-sizing:border-box;">
+    <button onclick="doLogin()" style="width:100%;padding:14px;background:#1b3a5c;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">ログイン</button>
+    <div id="lgErr" style="display:none;color:#b91c1c;font-size:13px;text-align:center;margin-top:10px;">ユーザー名またはパスワードが違います</div>
+  </div>
+</div>
 <div class="phone" id="phone">
 
 <!-- ===== APP HEADER ===== -->
@@ -1762,7 +1774,38 @@ function loadUserOrders() {
   try { return JSON.parse(localStorage.getItem(USER_ORDERS_KEY) || '[]'); } catch(e) { return []; }
 }
 function saveUserOrders(orders) { localStorage.setItem(USER_ORDERS_KEY, JSON.stringify(orders)); }
-function getAllOrders() { return ORDERS.concat(loadUserOrders()); }
+
+// Supabase orders から読み込んだ受注（カレンダー表示用に整形）
+var dbOrders = [];
+function orderKey(o){ return (o.date||'')+'|'+(o.buyer||'')+'|'+(o.fish||'')+'|'+(o.spec||''); }
+async function loadAppOrders() {
+  try {
+    var res = await sb.from('orders').select('order_date,buyer,species,size,qty,status').order('order_date',{ascending:false}).limit(300);
+    if (res.error) throw res.error;
+    dbOrders = (res.data||[]).map(function(r){
+      return {
+        date: r.order_date,
+        buyer: r.buyer,
+        fish: r.species,
+        spec: (r.size||'') + ' ' + (r.qty||0) + '尾',
+        status: 'confirmed'
+      };
+    });
+  } catch (e) {
+    console.warn('[Supabase] loadAppOrders failed, using local only:', e.message);
+  }
+}
+// サンプル + DB + ローカル（オフライン分）をキーで重複排除して統合
+function getAllOrders() {
+  var seen = {};
+  var out = [];
+  dbOrders.concat(loadUserOrders()).concat(ORDERS).forEach(function(o){
+    var k = orderKey(o);
+    if (seen[k]) return;
+    seen[k] = 1; out.push(o);
+  });
+  return out;
+}
 
 // ===== SVG MAP DATA =====
 var CAGE_MAP = {
@@ -2625,7 +2668,7 @@ function setOrderStatus(status) {
   document.getElementById('orderBtnTent').className =
     'order-status-btn' + (status === 'tentative' ? ' act-tent' : '');
 }
-function saveNewOrder() {
+async function saveNewOrder() {
   var date  = document.getElementById('orderDate').value;
   var buyer = document.getElementById('orderBuyer').value;
   var fish  = document.getElementById('orderFish').value;
@@ -2634,12 +2677,29 @@ function saveNewOrder() {
   if (!date || !buyer || !fish || !size || !count) {
     alert('すべての項目を入力してください'); return;
   }
-  var userOrders = loadUserOrders();
-  userOrders.push({date:date, buyer:buyer, fish:fish,
-    spec:size + ' ' + count + '尾', status:orderPanelStatus});
-  saveUserOrders(userOrders);
+  var qty = parseInt(count) || 0;
+
+  // メモリ即時反映（カレンダー表示用）
+  dbOrders.unshift({ date:date, buyer:buyer, fish:fish, spec:size + ' ' + qty + '尾', status:'confirmed' });
   closeOrderPanel();
   renderCalendar();
+
+  // DB write（orders テーブル）
+  try {
+    var r = await sb.from('orders').insert({
+      order_date: date, ship_date: null, buyer: buyer, species: fish,
+      size: size, qty: qty, route: '', status: 'pending', lot: '',
+      memo: (orderPanelStatus==='tentative' ? '仮' : '確定')
+    });
+    if (r.error) throw r.error;
+  } catch (e) {
+    console.error('[Supabase] saveNewOrder failed, ローカル保存にフォールバック:', e);
+    // フォールバック：オフライン用にローカルへ
+    var userOrders = loadUserOrders();
+    userOrders.push({date:date, buyer:buyer, fish:fish, spec:size + ' ' + qty + '尾', status:orderPanelStatus});
+    saveUserOrders(userOrders);
+    alert('受注をDBに保存できませんでした（端末内に一時保存しました）');
+  }
 }
 
 function calMove(dir) {
@@ -2905,6 +2965,7 @@ function subscribeRealtime() {
 // ===== INIT =====
 async function initApp() {
   await loadPonds();
+  await loadAppOrders();
   initAiMode();
   initAreaFilter();
   drawFishMap(null);
@@ -2925,6 +2986,25 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+// ===== 簡易ログインゲート（暫定・UX層）=====
+var AUTH_KEY = 'onoue_auth_v1';
+function doLogin() {
+  var u = document.getElementById('lgUser').value.trim();
+  var p = document.getElementById('lgPass').value;
+  if (u === 'onoue' && p === 'onoue2026') {
+    sessionStorage.setItem(AUTH_KEY, 'ok');
+    document.getElementById('loginGate').style.display = 'none';
+  } else {
+    document.getElementById('lgErr').style.display = 'block';
+    document.getElementById('lgPass').value = '';
+  }
+}
+(function() {
+  if (sessionStorage.getItem(AUTH_KEY) !== 'ok') {
+    document.getElementById('loginGate').style.display = 'flex';
+  }
+})();
 </script>
 </body>
 </html>

@@ -387,6 +387,18 @@ body.ai-mode-on .ai-element-flex{display:flex}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<!-- 簡易ログインゲート（暫定・UX層。真のアクセス制限はSupabase Auth+RLSで実施） -->
+<div id="loginGate" style="position:fixed;inset:0;background:#0f2437;z-index:99999;display:none;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+    <div style="text-align:center;font-size:40px;margin-bottom:8px;">🐠</div>
+    <h2 style="text-align:center;font-size:18px;font-weight:700;color:#0f172a;margin-bottom:4px;">尾上水産 管理システム</h2>
+    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:22px;">ログインしてください</p>
+    <input id="lgUser" placeholder="ユーザー名" autocomplete="username" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;box-sizing:border-box;">
+    <input id="lgPass" type="password" placeholder="パスワード" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:14px;outline:none;box-sizing:border-box;">
+    <button onclick="doLogin()" style="width:100%;padding:14px;background:#1b3a5c;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">ログイン</button>
+    <div id="lgErr" style="display:none;color:#b91c1c;font-size:13px;text-align:center;margin-top:10px;">ユーザー名またはパスワードが違います</div>
+  </div>
+</div>
 <div class="app">
 
 <header>
@@ -404,7 +416,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <button class="nav-btn" onclick="nav('inventory',this)"><span class="nav-icon">📦</span>在庫一覧</button>
     <button class="nav-btn" onclick="navDiary('diary',this)"><span class="nav-icon">📒</span>養殖日誌</button>
     <button class="nav-btn" onclick="nav('lots',this)"><span class="nav-icon">🐟</span>ロット管理</button>
-    <button class="nav-btn" onclick="nav('settings',this)"><span class="nav-icon">⚙️</span>設定</button>
+    <button class="nav-btn" onclick="nav('history',this);loadHistory()"><span class="nav-icon">📜</span>履歴</button>
+    <button class="nav-btn" onclick="navSettings(this)"><span class="nav-icon">⚙️</span>設定 🔒</button>
     <button class="nav-btn" onclick="navAi('ai',this)"><span class="nav-icon">🤖</span>AI機能</button>
   </nav>
   <div class="sidebar-footer">
@@ -476,9 +489,11 @@ body.ai-mode-on .ai-element-flex{display:flex}
         <div class="area-tabs" id="areaTabs">
           <button class="atab active" onclick="filterArea('all',this)">すべて</button>
           <button class="atab" onclick="filterArea('団地',this)">団地</button>
+          <button class="atab" onclick="filterArea('太喜',this)">太喜</button>
+          <button class="atab" onclick="filterArea('瀬後の浦',this)">瀬後の浦</button>
+          <button class="atab" onclick="filterArea('横島',this)">横島</button>
           <button class="atab" onclick="filterArea('楠森',this)">楠森</button>
           <button class="atab" onclick="filterArea('葛崎',this)">葛崎</button>
-          <button class="atab" onclick="filterArea('横島',this)">横島</button>
         </div>
         <div class="tank-grid" id="tankGrid"></div>
       </div>
@@ -539,7 +554,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <button class="tab-btn" onclick="swTab('orders','list',this)">📋 受注一覧</button>
     <button class="tab-btn" onclick="swTab('orders','ship',this)">📄 出荷入力</button>
     <button class="tab-btn" onclick="swTab('orders','preview',this)">🖨 仕切書プレビュー</button>
-    <button class="tab-btn" onclick="swTab('orders','ledger',this)">💴 入金元帳 🔒</button>
+    <button class="tab-btn" onclick="openLedger(this)">💴 入金元帳 🔒</button>
   </div>
 
   <div class="tab-pane active" id="orders-tp-cal">
@@ -782,9 +797,11 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <div class="area-tabs" id="cardAreaTabs">
       <button class="atab active" onclick="filterCardArea('all',this)">すべて</button>
       <button class="atab" onclick="filterCardArea('団地',this)">団地</button>
+      <button class="atab" onclick="filterCardArea('太喜',this)">太喜</button>
+      <button class="atab" onclick="filterCardArea('瀬後の浦',this)">瀬後の浦</button>
+      <button class="atab" onclick="filterCardArea('横島',this)">横島</button>
       <button class="atab" onclick="filterCardArea('楠森',this)">楠森</button>
       <button class="atab" onclick="filterCardArea('葛崎',this)">葛崎</button>
-      <button class="atab" onclick="filterCardArea('横島',this)">横島</button>
     </div>
     <div id="tankCardGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:4px"></div>
   </div>
@@ -808,6 +825,27 @@ body.ai-mode-on .ai-element-flex{display:flex}
       <th style="text-align:right">在庫尾数</th><th>配置いけす</th>
     </tr></thead>
     <tbody id="lotBody"></tbody></table>
+  </div>
+</div>
+
+<!-- ══ SCREEN: HISTORY（履歴） ══ -->
+<div class="screen" id="s-history">
+  <div class="page-header"><h2>📜 履歴</h2></div>
+  <div style="margin-bottom:24px">
+    <h3 style="font-size:15px;font-weight:700;margin-bottom:10px;color:var(--text)">↔ 移動履歴</h3>
+    <div class="tbl-wrap">
+      <table><thead><tr>
+        <th>日付</th><th>移動元</th><th>移動先</th><th style="text-align:right">尾数</th><th>理由</th>
+      </tr></thead><tbody id="moveHistBody"><tr><td colspan="5" style="padding:16px;text-align:center;color:var(--sub)">読み込み中...</td></tr></tbody></table>
+    </div>
+  </div>
+  <div style="margin-bottom:24px">
+    <h3 style="font-size:15px;font-weight:700;margin-bottom:10px;color:var(--text)">📦 出荷履歴</h3>
+    <div class="tbl-wrap">
+      <table><thead><tr>
+        <th>出荷日</th><th>業者</th><th>魚種</th><th style="text-align:right">尾数</th><th style="text-align:right">正味kg</th><th style="text-align:right">金額</th><th>ロット</th>
+      </tr></thead><tbody id="shipHistBody"><tr><td colspan="7" style="padding:16px;text-align:center;color:var(--sub)">読み込み中...</td></tr></tbody></table>
+    </div>
   </div>
 </div>
 
@@ -1758,6 +1796,7 @@ function renderLotMini(){
 }
 
 function toggleCost(){
+  if(!requireAdmin())return;
   costVisible=!costVisible;
   document.getElementById('costVal').textContent=costVisible?'¥4,820,000':'———';
 }
@@ -1882,6 +1921,49 @@ async function loadTankFeedHistory(pondId){
   }catch(e){
     console.error('[Supabase] loadTankFeedHistory failed:',e);
     if(histEl)histEl.innerHTML='給餌履歴の読み込みに失敗しました。';
+  }
+}
+
+// ══════════════════════════════════════════
+// 履歴（移動・出荷）
+// ══════════════════════════════════════════
+async function loadHistory(){
+  // 移動履歴
+  try{
+    var mv=await sb.from('move_logs').select('log_date,from_pond,to_pond,count,reason,external').order('log_date',{ascending:false}).limit(100);
+    var mb=document.getElementById('moveHistBody');
+    if(mv.error)throw mv.error;
+    var rows=mv.data||[];
+    mb.innerHTML = rows.length===0
+      ? '<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--sub)">移動記録はまだありません</td></tr>'
+      : rows.map(function(r){
+          return '<tr><td>'+r.log_date+'</td><td>'+(r.external?'外部（種苗業者）':(r.from_pond||'―'))+'</td><td>'+(r.to_pond||'―')+'</td>'
+            +'<td style="text-align:right;font-weight:700">'+(r.count||0).toLocaleString()+'尾</td><td>'+(r.reason||'')+'</td></tr>';
+        }).join('');
+  }catch(e){
+    console.error('[Supabase] loadHistory move_logs failed:',e);
+    var mb2=document.getElementById('moveHistBody');
+    if(mb2)mb2.innerHTML='<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--red)">移動履歴の読み込みに失敗しました</td></tr>';
+  }
+  // 出荷履歴
+  try{
+    var sh=await sb.from('shipments').select('ship_date,buyer,species,qty,net,amount,lot').order('ship_date',{ascending:false}).limit(100);
+    var sb2=document.getElementById('shipHistBody');
+    if(sh.error)throw sh.error;
+    var srows=sh.data||[];
+    sb2.innerHTML = srows.length===0
+      ? '<tr><td colspan="7" style="padding:16px;text-align:center;color:var(--sub)">出荷記録はまだありません</td></tr>'
+      : srows.map(function(r){
+          return '<tr><td>'+r.ship_date+'</td><td><strong>'+(r.buyer||'')+'</strong></td><td>'+(r.species||'')+'</td>'
+            +'<td style="text-align:right">'+(r.qty||0).toLocaleString()+'</td>'
+            +'<td style="text-align:right">'+(r.net||0)+'</td>'
+            +'<td style="text-align:right;font-weight:700;color:var(--blue)">¥'+Math.round(r.amount||0).toLocaleString()+'</td>'
+            +'<td>'+(r.lot||'')+'</td></tr>';
+        }).join('');
+  }catch(e){
+    console.error('[Supabase] loadHistory shipments failed:',e);
+    var sbe=document.getElementById('shipHistBody');
+    if(sbe)sbe.innerHTML='<tr><td colspan="7" style="padding:16px;text-align:center;color:var(--red)">出荷履歴の読み込みに失敗しました</td></tr>';
   }
 }
 
@@ -2501,6 +2583,41 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+// ===== 簡易ログインゲート＋管理者ティア（暫定・UX層）=====
+var AUTH_KEY='onoue_auth_v1';     // 入口（スタッフ共通）
+var ADMIN_KEY='onoue_admin';      // 管理者（売上・元帳・設定）
+function doLogin(){
+  var u=document.getElementById('lgUser').value.trim();
+  var p=document.getElementById('lgPass').value;
+  if(u==='onoue' && p==='onoue2026'){
+    sessionStorage.setItem(AUTH_KEY,'ok');
+    document.getElementById('loginGate').style.display='none';
+  }else{
+    document.getElementById('lgErr').style.display='block';
+    document.getElementById('lgPass').value='';
+  }
+}
+function isAdmin(){ return sessionStorage.getItem(ADMIN_KEY)==='ok'; }
+function requireAdmin(){
+  if(isAdmin())return true;
+  var p=prompt('管理者パスワードを入力してください（売上・元帳・設定の閲覧）');
+  if(p==='onoue-kanri2026'){ sessionStorage.setItem(ADMIN_KEY,'ok'); return true; }
+  if(p!==null) alert('管理者パスワードが違います');
+  return false;
+}
+function navSettings(el){ if(!requireAdmin())return; nav('settings',el); }
+function openLedger(el){ if(!requireAdmin())return; swTab('orders','ledger',el); }
+(function(){
+  if(sessionStorage.getItem(AUTH_KEY)!=='ok'){
+    document.getElementById('loginGate').style.display='flex';
+  }
+  // 餌代は既定マスク（管理者がトグルで解除）
+  if(!isAdmin()){
+    var cv=document.getElementById('costVal');
+    if(cv){ cv.textContent='———'; costVisible=false; }
+  }
+})();
 </script>
 </body>
 </html>
