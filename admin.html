@@ -2702,6 +2702,12 @@ function drawAdminFishMap(svgId,opts){
     }
   });
   svg.innerHTML=parts.join('');
+  // 上端のエリア名(団地/太喜/瀬後の浦)が枠外で見切れるのを防ぐため、viewBox上方向に余白を確保。
+  // 元のviewBoxを dataset に保持し、再描画でも累積しない（冪等）。
+  if(!svg.dataset.vbBase) svg.dataset.vbBase = svg.getAttribute('viewBox') || '0 0 640 1460';
+  var _vb = svg.dataset.vbBase.split(/\s+/).map(Number);
+  var TOPPAD = 30;
+  svg.setAttribute('viewBox', _vb[0]+' '+(_vb[1]-TOPPAD)+' '+_vb[2]+' '+(_vb[3]+TOPPAD));
 }
 
 // ══════════════════════════════════════════
