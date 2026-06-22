@@ -285,6 +285,10 @@ input:checked+.tgl-slider:before{transform:translateX(20px)}
 .hm-pending{background:#fef3c7}
 
 /* ─── Inventory summary table ─── */
+/* 在庫一覧は画面全体を1つのスクロールにする。
+   直下要素が flex で縮むと漁場図(高1460px)/リストが小さなスクロール箱に潰れ
+   「スクロールがロック」状態になるため、縮小を禁止して自然な高さを保たせる。 */
+#s-inventory>*{flex-shrink:0}
 .inv-summary{margin-bottom:14px}
 .inv-summary-table th{font-size:11px}
 .inv-summary-table td{font-size:13px;text-align:right}
