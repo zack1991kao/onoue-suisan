@@ -436,17 +436,17 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div class="today-banner">
     <div class="tb-item" onclick="nav('inventory',document.querySelectorAll('.nav-btn')[2])">
       <span class="tb-label">本日の未記録</span>
-      <span class="tb-val warn">15</span>
+      <span class="tb-val warn" id="tbTodo">—</span>
       <span class="tb-label" style="margin-left:2px">基</span>
     </div>
     <div class="tb-item" onclick="nav('orders',document.querySelectorAll('.nav-btn')[1])">
       <span class="tb-label">出荷予定</span>
-      <span class="tb-val">4</span>
+      <span class="tb-val" id="tbShip">—</span>
       <span class="tb-label" style="margin-left:2px">社</span>
     </div>
     <div class="tb-item" onclick="nav('inventory',document.querySelectorAll('.nav-btn')[2])">
       <span class="tb-label">要確認アラート</span>
-      <span class="tb-val alert">3</span>
+      <span class="tb-val alert" id="tbAlert">—</span>
       <span class="tb-label" style="margin-left:2px">件</span>
     </div>
     <div style="flex:1"></div>
@@ -466,9 +466,9 @@ body.ai-mode-on .ai-element-flex{display:flex}
     </div>
     <div class="scard">
       <div class="slabel">本日の給餌記録</div>
-      <div class="sval">85<span style="font-size:15px;font-weight:400"> / 100</span></div>
-      <div class="ssub">記録済 / 全基</div>
-      <div class="progress-wrap"><div class="progress-fill" style="width:85%"></div></div>
+      <div class="sval"><span id="dashFedDone">—</span><span style="font-size:15px;font-weight:400"> / <span id="dashFedTotal">—</span></span></div>
+      <div class="ssub">記録済 / 稼働基</div>
+      <div class="progress-wrap"><div class="progress-fill" id="dashFedBar" style="width:0%"></div></div>
     </div>
     <div class="scard" id="dashAlertCard">
       <div class="slabel">要対応のいけす</div>
@@ -478,8 +478,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <div class="scard" id="costCard">
       <button class="eye-btn" onclick="toggleCost()" title="表示切替">👁</button>
       <div class="slabel">今月の餌代</div>
-      <div class="sval" id="costVal" style="font-size:20px">¥4,820,000</div>
-      <div class="ssub">2026年5月</div>
+      <div class="sval" id="costVal" style="font-size:20px">—</div>
+      <div class="ssub" id="costSub">餌価格マスター登録後に算出</div>
     </div>
   </div>
 
@@ -2064,7 +2064,8 @@ function renderLotMini(){
 function toggleCost(){
   if(!requireAdmin())return;
   costVisible=!costVisible;
-  document.getElementById('costVal').textContent=costVisible?'¥4,820,000':'———';
+  // 餌価格マスター未登録のため金額は未算出。表示/非表示の切替のみ。
+  document.getElementById('costVal').textContent=costVisible?'—':'———';
 }
 
 // ══════════════════════════════════════════
@@ -2529,7 +2530,24 @@ function calcDashSummary(){
   if(elAV)elAV.textContent=alertPonds.length;
   if(elAS)elAS.textContent=alertPonds.length>0?alertPonds.map(function(p){return p.id;}).join(' / '):'アラートなし';
   if(alertCard)alertCard.className='scard'+(alertPonds.length>0?' red':'');
-  return {total:total,active:active,skip:skip,totalStock:totalStock,byFish:byFish,alertCount:alertPonds.length};
+
+  // ===== 上部バー・給餌記録も実データに連動（固定ダミー値の解消）=====
+  var todo=POND_CONFIG.filter(function(p){return p.status==='todo';}).length;
+  var done=POND_CONFIG.filter(function(p){return p.status==='done';}).length;
+  var setTxt=function(id,v){ var e=document.getElementById(id); if(e)e.textContent=v; };
+  setTxt('tbTodo', todo);                 // 本日の未記録（todo件数）
+  setTxt('tbAlert', alertPonds.length);   // 要確認アラート（=要対応のいけすと一致）
+  // 出荷予定：未出荷(pending)注文の取引先数
+  var shipBuyers={};
+  (typeof orders!=='undefined'?orders:[]).forEach(function(o){ if(o.status==='pending'&&o.buyer)shipBuyers[o.buyer]=1; });
+  setTxt('tbShip', Object.keys(shipBuyers).length);
+  // 本日の給餌記録：記録済(done) / 稼働基(active)
+  setTxt('dashFedDone', done);
+  setTxt('dashFedTotal', active);
+  var fbar=document.getElementById('dashFedBar');
+  if(fbar)fbar.style.width=(active?Math.round(done/active*100):0)+'%';
+
+  return {total:total,active:active,skip:skip,totalStock:totalStock,byFish:byFish,alertCount:alertPonds.length,todo:todo,done:done};
 }
 
 // ══════════════════════════════════════════
@@ -2702,7 +2720,8 @@ function renderLotSummary(){
     byFish[l.species].stock+=l.stock;
   });
   var cards='<div class="scard"><div class="slabel">ロット数</div><div class="sval" style="font-size:24px">'+built.length+'</div><div class="ssub">魚種×年齢別</div></div>';
-  cards+='<div class="scard"><div class="slabel">総在庫尾数</div><div class="sval" style="font-size:20px">'+totalStock.toLocaleString()+'</div><div class="ssub">尾（稼働90基）</div></div>';
+  var activeCnt=POND_CONFIG.filter(function(p){return p.status!=='skip';}).length;
+  cards+='<div class="scard"><div class="slabel">総在庫尾数</div><div class="sval" style="font-size:20px">'+totalStock.toLocaleString()+'</div><div class="ssub">尾（稼働'+activeCnt+'基）</div></div>';
   var fishSub=Object.keys(byFish).map(function(f){return f+' '+byFish[f].cnt+'基・'+byFish[f].stock.toLocaleString()+'尾';}).join(' / ');
   cards+='<div class="scard"><div class="slabel">魚種別内訳</div><div class="sval" style="font-size:13px;line-height:1.8">'+fishSub+'</div></div>';
   document.getElementById('lotSummary').innerHTML=cards;
@@ -3029,7 +3048,7 @@ async function applyRole(){
     if(!pr.error && pr.data && pr.data.role==='admin'){
       sessionStorage.setItem(ADMIN_KEY,'ok');
       var cv=document.getElementById('costVal');
-      if(cv){ cv.textContent='¥4,820,000'; costVisible=true; }
+      if(cv){ cv.textContent='—'; costVisible=true; }  // 餌価格マスター登録後に算出
     }
   }catch(e){ console.warn('[Auth] role fetch skipped:', e.message); }
 }
