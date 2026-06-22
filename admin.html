@@ -2508,7 +2508,8 @@ function calcDashSummary(){
   var total=POND_CONFIG.length;
   var active=POND_CONFIG.filter(function(p){return p.status!=='skip';}).length;
   var skip=total-active;
-  var totalStock=POND_CONFIG.reduce(function(s,p){return s+(p.stock||0);},0);
+  // 総在庫＝稼働中(空き以外)のみ合計（空きいけすの残数字を計上しない／在庫一覧と一致）
+  var totalStock=POND_CONFIG.filter(function(p){return p.status!=='skip';}).reduce(function(s,p){return s+(p.stock||0);},0);
   var byFish={};
   POND_CONFIG.filter(function(p){return p.status!=='skip';}).forEach(function(p){
     if(!byFish[p.species])byFish[p.species]={cnt:0,stock:0};
@@ -2639,11 +2640,12 @@ function renderInvSummary(){
   var totTodo=POND_CONFIG.filter(function(p){return p.status==='todo';}).length;
   var totAlert=POND_CONFIG.filter(function(p){return p.status==='alert';}).length;
   var totSkip=POND_CONFIG.filter(function(p){return p.status==='skip';}).length;
-  var totalStock=POND_CONFIG.reduce(function(s,p){return s+(p.stock||0);},0);
+  // 総在庫＝稼働中(空き以外)の合計に統一（空きいけすに残った数字を二重計上しない）
+  var totalStock=POND_CONFIG.filter(function(p){return p.status!=='skip';}).reduce(function(s,p){return s+(p.stock||0);},0);
   rows.push('<tr class="inv-summary-total"><td>合計</td><td><span style="color:var(--green);font-weight:700">'+totDone+'</span></td><td><span style="color:var(--orange)">'+totTodo+'</span></td><td><span style="color:var(--red)">'+totAlert+'</span></td><td style="color:var(--sub)">'+totSkip+'</td><td style="font-weight:700">'+POND_CONFIG.length+'</td></tr>');
   document.getElementById('invSummaryBody').innerHTML=rows.join('');
   var sub=document.getElementById('invPageSub');
-  if(sub)sub.textContent='総在庫 '+totalStock.toLocaleString()+'尾 ／ '+POND_CONFIG.length+'基';
+  if(sub)sub.textContent='総在庫 '+totalStock.toLocaleString()+'尾 ／ 稼働'+(POND_CONFIG.length-totSkip)+'基 / 全'+POND_CONFIG.length+'基';
 }
 
 function renderInv(){
