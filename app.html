@@ -2820,12 +2820,21 @@ function setAiMode(on, save) {
 
 // ===== SUPABASE LOAD =====
 async function loadPonds() {
+  // 固定配列の並び順を維持するための基準（DBは更新行を末尾に返すため）
+  var orderIdx = {};
+  POND_CONFIG.forEach(function(p, i) { orderIdx[p.id] = i; });
   try {
     var res = await sb.from('ponds').select('*');
     if (res.error) throw res.error;
     if (res.data && res.data.length > 0) {
+      var rows = res.data.slice();
+      rows.sort(function(a, b) {
+        var ia = (a.id in orderIdx) ? orderIdx[a.id] : 9999;
+        var ib = (b.id in orderIdx) ? orderIdx[b.id] : 9999;
+        return ia - ib;
+      });
       POND_CONFIG.length = 0;
-      res.data.forEach(function(row) { POND_CONFIG.push(row); });
+      rows.forEach(function(row) { POND_CONFIG.push(row); });
     }
   } catch (e) {
     console.warn('[Supabase] loadPonds failed, using fallback:', e.message);
