@@ -493,6 +493,14 @@ body.ai-mode-on .ai-element-flex{display:flex}
           <button class="btn btn-secondary btn-sm" id="dashViewMapBtn" onclick="setDashView('map')">🗺 漁場図</button>
           <button class="btn btn-secondary btn-sm" id="dashViewListBtn" onclick="setDashView('list')">📋 リスト</button>
         </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+          <input id="dashSearch" placeholder="🔍 いけす・魚種で検索" oninput="applyDashFilter()" style="flex:1;min-width:150px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:13px">
+          <select id="dashFArea" onchange="applyDashFilter()" style="font:inherit;font-size:12px"><option value="all">全エリア</option><option>団地</option><option>太喜</option><option>瀬後の浦</option><option>横島</option><option>楠森</option><option>葛崎</option></select>
+          <select id="dashFSpecies" onchange="applyDashFilter()" style="font:inherit;font-size:12px"><option value="all">全魚種</option><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select>
+          <select id="dashFStatus" onchange="applyDashFilter()" style="font:inherit;font-size:12px"><option value="all">全状態</option><option value="done">給餌済</option><option value="todo">記録待ち</option><option value="alert">要対応</option></select>
+          <select id="dashSort" onchange="applyDashFilter()" style="font:inherit;font-size:12px"><option value="id">いけす順</option><option value="stock_desc">在庫多い順</option><option value="stock_asc">在庫少ない順</option><option value="age">年齢高い順</option><option value="species">魚種別</option></select>
+        </div>
+        <div id="dashFilterCount" style="font-size:12px;color:var(--sub);margin-bottom:6px"></div>
         <div id="dashMapWrap" style="text-align:center;overflow:auto;max-height:640px;background:#eef4fb;border-radius:8px;padding:8px">
           <svg id="dashFishMapSvg" viewBox="0 0 640 1460" style="width:520px;max-width:100%;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
@@ -2034,8 +2042,48 @@ function renderPending(){ /* 本日未記録バーは廃止（要望により削
 
 function filterArea(area,btn){ /* エリアタブは漁場図化により廃止 */ }
 
-// いけす状況：漁場図 / リスト 切替
+// いけす状況：漁場図 / リスト 切替 ＋ 検索・絞り込み・並べ替え
 var dashView='map';
+var dashFilter={q:'',area:'all',species:'all',status:'all',sort:'id'};
+function readDashFilter(){
+  var g=function(id){var e=document.getElementById(id);return e?e.value:'';};
+  dashFilter.q=(g('dashSearch')||'').trim().toLowerCase();
+  dashFilter.area=g('dashFArea')||'all';
+  dashFilter.species=g('dashFSpecies')||'all';
+  dashFilter.status=g('dashFStatus')||'all';
+  dashFilter.sort=g('dashSort')||'id';
+}
+// 該当判定（空きは常に対象外）
+function dashMatch(p){
+  if(p.status==='skip')return false;
+  var f=dashFilter;
+  if(f.area!=='all' && p.area!==f.area)return false;
+  if(f.species!=='all' && p.species!==f.species)return false;
+  if(f.status!=='all' && p.status!==f.status)return false;
+  if(f.q){
+    var hay=(p.id+' '+(p.species||'')).toLowerCase();
+    if(hay.indexOf(f.q)<0)return false;
+  }
+  return true;
+}
+function dashSortPonds(arr){
+  var s=dashFilter.sort, a=arr.slice();
+  if(s==='stock_desc')a.sort(function(x,y){return (y.stock||0)-(x.stock||0);});
+  else if(s==='stock_asc')a.sort(function(x,y){return (x.stock||0)-(y.stock||0);});
+  else if(s==='age')a.sort(function(x,y){return (POND_YR[y.id]||0)-(POND_YR[x.id]||0);});
+  else if(s==='species')a.sort(function(x,y){return (x.species||'').localeCompare(y.species||'')|| x.id.localeCompare(y.id);});
+  return a; // 'id' は POND_CONFIG 順
+}
+// 検索/絞り込み/並べ替え変更時：現在ビューを再描画
+function applyDashFilter(){
+  readDashFilter();
+  var matched=POND_CONFIG.filter(dashMatch).length;
+  var active=POND_CONFIG.filter(function(p){return p.status!=='skip';}).length;
+  var cnt=document.getElementById('dashFilterCount');
+  if(cnt)cnt.textContent='該当 '+matched+' 基 ／ 稼働 '+active+' 基';
+  if(dashView==='list')renderDashTankList();
+  else drawAdminFishMap('dashFishMapSvg', {labels:true, clickable:true, dimFn:function(p){return !dashMatch(p);}});
+}
 function setDashView(mode){
   dashView=mode;
   var mapW=document.getElementById('dashMapWrap');
@@ -2046,19 +2094,20 @@ function setDashView(mode){
     if(mapW)mapW.style.display='none';
     if(listW)listW.style.display='block';
     if(lb)lb.classList.add('btn-primary'); if(mb)mb.classList.remove('btn-primary');
-    renderDashTankList();
   }else{
     if(mapW)mapW.style.display='block';
     if(listW)listW.style.display='none';
     if(mb)mb.classList.add('btn-primary'); if(lb)lb.classList.remove('btn-primary');
-    drawAdminFishMap('dashFishMapSvg', {labels:true, clickable:true});
   }
+  applyDashFilter();
 }
-// リスト：全てDB(POND_CONFIG)の実データ。空き以外を表示。
+// リスト：全てDB(POND_CONFIG)の実データ。絞り込み・並べ替え適用。
 function renderDashTankList(){
   var list=document.getElementById('dashTankList');
   if(!list)return;
-  var ponds=POND_CONFIG.filter(function(p){return p.status!=='skip';});
+  readDashFilter();
+  var ponds=dashSortPonds(POND_CONFIG.filter(dashMatch));
+  if(ponds.length===0){ list.innerHTML='<div style="padding:18px;text-align:center;color:var(--sub);font-size:13px">該当するいけすがありません</div>'; return; }
   var html='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--sub);font-size:11px;text-align:left">'
     +'<th style="padding:6px 8px">いけす</th><th style="padding:6px 8px">魚種</th><th style="padding:6px 8px">年齢</th>'
     +'<th style="padding:6px 8px;text-align:right">在庫尾数</th><th style="padding:6px 8px">状態</th></tr></thead><tbody>';
@@ -2614,6 +2663,7 @@ function drawAdminFishMap(svgId,opts){
   opts=opts||{};
   var showLabels = opts.labels!==false;   // 既定: 魚種ラベルあり
   var clickable  = opts.clickable!==false; // 既定: クリックで詳細
+  var dimFn      = opts.dimFn || null;     // 該当外を淡色化する判定（検索/絞り込み用）
   var svg=document.getElementById(svgId||'adminFishMapSvg');
   if(!svg)return;
   var SC=2,SZ=22*SC,R=11*SC;
@@ -2632,18 +2682,19 @@ function drawAdminFishMap(svgId,opts){
     var k=st==='done'?'#22c55e':st==='alert'?'#d97706':st==='skip'?'#e2e8f0':'#ef4444';
     var t=st==='done'?'#166534':st==='alert'?'#7c2d12':st==='skip'?'#94a3b8':'#991b1b';
     var tap=clickable?(' onclick="adminTankClick(\''+p.id+'\')" style="cursor:pointer"'):'';
+    var op=(dimFn && dimFn(p))?' opacity="0.18"':'';  // 検索/絞り込みの非該当は淡色化
     if(p.sh==='ci'){
-      parts.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"'+tap+'/>');
+      parts.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"'+tap+op+'/>');
     }else{
-      parts.push('<rect x="'+(cm.x*SC)+'" y="'+(cm.y*SC)+'" width="'+SZ+'" height="'+SZ+'" rx="3" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"'+tap+'/>');
+      parts.push('<rect x="'+(cm.x*SC)+'" y="'+(cm.y*SC)+'" width="'+SZ+'" height="'+SZ+'" rx="3" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"'+tap+op+'/>');
     }
     if(showLabels && st!=='skip'){
       var lbl=fishInitial(p.species);
-      parts.push('<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" font-size="13" font-weight="700" fill="'+t+'" font-family='+FF+' pointer-events="none">'+lbl+'</text>');
+      parts.push('<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" font-size="13" font-weight="700" fill="'+t+'" font-family='+FF+' pointer-events="none"'+op+'>'+lbl+'</text>');
     }
     var fk=p.feedKg||p.feed_kg;
     if(showLabels && st==='done' && fk){
-      parts.push('<text x="'+cx+'" y="'+(cy+R+14)+'" text-anchor="middle" font-size="10" fill="#166534" font-family='+FF+' pointer-events="none">'+fk+'k</text>');
+      parts.push('<text x="'+cx+'" y="'+(cy+R+14)+'" text-anchor="middle" font-size="10" fill="#166534" font-family='+FF+' pointer-events="none"'+op+'>'+fk+'k</text>');
     }
   });
   svg.innerHTML=parts.join('');
