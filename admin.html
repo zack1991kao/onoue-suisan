@@ -416,6 +416,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <button class="nav-btn" onclick="nav('inventory',this)"><span class="nav-icon">📦</span>在庫一覧</button>
     <button class="nav-btn" onclick="navDiary('diary',this)"><span class="nav-icon">📒</span>養殖日誌</button>
     <button class="nav-btn" onclick="nav('lots',this)"><span class="nav-icon">🐟</span>ロット管理</button>
+    <button class="nav-btn" onclick="navPayments(this)"><span class="nav-icon">💰</span>入金管理 🔒</button>
     <button class="nav-btn" onclick="nav('history',this);loadHistory()"><span class="nav-icon">📜</span>履歴</button>
     <button class="nav-btn" onclick="navSettings(this)"><span class="nav-icon">⚙️</span>設定 🔒</button>
     <button class="nav-btn" onclick="navAi('ai',this)"><span class="nav-icon">🤖</span>AI機能</button>
@@ -666,7 +667,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
       <div style="font-size:48px;margin-bottom:16px">🔒</div>
       <div style="font-size:16px;font-weight:700;margin-bottom:8px">社長・お母様のみ閲覧できます</div>
       <div style="font-size:13px;color:var(--sub);margin-bottom:20px">売上金額・入金情報は権限のある方のみが確認できます</div>
-      <button class="btn btn-primary" onclick="document.getElementById('ledgerLock').style.display='none';document.getElementById('ledgerContent').style.display='flex'">確認する（デモ用）</button>
+      <button class="btn btn-primary" onclick="if(requireAdmin()){document.getElementById('ledgerLock').style.display='none';document.getElementById('ledgerContent').style.display='flex';renderLedger(currentLedger);}">確認する</button>
     </div>
     <div id="ledgerContent" style="display:none;flex-direction:column;flex:1">
       <div class="ledger-note">📝 お母様の手書き売上帳と同じ形式です。当面は紙と並行運用してください。</div>
@@ -826,6 +827,33 @@ body.ai-mode-on .ai-element-flex{display:flex}
       <th style="text-align:right">在庫尾数</th><th>配置いけす</th>
     </tr></thead>
     <tbody id="lotBody"></tbody></table>
+  </div>
+</div>
+
+<!-- ══ SCREEN: PAYMENTS（入金管理） ══ -->
+<div class="screen" id="s-payments">
+  <div class="page-header"><h2>💰 入金管理</h2></div>
+  <div class="ledger-note">📠 銀行FAXを見ながら入金を確認・消込してください。金額は管理者のみ閲覧できます。</div>
+  <div style="display:flex;gap:16px;margin:12px 0 20px">
+    <div class="td-stat" style="flex:1"><div class="tds-label">未入金 合計</div><div class="tds-val" style="color:var(--red)" id="payUnpaidTotal">¥0</div></div>
+    <div class="td-stat" style="flex:1"><div class="tds-label">今月の売上（出荷金額）</div><div class="tds-val" style="color:var(--blue)" id="paySalesMonth">¥0</div></div>
+    <div class="td-stat" style="flex:1"><div class="tds-label">今月の入金</div><div class="tds-val" style="color:var(--green)" id="payRecvMonth">¥0</div></div>
+  </div>
+  <div style="margin-bottom:24px">
+    <h3 style="font-size:15px;font-weight:700;margin-bottom:10px;color:var(--text)">🔴 未入金リスト</h3>
+    <div class="tbl-wrap">
+      <table><thead><tr>
+        <th>出荷日</th><th>業者</th><th>魚種</th><th style="text-align:right">数量</th><th style="text-align:right">売上金額</th><th style="text-align:right">入金済</th><th style="text-align:right">残額</th><th style="text-align:right">経過</th><th></th>
+      </tr></thead><tbody id="unpaidBody"><tr><td colspan="9" style="padding:16px;text-align:center;color:var(--sub)">読み込み中...</td></tr></tbody></table>
+    </div>
+  </div>
+  <div style="margin-bottom:24px">
+    <h3 style="font-size:15px;font-weight:700;margin-bottom:10px;color:var(--text)">✅ 入金済みリスト</h3>
+    <div class="tbl-wrap">
+      <table><thead><tr>
+        <th>出荷日</th><th>業者</th><th>魚種</th><th style="text-align:right">数量</th><th style="text-align:right">売上金額</th><th style="text-align:right">入金済</th>
+      </tr></thead><tbody id="paidBody"><tr><td colspan="6" style="padding:16px;text-align:center;color:var(--sub)">読み込み中...</td></tr></tbody></table>
+    </div>
   </div>
 </div>
 
@@ -1128,17 +1156,24 @@ body.ai-mode-on .ai-element-flex{display:flex}
 
 <div class="overlay" id="mAddPayment">
   <div class="modal">
-    <div class="mhd"><h3>入金登録</h3><button class="mclose" onclick="closeM('mAddPayment')">✕</button></div>
+    <div class="mhd"><h3 id="payFormTitle">入金確認</h3><button class="mclose" onclick="closeM('mAddPayment')">✕</button></div>
     <div class="mbody">
+      <div id="payTargetInfo" style="font-size:13px;color:var(--sub);margin-bottom:12px"></div>
       <div class="fr2">
-        <div class="fg"><label>入金日</label><input type="date" class="fc" value="2026-05-20"></div>
-        <div class="fg"><label>金額（円）</label><input type="number" class="fc" placeholder="例：242568"></div>
+        <div class="fg"><label>入金日</label><input type="date" class="fc" id="payDate"></div>
+        <div class="fg"><label>入金額（円）</label><input type="number" class="fc" id="payAmount" placeholder="例：242568"></div>
       </div>
-      <div class="fg"><label>摘要</label><input type="text" class="fc" placeholder="例：5月分まとめ入金"></div>
+      <div class="fr2">
+        <div class="fg"><label>業者名</label><input type="text" class="fc" id="payBuyer" readonly></div>
+        <div class="fg"><label>入金方法</label>
+          <select class="fc" id="payMethod"><option>振込</option><option>現金</option><option>手形</option><option>その他</option></select>
+        </div>
+      </div>
+      <div class="fg"><label>摘要・メモ</label><input type="text" class="fc" id="payMemo" placeholder="例：5月分まとめ入金"></div>
     </div>
     <div class="mfoot">
       <button class="btn btn-secondary" onclick="closeM('mAddPayment')">キャンセル</button>
-      <button class="btn btn-primary" onclick="closeM('mAddPayment');showToast('入金を記録しました')">登録</button>
+      <button class="btn btn-primary" onclick="savePayment()">入金を記録（消込）</button>
     </div>
   </div>
 </div>
@@ -1430,30 +1465,7 @@ const lots=[
   {id:'2023-08-B',date:'2023/8/22',vendor:'ZZ種苗',species:'カンパチ',intro:60000,current:0,loss:18.7,status:'出荷完了'},
 ];
 
-const ledgerData={
-  'ニチモウ':[
-    {date:'4/1',item:'鯛',qty:21,price:1000,sale:47500,recv:null},
-    {date:'4/1',item:'鯛',qty:40,price:1000,sale:66000,recv:null},
-    {date:'4/1',item:'カンパチ',qty:12,price:2000,sale:86000,recv:null},
-    {date:'4/1',item:'（合計）',qty:null,price:null,sale:242568,recv:null,isTotal:true},
-    {date:'4/15',item:'入金',qty:null,price:null,sale:null,recv:242568},
-    {date:'4月計',item:'',qty:null,price:null,sale:242568,recv:242568,isMon:true},
-  ],
-  '信源':[
-    {date:'4/5',item:'カンパチ',qty:30,price:2000,sale:120000,recv:null},
-    {date:'4/5',item:'鯛',qty:15,price:1000,sale:36500,recv:null},
-    {date:'4/5',item:'（合計）',qty:null,price:null,sale:156500,recv:null,isTotal:true},
-    {date:'4/18',item:'入金',qty:null,price:null,sale:null,recv:156500},
-    {date:'4月計',item:'',qty:null,price:null,sale:156500,recv:156500,isMon:true},
-  ],
-};
-['オーシャン','龍ヶ岳','和潮','紀勝','大海水産'].forEach(function(b){
-  var s=Math.floor(Math.random()*120000+40000);
-  ledgerData[b]=[
-    {date:'4/10',item:'鯛',qty:Math.floor(s/1000),price:1000,sale:s,recv:null},
-    {date:'4月計',item:'',qty:null,price:null,sale:s,recv:s,isMon:true},
-  ];
-});
+// 元帳は shipments / payments の実データから集計（renderLedger 参照）。旧サンプル生成は廃止。
 
 const calOrders={};
 [[3,'ニチモウ',50,'confirmed'],[4,'信源',80,'confirmed'],
@@ -1560,6 +1572,166 @@ async function loadOrders() {
   }
 }
 
+// ══════════════════════════════════════════
+// 入金管理（shipments / payments）※管理者のみ。staffはRLSで空が返る
+// ══════════════════════════════════════════
+var shipmentsCache = [];
+var paymentsCache  = [];
+async function loadShipments(){
+  try{
+    var res = await sb.from('shipments')
+      .select('id,ship_date,buyer,species,qty,net,price,amount,lot,paid,paid_amount')
+      .order('ship_date',{ascending:false}).limit(500);
+    if(res.error) throw res.error;
+    shipmentsCache = res.data || [];
+  }catch(e){
+    console.warn('[Supabase] loadShipments failed:', e.message);
+    shipmentsCache = [];
+  }
+}
+async function loadPayments(){
+  try{
+    var res = await sb.from('payments')
+      .select('id,shipment_id,pay_date,buyer,amount,method,memo')
+      .order('pay_date',{ascending:false}).limit(500);
+    if(res.error) throw res.error;
+    paymentsCache = res.data || [];
+  }catch(e){
+    console.warn('[Supabase] loadPayments failed:', e.message);
+    paymentsCache = [];
+  }
+}
+
+// 入金管理タブ（管理者ガード）
+function navPayments(el){
+  if(!requireAdmin()) return;
+  nav('payments', el);
+  loadPaymentsScreen();
+}
+async function loadPaymentsScreen(){
+  await loadShipments();
+  await loadPayments();
+  renderPaymentsScreen();
+}
+
+function ymOfToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function daysSince(dateStr){
+  if(!dateStr) return '';
+  try{
+    var d=new Date(dateStr); var now=new Date();
+    var diff=Math.floor((now - d)/86400000);
+    return diff>=0 ? diff+'日' : '';
+  }catch(e){ return ''; }
+}
+
+function renderPaymentsScreen(){
+  var unpaid = shipmentsCache.filter(function(s){ return !s.paid && (s.amount||0) > (s.paid_amount||0); });
+  var paid   = shipmentsCache.filter(function(s){ return s.paid; });
+  // サマリー
+  var unpaidTotal = unpaid.reduce(function(t,s){ return t + ((s.amount||0) - (s.paid_amount||0)); },0);
+  var ym = ymOfToday();
+  var salesMonth = shipmentsCache.filter(function(s){ return (s.ship_date||'').slice(0,7)===ym; })
+    .reduce(function(t,s){ return t + (s.amount||0); },0);
+  var recvMonth = paymentsCache.filter(function(p){ return (p.pay_date||'').slice(0,7)===ym; })
+    .reduce(function(t,p){ return t + (p.amount||0); },0);
+  document.getElementById('payUnpaidTotal').textContent = '¥' + Math.round(unpaidTotal).toLocaleString();
+  document.getElementById('paySalesMonth').textContent  = '¥' + Math.round(salesMonth).toLocaleString();
+  document.getElementById('payRecvMonth').textContent   = '¥' + Math.round(recvMonth).toLocaleString();
+
+  // 未入金リスト
+  var ub=document.getElementById('unpaidBody');
+  ub.innerHTML = unpaid.length===0
+    ? '<tr><td colspan="9" style="padding:16px;text-align:center;color:var(--sub)">未入金の出荷はありません</td></tr>'
+    : unpaid.map(function(s){
+        var rest=(s.amount||0)-(s.paid_amount||0);
+        return '<tr><td>'+(s.ship_date||'')+'</td><td><strong>'+(s.buyer||'')+'</strong></td><td>'+(s.species||'')+'</td>'
+          +'<td style="text-align:right">'+(s.qty||0).toLocaleString()+'</td>'
+          +'<td style="text-align:right">¥'+Math.round(s.amount||0).toLocaleString()+'</td>'
+          +'<td style="text-align:right;color:var(--sub)">¥'+Math.round(s.paid_amount||0).toLocaleString()+'</td>'
+          +'<td style="text-align:right;font-weight:700;color:var(--red)">¥'+Math.round(rest).toLocaleString()+'</td>'
+          +'<td style="text-align:right;color:var(--sub)">'+daysSince(s.ship_date)+'</td>'
+          +'<td><button class="btn btn-primary btn-sm" onclick="openPaymentForm('+s.id+')">入金確認</button></td></tr>';
+      }).join('');
+
+  // 入金済みリスト
+  var pb=document.getElementById('paidBody');
+  pb.innerHTML = paid.length===0
+    ? '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--sub)">入金済みの出荷はまだありません</td></tr>'
+    : paid.map(function(s){
+        return '<tr><td>'+(s.ship_date||'')+'</td><td><strong>'+(s.buyer||'')+'</strong></td><td>'+(s.species||'')+'</td>'
+          +'<td style="text-align:right">'+(s.qty||0).toLocaleString()+'</td>'
+          +'<td style="text-align:right">¥'+Math.round(s.amount||0).toLocaleString()+'</td>'
+          +'<td style="text-align:right;color:var(--green)">¥'+Math.round(s.paid_amount||0).toLocaleString()+'</td></tr>';
+      }).join('');
+}
+
+var payTargetShipmentId = null;
+function openPaymentForm(shipmentId){
+  if(!requireAdmin()) return;
+  var s = shipmentsCache.filter(function(x){ return x.id===shipmentId; })[0];
+  if(!s){ alert('対象の出荷が見つかりません'); return; }
+  payTargetShipmentId = shipmentId;
+  var rest=(s.amount||0)-(s.paid_amount||0);
+  document.getElementById('payTargetInfo').innerHTML =
+    '<strong>'+(s.buyer||'')+'</strong> / '+(s.ship_date||'')+' / '+(s.species||'')+'<br>'
+    +'売上 ¥'+Math.round(s.amount||0).toLocaleString()+' ・ 入金済 ¥'+Math.round(s.paid_amount||0).toLocaleString()+' ・ 残額 <span style="color:var(--red);font-weight:700">¥'+Math.round(rest).toLocaleString()+'</span>';
+  var d=new Date();
+  document.getElementById('payDate').value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  document.getElementById('payAmount').value = Math.round(rest);
+  document.getElementById('payBuyer').value = s.buyer||'';
+  document.getElementById('payMemo').value = '';
+  openM('mAddPayment');
+}
+
+async function savePayment(){
+  if(!requireAdmin()) return;
+  var sid = payTargetShipmentId;
+  var s = shipmentsCache.filter(function(x){ return x.id===sid; })[0];
+  if(!s){ alert('対象の出荷が見つかりません'); return; }
+  var payDate = document.getElementById('payDate').value;
+  var amount  = parseFloat(document.getElementById('payAmount').value)||0;
+  var method  = document.getElementById('payMethod').value;
+  var memo    = document.getElementById('payMemo').value;
+  if(amount<=0){ alert('入金額を正しく入力してください'); return; }
+
+  var newPaid = (s.paid_amount||0) + amount;
+  var fullyPaid = newPaid >= (s.amount||0) - 0.01; // 端数誤差吸収
+
+  // ① shipments を消込更新（最優先・0件更新検知）
+  try{
+    var up = await sb.from('shipments').update({
+      paid: fullyPaid, paid_amount: newPaid
+    }).eq('id', sid).select('id');
+    if(up.error) throw up.error;
+    if(!up.data || up.data.length===0){
+      alert('⚠ DBに保存できませんでした（権限をご確認ください）'); return;
+    }
+  }catch(e){
+    console.error('[Supabase] savePayment shipments update failed:', e);
+    alert('入金の保存に失敗しました。通信を確認してください'); return;
+  }
+
+  // ② payments に記録（補助。失敗しても消込は成立済み）
+  try{
+    var ins = await sb.from('payments').insert({
+      shipment_id: sid, pay_date: payDate||null, buyer: s.buyer,
+      amount: amount, method: method, memo: memo
+    });
+    if(ins.error) throw ins.error;
+  }catch(e){
+    console.warn('[Supabase] payments insert failed (消込は保存済み):', e);
+  }
+
+  // メモリ更新＋再描画
+  s.paid = fullyPaid; s.paid_amount = newPaid;
+  paymentsCache.unshift({ shipment_id:sid, pay_date:payDate, buyer:s.buyer, amount:amount, method:method, memo:memo });
+  closeM('mAddPayment');
+  showToast(fullyPaid ? '入金を記録し消込しました' : '一部入金を記録しました');
+  renderPaymentsScreen();
+  // 元帳も開いていれば更新
+  if(typeof renderLedger==='function' && currentLedger) renderLedger(currentLedger);
+}
+
 function refreshDashboard(){
   var ds=calcDashSummary();
   if(ds){
@@ -1620,6 +1792,8 @@ async function init(){
   try { await sb.auth.getSession(); } catch(e){}  // セッション復元（RLS有効化後の認証付きクエリ用）
   await loadPonds();
   await loadOrders();
+  await loadShipments();  // 元帳・入金管理用（管理者のみ取得可・staffは空）
+  await loadPayments();
   initAiMode();
   setDate();
   var ds=calcDashSummary();
@@ -2212,17 +2386,36 @@ function selectLedger(b,el){
 }
 function renderLedger(buyer){
   currentLedger=buyer;
-  document.getElementById('ledgerTitle').textContent=buyer+' 元帳';
-  var rows=ledgerData[buyer]||[];
-  var balance=0;
-  document.getElementById('ledgerBody').innerHTML=rows.map(function(r){
-    var st=r.isMon?'style="font-weight:700;background:var(--bg)"':'';
-    if(r.sale&&!r.isTotal&&!r.isMon)balance+=r.sale;
-    if(r.recv)balance-=r.recv;
-    var balStr=(r.isTotal||r.isMon)?'<span style="color:'+(Math.abs(balance)<1?'var(--green)':'var(--blue)')+'">'+balance.toLocaleString()+'</span>':'';
-    var chip=r.recv&&!r.isMon?'<span class="badge b-green">入金確認</span>':r.sale&&!r.isTotal&&!r.isMon?'<span class="badge b-warn">未入金</span>':'';
-    return '<tr '+st+'><td>'+r.date+'</td><td>'+r.item+'</td><td style="text-align:right">'+(r.qty!=null?r.qty:'')+'</td><td style="text-align:right">'+(r.price!=null?r.price.toLocaleString():'')+'</td><td style="text-align:right">'+(r.sale!=null?r.sale.toLocaleString():'')+'</td><td style="text-align:right;color:var(--green)">'+(r.recv!=null?r.recv.toLocaleString():'')+'</td><td style="text-align:right">'+balStr+'</td><td>'+chip+'</td></tr>';
+  var titleEl=document.getElementById('ledgerTitle');
+  if(titleEl) titleEl.textContent=buyer+' 元帳';
+  var body=document.getElementById('ledgerBody');
+  if(!body) return;
+  // shipments の実データから当該業者の取引を古い順に
+  var rows = shipmentsCache.filter(function(s){ return s.buyer===buyer; })
+    .slice().sort(function(a,b){ return (a.ship_date||'').localeCompare(b.ship_date||''); });
+  if(rows.length===0){
+    body.innerHTML='<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--sub)">この業者の取引データはまだありません</td></tr>';
+    return;
+  }
+  var balance=0, totSale=0, totRecv=0;
+  var html = rows.map(function(s){
+    var sale=s.amount||0, recv=s.paid_amount||0;
+    balance += sale - recv; totSale+=sale; totRecv+=recv;
+    var chip = s.paid ? '<span class="badge b-green">入金済</span>'
+      : (recv>0 ? '<span class="badge b-warn">一部入金</span>' : '<span class="badge b-warn">未入金</span>');
+    return '<tr><td>'+(s.ship_date||'')+'</td><td>'+(s.species||'')+'</td>'
+      +'<td style="text-align:right">'+(s.qty||0).toLocaleString()+'</td>'
+      +'<td style="text-align:right">'+(s.price!=null?Math.round(s.price).toLocaleString():'')+'</td>'
+      +'<td style="text-align:right">'+Math.round(sale).toLocaleString()+'</td>'
+      +'<td style="text-align:right;color:var(--green)">'+(recv?Math.round(recv).toLocaleString():'')+'</td>'
+      +'<td style="text-align:right">'+Math.round(balance).toLocaleString()+'</td>'
+      +'<td>'+chip+'</td></tr>';
   }).join('');
+  html += '<tr style="font-weight:700;background:var(--bg)"><td colspan="4">合計</td>'
+    +'<td style="text-align:right">'+Math.round(totSale).toLocaleString()+'</td>'
+    +'<td style="text-align:right;color:var(--green)">'+Math.round(totRecv).toLocaleString()+'</td>'
+    +'<td style="text-align:right;color:'+((totSale-totRecv)<1?'var(--green)':'var(--blue)')+'">'+Math.round(totSale-totRecv).toLocaleString()+'</td><td></td></tr>';
+  body.innerHTML=html;
 }
 
 // ══════════════════════════════════════════
@@ -2670,7 +2863,13 @@ function requireAdmin(){
   return false;
 }
 function navSettings(el){ if(!requireAdmin())return; nav('settings',el); }
-function openLedger(el){ if(!requireAdmin())return; swTab('orders','ledger',el); }
+function openLedger(el){
+  if(!requireAdmin())return;
+  swTab('orders','ledger',el);
+  var lk=document.getElementById('ledgerLock'); if(lk)lk.style.display='none';
+  var lc=document.getElementById('ledgerContent'); if(lc)lc.style.display='flex';
+  renderLedger(currentLedger);
+}
 
 // 起動時：セッションが無ければゲート表示。あればrole反映。餌代は既定マスク。
 (function(){
