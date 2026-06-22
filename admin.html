@@ -453,7 +453,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
   </div>
 
   <div class="page-header">
-    <div><h2>ダッシュボード</h2><div class="phsub">2026年5月20日（水）朝の確認</div></div>
+    <div><h2>ダッシュボード</h2><div class="phsub" id="dashDateSub">読み込み中...</div></div>
   </div>
 
   <div class="summary-row">
@@ -482,23 +482,15 @@ body.ai-mode-on .ai-element-flex{display:flex}
     </div>
   </div>
 
-  <!-- 本日未記録バーは非表示（毎日入力前提でないため。ヒートマップ＋いけす状況で代替）-->
-  <div class="pending-bar" id="pendingBar" style="display:none"></div>
+  <!-- 本日未記録バーは要望により廃止 -->
 
   <div class="dash-grid">
     <div class="dash-left">
       <div class="card" style="padding:14px 16px">
-        <div class="card-title">いけす状況 <span>クリックで詳細</span></div>
-        <div class="area-tabs" id="areaTabs">
-          <button class="atab active" onclick="filterArea('all',this)">すべて</button>
-          <button class="atab" onclick="filterArea('団地',this)">団地</button>
-          <button class="atab" onclick="filterArea('太喜',this)">太喜</button>
-          <button class="atab" onclick="filterArea('瀬後の浦',this)">瀬後の浦</button>
-          <button class="atab" onclick="filterArea('横島',this)">横島</button>
-          <button class="atab" onclick="filterArea('楠森',this)">楠森</button>
-          <button class="atab" onclick="filterArea('葛崎',this)">葛崎</button>
+        <div class="card-title">いけす状況（漁場図） <span>クリックで詳細</span></div>
+        <div style="text-align:center;overflow:auto;max-height:640px;background:#eef4fb;border-radius:8px;padding:8px">
+          <svg id="dashFishMapSvg" viewBox="0 0 640 1460" style="width:520px;max-width:100%;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
-        <div class="tank-grid" id="tankGrid"></div>
       </div>
       <div class="card">
         <div class="card-title">直近14日の給餌量推移（全体合計） <span>kg/日</span></div>
@@ -526,7 +518,10 @@ body.ai-mode-on .ai-element-flex{display:flex}
           <span><span style="display:inline-block;width:9px;height:9px;background:#fed7aa;border-radius:2px;margin-right:3px"></span>要確認</span>
           <span><span style="display:inline-block;width:9px;height:9px;background:#fee2e2;border-radius:2px;margin-right:3px"></span>要対応</span>
         </div>
-        <div class="heatmap-grid" id="heatmap"></div>
+        <div style="text-align:center;overflow:auto;max-height:520px;background:#eef4fb;border-radius:8px;padding:8px">
+          <svg id="heatFishMapSvg" viewBox="0 0 640 1460" style="width:100%;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div class="heatmap-grid" id="heatmap" style="display:none"></div>
       </div>
       <div class="card">
         <div class="card-title">要対応・要確認</div>
@@ -1840,10 +1835,14 @@ async function init(){
 function setDate(){
   var d=new Date();
   var days=['日','月','火','水','木','金','土'];
-  document.getElementById('hdate').textContent=d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日（'+days[d.getDay()]+'）';
+  var label=d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日（'+days[d.getDay()]+'）';
+  document.getElementById('hdate').textContent=label;
+  var sub=document.getElementById('dashDateSub');
+  if(sub)sub.textContent=label+' 現在';
   var y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
   var today=y+'-'+m+'-'+day;
-  document.getElementById('shipDate').value=today;
+  var shipDateEl=document.getElementById('shipDate');
+  if(shipDateEl)shipDateEl.value=today;
 }
 
 // ══════════════════════════════════════════
@@ -1920,53 +1919,18 @@ function pondStatusInfo(st){
   return               {cls:'b-pending',lbl:'記録待ち',hm:'hm-pending'};
 }
 
-function renderPending(){
-  var todo=POND_CONFIG.filter(function(p){return p.status==='todo';});
-  var bar=document.getElementById('pendingBar');
-  bar.innerHTML='<div class="plabel">⚠ 本日未記録のいけす — '+todo.length+'基</div><div class="pending-scroll" id="pscroll"></div>';
-  var sc=document.getElementById('pscroll');
-  todo.forEach(function(p){
-    var div=document.createElement('div');
-    div.className='pcard';
-    div.innerHTML='<div class="pid">'+p.id+'</div><div class="psp">'+p.species+'</div><div class="pct">'+(p.stock||0).toLocaleString()+'<small style="font-size:10px;font-weight:400;color:var(--sub)">尾</small></div>';
-    div.onclick=function(){openTankDetail(p);};
-    sc.appendChild(div);
-  });
-}
+function renderPending(){ /* 本日未記録バーは廃止（要望により削除） */ }
 
-function filterArea(area,btn){
-  document.querySelectorAll('#areaTabs .atab').forEach(function(b){b.classList.remove('active');});
-  btn.classList.add('active');
-  renderTankGrid(area);
-}
+function filterArea(area,btn){ /* エリアタブは漁場図化により廃止 */ }
 
+// いけす状況 → 漁場図（魚種ラベル＋クリックで詳細）
 function renderTankGrid(area){
-  var grid=document.getElementById('tankGrid');
-  grid.innerHTML='';
-  var list=POND_CONFIG.filter(function(p){
-    return p.status!=='skip' && (area==='all'||p.area===area);
-  });
-  list.forEach(function(p){
-    var div=document.createElement('div');
-    var si=pondStatusInfo(p.status);
-    div.className='tcard st-'+(p.status==='done'?'ok':p.status==='alert'?'alert':'pending');
-    div.innerHTML='<div class="tid">'+p.id+'</div><div class="tsp">'+p.species+'</div><div class="tcnt">'+(p.stock||0).toLocaleString()+'<small>尾</small></div><div class="tfeed">未記録</div><span class="badge '+si.cls+'">'+si.lbl+'</span>';
-    div.onclick=function(){openTankDetail(p);};
-    grid.appendChild(div);
-  });
+  drawAdminFishMap('dashFishMapSvg', {labels:true, clickable:true});
 }
 
+// ヒートマップ → 漁場図レイアウト（状態色のみ・ラベルなし）
 function renderHeatmap(){
-  var hm=document.getElementById('heatmap');
-  hm.innerHTML='';
-  POND_CONFIG.filter(function(p){return p.status!=='skip';}).forEach(function(p){
-    var div=document.createElement('div');
-    var si=pondStatusInfo(p.status);
-    div.className='hm-cell '+si.hm;
-    div.setAttribute('data-tip',p.id+': '+si.lbl);
-    div.onclick=function(){openTankDetail(p);};
-    hm.appendChild(div);
-  });
+  drawAdminFishMap('heatFishMapSvg', {labels:false, clickable:true});
 }
 
 function renderAlertList(){
@@ -2469,7 +2433,14 @@ function fishInitial(fish){
   var map={'マダイ':'タイ','カンパチ':'カンパチ','シマアジ':'シマアジ'};
   return map[fish]||fish;
 }
-function drawAdminFishMap(svgId){
+function adminTankClick(id){
+  var p=POND_CONFIG.find(function(x){return x.id===id;});
+  if(p)openTankDetail(p);
+}
+function drawAdminFishMap(svgId,opts){
+  opts=opts||{};
+  var showLabels = opts.labels!==false;   // 既定: 魚種ラベルあり
+  var clickable  = opts.clickable!==false; // 既定: クリックで詳細
   var svg=document.getElementById(svgId||'adminFishMapSvg');
   if(!svg)return;
   var SC=2,SZ=22*SC,R=11*SC;
@@ -2487,17 +2458,19 @@ function drawAdminFishMap(svgId){
     var f=st==='done'?'#dcfce7':st==='alert'?'#fff7ed':st==='skip'?'#f8fafc':'#fef2f2';
     var k=st==='done'?'#22c55e':st==='alert'?'#d97706':st==='skip'?'#e2e8f0':'#ef4444';
     var t=st==='done'?'#166534':st==='alert'?'#7c2d12':st==='skip'?'#94a3b8':'#991b1b';
+    var tap=clickable?(' onclick="adminTankClick(\''+p.id+'\')" style="cursor:pointer"'):'';
     if(p.sh==='ci'){
-      parts.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"/>');
+      parts.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"'+tap+'/>');
     }else{
-      parts.push('<rect x="'+(cm.x*SC)+'" y="'+(cm.y*SC)+'" width="'+SZ+'" height="'+SZ+'" rx="3" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"/>');
+      parts.push('<rect x="'+(cm.x*SC)+'" y="'+(cm.y*SC)+'" width="'+SZ+'" height="'+SZ+'" rx="3" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"'+tap+'/>');
     }
-    if(st!=='skip'){
+    if(showLabels && st!=='skip'){
       var lbl=fishInitial(p.species);
-      parts.push('<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" font-size="13" font-weight="700" fill="'+t+'" font-family='+FF+'>'+lbl+'</text>');
+      parts.push('<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" font-size="13" font-weight="700" fill="'+t+'" font-family='+FF+' pointer-events="none">'+lbl+'</text>');
     }
-    if(st==='done'&&p.feedKg){
-      parts.push('<text x="'+cx+'" y="'+(cy+R+14)+'" text-anchor="middle" font-size="10" fill="#166534" font-family='+FF+'>'+p.feedKg+'k</text>');
+    var fk=p.feedKg||p.feed_kg;
+    if(showLabels && st==='done' && fk){
+      parts.push('<text x="'+cx+'" y="'+(cy+R+14)+'" text-anchor="middle" font-size="10" fill="#166534" font-family='+FF+' pointer-events="none">'+fk+'k</text>');
     }
   });
   svg.innerHTML=parts.join('');
