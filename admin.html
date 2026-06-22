@@ -385,6 +385,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
 .hdr-sp-link:hover { color: #fff; border-color: #fff; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/encoding-japanese@2.0.0/encoding.min.js"></script>
 </head>
 <body>
 <!-- 簡易ログインゲート（暫定・UX層。真のアクセス制限はSupabase Auth+RLSで実施） -->
@@ -835,8 +836,18 @@ body.ai-mode-on .ai-element-flex{display:flex}
 
 <!-- ══ SCREEN: PAYMENTS（入金管理） ══ -->
 <div class="screen" id="s-payments">
-  <div class="page-header"><h2>💰 入金管理</h2></div>
-  <div class="ledger-note">📠 銀行FAXを見ながら入金を確認・消込してください。金額は管理者のみ閲覧できます。</div>
+  <div class="page-header">
+    <h2>💰 入金管理</h2>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="acctPeriod" class="fc" style="width:auto">
+        <option value="thismonth">今月</option>
+        <option value="lastmonth">先月</option>
+        <option value="all">全期間</option>
+      </select>
+      <button class="btn btn-secondary btn-sm" onclick="exportAccountingCsv()">📥 会計用CSV出力</button>
+    </div>
+  </div>
+  <div class="ledger-note">📠 銀行FAXを見ながら入金を確認・消込してください。金額は管理者のみ閲覧できます。「会計用CSV出力」で売上・入金を仕訳形式（会計ソフト取込用）で書き出せます。</div>
   <div style="display:flex;gap:16px;margin:12px 0 20px">
     <div class="td-stat" style="flex:1"><div class="tds-label">未入金 合計</div><div class="tds-val" style="color:var(--red)" id="payUnpaidTotal">¥0</div></div>
     <div class="td-stat" style="flex:1"><div class="tds-label">今月の売上（出荷金額）</div><div class="tds-val" style="color:var(--blue)" id="paySalesMonth">¥0</div></div>
@@ -1736,6 +1747,101 @@ async function savePayment(){
   renderPaymentsScreen();
   // 元帳も開いていれば更新
   if(typeof renderLedger==='function' && currentLedger) renderLedger(currentLedger);
+}
+
+// ══════════════════════════════════════════
+// 会計用CSV出力（仕訳取込フォーマット・22列）
+// ══════════════════════════════════════════
+// 固定コード（仮）。会計士が一貫名で変換する前提（ひな形の注記より）。
+var ACCT = {
+  uriage:   {code:'500', name:'売上高'},     // 貸方（軽減8%売上）
+  urikake:  {code:'135', name:'売掛金'},     // 借方/貸方
+  yokin:    {code:'111', name:'普通預金'},   // 借方（振込入金）
+  genkin:   {code:'100', name:'現金'}        // 借方（現金入金）
+};
+var TAX = { sale8:'軽減8%売上', none:'対象外' }; // 消費税情報（会計士が実コードへ変換）
+
+function ymd8(dstr){ return dstr ? String(dstr).replace(/-/g,'').slice(0,8) : ''; }
+function inPeriod(dstr, mode){
+  if(mode==='all' || !dstr) return mode==='all';
+  var ym = String(dstr).slice(0,7);
+  var d = new Date();
+  var cur = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  var pd = new Date(d.getFullYear(), d.getMonth()-1, 1);
+  var last = pd.getFullYear()+'-'+String(pd.getMonth()+1).padStart(2,'0');
+  return mode==='thismonth' ? ym===cur : ym===last;
+}
+function csvCell(v){
+  if(v===null||v===undefined) return '';
+  var s=String(v);
+  return /[",\r\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function downloadCsv(rows, filename){
+  var csv = rows.map(function(r){ return r.map(csvCell).join(','); }).join('\r\n');
+  var blob;
+  try{
+    if(window.Encoding){
+      var arr = Encoding.convert(Encoding.stringToCode(csv), {to:'SJIS', from:'UNICODE'});
+      blob = new Blob([new Uint8Array(arr)], {type:'text/csv'});
+    }else{
+      blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'}); // フォールバック: UTF-8 BOM
+    }
+  }catch(e){ blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'}); }
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+}
+// 仕訳1行を22列配列で組み立て
+function journalRow(no, date, dr, cr, memo){
+  // dr/cr = {bumon,code,name,subcode,subname,taxinfo,amount,tax}
+  return [
+    ymd8(date), no, 1,
+    dr.bumon||0, dr.code||'', dr.name||'', dr.subcode||'', dr.subname||'', dr.taxinfo||'', dr.amount||0, dr.tax||0,
+    cr.bumon||0, cr.code||'', cr.name||'', cr.subcode||'', cr.subname||'', cr.taxinfo||'', cr.amount||0, cr.tax||0,
+    '', '', memo||''
+  ];
+}
+function exportAccountingCsv(){
+  if(typeof requireAdmin==='function' && !requireAdmin()) return;
+  var mode=(document.getElementById('acctPeriod')||{}).value||'thismonth';
+  var rows=[];
+  // ヘッダー行（ひな形の見出し）
+  rows.push(['西暦8桁','伝票番号','消費税計算区分',
+    '借方部門コード','科目コード','科目名','補助科目コード','補助科目名','消費税情報','税込金額','消費税',
+    '貸方部門コード','科目コード','科目名','補助科目コード','補助科目名','消費税情報','税込金額','消費税',
+    '数字１（手形期日等）','数字２（インボイス№等）','摘要']);
+  var no=0;
+  // ① 売上仕訳（出荷）：借方 売掛金 / 貸方 売上高（軽減8%）
+  shipmentsCache.filter(function(s){ return inPeriod(s.ship_date, mode); })
+    .sort(function(a,b){ return (a.ship_date||'').localeCompare(b.ship_date||''); })
+    .forEach(function(s){
+      var amt=Math.round(s.amount||0); if(amt<=0) return;
+      var tax=Math.round(amt*8/108);
+      no++;
+      rows.push(journalRow(no, s.ship_date,
+        {bumon:0, code:ACCT.urikake.code, name:ACCT.urikake.name, subname:s.buyer||'', taxinfo:TAX.none, amount:amt, tax:0},
+        {bumon:0, code:ACCT.uriage.code,  name:ACCT.uriage.name,  taxinfo:TAX.sale8, amount:amt, tax:tax},
+        (s.buyer||'')+' '+(s.species||'')+' '+(s.qty||0)+'尾 売上'));
+    });
+  // ② 入金仕訳：借方 預金/現金 / 貸方 売掛金
+  paymentsCache.filter(function(p){ return inPeriod(p.pay_date, mode); })
+    .sort(function(a,b){ return (a.pay_date||'').localeCompare(b.pay_date||''); })
+    .forEach(function(p){
+      var amt=Math.round(p.amount||0); if(amt<=0) return;
+      var dr = (p.method==='現金') ? ACCT.genkin : ACCT.yokin;
+      no++;
+      rows.push(journalRow(no, p.pay_date,
+        {bumon:0, code:dr.code, name:dr.name, taxinfo:TAX.none, amount:amt, tax:0},
+        {bumon:0, code:ACCT.urikake.code, name:ACCT.urikake.name, subname:p.buyer||'', taxinfo:TAX.none, amount:amt, tax:0},
+        (p.buyer||'')+' 入金'+(p.method?'（'+p.method+'）':'')));
+    });
+  if(no===0){ alert('対象期間に出力できる売上・入金データがありません'); return; }
+  var label = mode==='thismonth'?'今月':mode==='lastmonth'?'先月':'全期間';
+  var d=new Date();
+  var stamp=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  downloadCsv(rows, '尾上水産_会計仕訳_'+label+'_'+stamp+'.csv');
+  showToast(no+'件の仕訳を出力しました（'+label+'）');
 }
 
 function refreshDashboard(){
