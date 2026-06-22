@@ -488,10 +488,15 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div class="dash-grid">
     <div class="dash-left">
       <div class="card" style="padding:14px 16px">
-        <div class="card-title">いけす状況（漁場図） <span>クリックで詳細</span></div>
-        <div style="text-align:center;overflow:auto;max-height:640px;background:#eef4fb;border-radius:8px;padding:8px">
+        <div class="card-title">いけす状況 <span>クリックで詳細</span></div>
+        <div style="display:flex;gap:8px;margin:8px 0">
+          <button class="btn btn-secondary btn-sm" id="dashViewMapBtn" onclick="setDashView('map')">🗺 漁場図</button>
+          <button class="btn btn-secondary btn-sm" id="dashViewListBtn" onclick="setDashView('list')">📋 リスト</button>
+        </div>
+        <div id="dashMapWrap" style="text-align:center;overflow:auto;max-height:640px;background:#eef4fb;border-radius:8px;padding:8px">
           <svg id="dashFishMapSvg" viewBox="0 0 640 1460" style="width:520px;max-width:100%;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
+        <div id="dashTankList" style="display:none;max-height:640px;overflow:auto"></div>
       </div>
       <div class="card">
         <div class="card-title">直近14日の給餌量推移（全体合計） <span>kg/日</span></div>
@@ -2029,9 +2034,52 @@ function renderPending(){ /* 本日未記録バーは廃止（要望により削
 
 function filterArea(area,btn){ /* エリアタブは漁場図化により廃止 */ }
 
-// いけす状況 → 漁場図（魚種ラベル＋クリックで詳細）
+// いけす状況：漁場図 / リスト 切替
+var dashView='map';
+function setDashView(mode){
+  dashView=mode;
+  var mapW=document.getElementById('dashMapWrap');
+  var listW=document.getElementById('dashTankList');
+  var mb=document.getElementById('dashViewMapBtn');
+  var lb=document.getElementById('dashViewListBtn');
+  if(mode==='list'){
+    if(mapW)mapW.style.display='none';
+    if(listW)listW.style.display='block';
+    if(lb)lb.classList.add('btn-primary'); if(mb)mb.classList.remove('btn-primary');
+    renderDashTankList();
+  }else{
+    if(mapW)mapW.style.display='block';
+    if(listW)listW.style.display='none';
+    if(mb)mb.classList.add('btn-primary'); if(lb)lb.classList.remove('btn-primary');
+    drawAdminFishMap('dashFishMapSvg', {labels:true, clickable:true});
+  }
+}
+// リスト：全てDB(POND_CONFIG)の実データ。空き以外を表示。
+function renderDashTankList(){
+  var list=document.getElementById('dashTankList');
+  if(!list)return;
+  var ponds=POND_CONFIG.filter(function(p){return p.status!=='skip';});
+  var html='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--sub);font-size:11px;text-align:left">'
+    +'<th style="padding:6px 8px">いけす</th><th style="padding:6px 8px">魚種</th><th style="padding:6px 8px">年齢</th>'
+    +'<th style="padding:6px 8px;text-align:right">在庫尾数</th><th style="padding:6px 8px">状態</th></tr></thead><tbody>';
+  html+=ponds.map(function(p){
+    var si=pondStatusInfo(p.status);
+    var yr=POND_YR[p.id];
+    var yrLabel=yr?yrToLabel(yr):'―';
+    return '<tr class="clickable" style="border-top:1px solid var(--line);cursor:pointer" onclick="adminTankClick(\''+p.id+'\')">'
+      +'<td style="padding:6px 8px;font-weight:700">'+p.id+'</td>'
+      +'<td style="padding:6px 8px">'+(p.species||'―')+'</td>'
+      +'<td style="padding:6px 8px;color:var(--sub);font-size:12px">'+yrLabel+'</td>'
+      +'<td style="padding:6px 8px;text-align:right;font-weight:700">'+(p.stock||0).toLocaleString()+'尾</td>'
+      +'<td style="padding:6px 8px"><span class="badge '+si.cls+'">'+si.lbl+'</span></td></tr>';
+  }).join('');
+  html+='</tbody></table>';
+  list.innerHTML=html;
+}
+
+// いけす状況の再描画（現在のビューを維持）
 function renderTankGrid(area){
-  drawAdminFishMap('dashFishMapSvg', {labels:true, clickable:true});
+  setDashView(dashView);
 }
 
 // ヒートマップ → 漁場図レイアウト（状態色のみ・ラベルなし）
