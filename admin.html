@@ -1133,25 +1133,13 @@ body.ai-mode-on .ai-element-flex{display:flex}
 
 <div class="overlay" id="mCalCell">
   <div class="modal">
-    <div class="mhd"><h3 id="mCalCellTitle">注文編集</h3><button class="mclose" onclick="closeM('mCalCell')">✕</button></div>
-    <div class="mbody">
-      <div class="fr2">
-        <div class="fg"><label>業者名</label>
-          <select class="fc"><option>ニチモウ</option><option>信源</option><option>オーシャン</option><option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option></select>
-        </div>
-        <div class="fg"><label>数量（尾）</label><input type="number" class="fc"></div>
-      </div>
-      <div class="fr2">
-        <div class="fg"><label>魚種</label><select class="fc"><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select></div>
-        <div class="fg"><label>状態</label><select class="fc"><option>確定</option><option>仮</option><option>キャンセル</option></select></div>
-      </div>
-      <div class="fg"><label>備考</label><input type="text" class="fc" placeholder="例：サイズ指定1.5〜2.0kg"></div>
-    </div>
+    <div class="mhd"><h3 id="mCalCellTitle">受注</h3><button class="mclose" onclick="closeM('mCalCell')">✕</button></div>
+    <div class="mbody" id="mCalCellBody"></div>
     <div class="mfoot">
-      <button class="btn btn-danger btn-sm" onclick="closeM('mCalCell')">削除</button>
+      <button class="btn btn-secondary btn-sm" id="mCalAddBtn">＋ この日に受注を追加</button>
       <span style="flex:1"></span>
-      <button class="btn btn-secondary" onclick="closeM('mCalCell')">キャンセル</button>
-      <button class="btn btn-primary" onclick="closeM('mCalCell');showToast('保存しました')">保存</button>
+      <button class="btn btn-secondary" onclick="closeM('mCalCell')">閉じる</button>
+      <button class="btn btn-primary" id="mCalSaveBtn" onclick="saveDayOrders()">保存</button>
     </div>
   </div>
 </div>
@@ -1634,6 +1622,7 @@ async function loadOrders() {
     orders.length = 0;
     (res.data || []).forEach(function(row) {
       orders.push({
+        id: row.id,                  // 編集/削除のためDBの注文IDを保持
         date: mdShort(row.order_date), buyer: row.buyer, species: row.species,
         size: row.size, qty: row.qty, shipDate: mdShort(row.ship_date),
         route: row.route, status: row.status, lot: row.lot || '', memo: row.memo || '',
@@ -2646,8 +2635,8 @@ function renderOrderList(){
   var spf=document.getElementById('oSpeciesF').value;
   var rows=orders.filter(function(o){return(sf==='all'||o.status===sf)&&(bf==='all'||o.buyer===bf)&&(spf==='all'||o.species===spf);});
   document.getElementById('orderListBody').innerHTML=rows.map(function(o){
-    var idx=orders.indexOf(o);
-    return '<tr class="clickable" onclick="openOrderDetail('+idx+')"><td>'+o.date+'</td><td><strong>'+o.buyer+'</strong></td><td>'+o.species+'</td><td style="text-align:right">'+o.qty+'</td><td>'+o.size+'</td><td>'+o.shipDate+'</td><td><span class="chip chip-gray">'+o.route+'</span></td><td><span class="stag '+(o.status==='pending'?'stag-pending':'stag-done')+'">'+(o.status==='pending'?'未出荷':'出荷済')+'</span></td><td><span class="action-link" onclick="event.stopPropagation();openM(\'mNewOrder\')">編集</span></td></tr>';
+    var stTag=(o.memo==='仮')?'<span class="stag stag-pending">仮</span>':'<span class="stag stag-done">確定</span>';
+    return '<tr class="clickable" onclick="openDayOrders(\''+(o.order_date||'')+'\')"><td>'+o.date+'</td><td><strong>'+o.buyer+'</strong></td><td>'+o.species+'</td><td style="text-align:right">'+o.qty+'</td><td>'+(o.size||'')+'</td><td>'+(o.shipDate||'')+'</td><td><span class="chip chip-gray">'+(o.route||'')+'</span></td><td>'+stTag+'</td><td><span class="action-link" onclick="event.stopPropagation();openDayOrders(\''+(o.order_date||'')+'\')">編集</span></td></tr>';
   }).join('');
 }
 
@@ -2658,10 +2647,11 @@ function mdShort(isoDate){
   if(parts.length<3)return isoDate;
   return parseInt(parts[1],10)+'/'+parseInt(parts[2],10);
 }
-// 受注モーダルを開いてスマホ版と同じ初期状態にリセット
-function openNewOrder(presetSpecies){
+// 受注モーダルを開いてスマホ版と同じ初期状態にリセット（dateStr指定で受注日プリセット）
+function openNewOrder(presetSpecies, dateStr){
   var d=new Date();
-  document.getElementById('noDate').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  var def=dateStr || (d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
+  document.getElementById('noDate').value=def;
   var nb=document.getElementById('noBuyer'); if(nb) nb.value='';
   var nbo=document.getElementById('noBuyerOther'); if(nbo){ nbo.value=''; nbo.style.display='none'; }
   document.getElementById('noSpecies').value=presetSpecies||'マダイ';
@@ -2675,6 +2665,73 @@ function onNoBuyerChange(){
   var v=document.getElementById('noBuyer').value;
   var ob=document.getElementById('noBuyerOther');
   if(ob) ob.style.display=(v==='その他')?'block':'none';
+}
+
+// 受注のサイズ選択肢（スマホ版と統一）
+var ORDER_SIZES=['0.8kg〜','1.0kg〜','1.0〜1.5kg','1.5〜2.0kg','2.0kg〜','2.5kg〜','3.0kg〜','3.5kg〜','4.0kg〜'];
+var ORDER_SPECIES=['マダイ','カンパチ','シマアジ'];
+function _selOpts(arr,sel){ return arr.map(function(x){return '<option'+(x===sel?' selected':'')+'>'+x+'</option>';}).join(''); }
+// カレンダーの日付（または受注一覧の行）をクリック→その日の実受注を編集できるモーダル
+function openDayOrders(dateStr){
+  if(!dateStr) return;
+  var pr=String(dateStr).split('-');
+  var title=parseInt(pr[0],10)+'/'+parseInt(pr[1],10)+'/'+parseInt(pr[2],10);
+  document.getElementById('mCalCellTitle').textContent=title+' の受注';
+  var list=orders.filter(function(o){return o.order_date===dateStr;});
+  var body=document.getElementById('mCalCellBody');
+  var saveBtn=document.getElementById('mCalSaveBtn');
+  if(!list.length){
+    body.innerHTML='<div style="padding:8px 2px;color:var(--sub);font-size:13px">この日の受注はありません。下の「＋ この日に受注を追加」から登録できます。</div>';
+    if(saveBtn) saveBtn.style.display='none';
+  }else{
+    if(saveBtn) saveBtn.style.display='';
+    body.innerHTML=list.map(function(o){
+      var st=(o.memo==='仮')?'tentative':'confirmed';
+      var buyerOpts='<option value="">選択</option>'+BUYERS.map(function(b){return '<option'+(b===o.buyer?' selected':'')+'>'+b+'</option>';}).join('');
+      if(o.buyer && BUYERS.indexOf(o.buyer)<0){ buyerOpts='<option selected>'+o.buyer+'</option>'+buyerOpts; } // その他手入力先も保持
+      return '<div class="cal-ord-row" data-oid="'+(o.id||'')+'" style="border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px">'
+        +'<div class="fr2">'
+          +'<div class="fg"><label>取引先</label><select class="fc co-buyer">'+buyerOpts+'</select></div>'
+          +'<div class="fg"><label>数量（尾）</label><input type="number" class="fc co-qty" value="'+(o.qty||0)+'"></div>'
+        +'</div>'
+        +'<div class="fr2">'
+          +'<div class="fg"><label>魚種</label><select class="fc co-species">'+_selOpts(ORDER_SPECIES,o.species)+'</select></div>'
+          +'<div class="fg"><label>サイズ</label><select class="fc co-size">'+_selOpts(ORDER_SIZES,o.size)+'</select></div>'
+        +'</div>'
+        +'<div class="fr2">'
+          +'<div class="fg"><label>状態</label><select class="fc co-status"><option value="confirmed"'+(st==='confirmed'?' selected':'')+'>確定</option><option value="tentative"'+(st==='tentative'?' selected':'')+'>仮</option></select></div>'
+          +'<div class="fg" style="display:flex;align-items:flex-end"><button class="btn btn-danger btn-sm" onclick="deleteDayOrder(\''+(o.id||'')+'\')">この受注を削除</button></div>'
+        +'</div>'
+      +'</div>';
+    }).join('');
+  }
+  document.getElementById('mCalAddBtn').onclick=function(){ closeM('mCalCell'); openNewOrder(null, dateStr); };
+  openM('mCalCell');
+}
+async function saveDayOrders(){
+  var rows=[].slice.call(document.querySelectorAll('#mCalCellBody .cal-ord-row'));
+  var ok=0, failed=0;
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i]; var id=r.getAttribute('data-oid'); if(!id) continue;
+    var buyer=r.querySelector('.co-buyer').value;
+    var species=r.querySelector('.co-species').value;
+    var size=r.querySelector('.co-size').value;
+    var qty=parseInt(r.querySelector('.co-qty').value)||0;
+    var memoTag=(r.querySelector('.co-status').value==='tentative')?'仮':'確定';
+    var up=await sb.from('orders').update({buyer:buyer,species:species,size:size,qty:qty,memo:memoTag}).eq('id',id).select('id');
+    if(up.error || !up.data || !up.data.length){ failed++; } else { ok++; }
+  }
+  closeM('mCalCell');
+  await loadOrders(); renderCalendar(); renderOrderList();
+  showToast(failed? (ok+'件保存（'+failed+'件失敗）') : (ok+'件の受注を更新しました'));
+}
+async function deleteDayOrder(id){
+  if(!id) return;
+  if(!confirm('この受注を削除しますか？')) return;
+  var del=await sb.from('orders').delete().eq('id',id);
+  closeM('mCalCell');
+  await loadOrders(); renderCalendar(); renderOrderList();
+  showToast(del.error?'削除に失敗しました':'受注を削除しました');
 }
 async function saveOrder(){
   var date=document.getElementById('noDate').value;
@@ -2796,10 +2853,8 @@ function renderCalendar(){
       });
     }
     (function(d){
-      cell.onclick=function(){
-        document.getElementById('mCalCellTitle').textContent=calYear+'/'+calMonth+'/'+d+' 注文';
-        openM('mCalCell');
-      };
+      var dateStr=calYear+'-'+String(calMonth).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      cell.onclick=function(){ openDayOrders(dateStr); };  // その日の実受注を表示・編集
     })(day);
     grid.appendChild(cell);
   }
