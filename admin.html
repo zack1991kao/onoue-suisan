@@ -2054,6 +2054,20 @@ async function init(){
   renderBuyerMaster();
   populateOrderBuyers();   // 受注モーダルの取引先をPCA実マスタ(BUYERS)に統一
   subscribeRealtime();
+  restoreScreen();         // リロード前に開いていた画面を復元
+}
+// リロード後、前回開いていた画面を復元（ダッシュボード固定で戻らないように）
+function restoreScreen(){
+  var s; try{ s=localStorage.getItem('onoue_admin_screen'); }catch(e){}
+  if(!s || s==='dashboard') return;
+  if((s==='payments'||s==='settings') && !isAdmin()) return;  // 権限画面は管理者のみ復元
+  var btn=[].slice.call(document.querySelectorAll('.nav-btn')).find(function(b){
+    var oc=b.getAttribute('onclick')||'';
+    return oc.indexOf("'"+s+"'")>=0
+      || (s==='payments' && /navPayments/.test(oc))
+      || (s==='settings' && /navSettings/.test(oc));
+  });
+  if(btn) btn.click();  // 対応するナビ関数(this付き)で正しく遷移
 }
 // 受注・出荷の取引先ドロップダウンを BUYERS（PCA売掛金マスタ）から生成
 function populateOrderBuyers(){
@@ -2078,11 +2092,13 @@ function setDate(){
 // ══════════════════════════════════════════
 // NAV
 // ══════════════════════════════════════════
+function rememberScreen(name){ try{ localStorage.setItem('onoue_admin_screen', name); }catch(e){} }
 function nav(name,btn){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
   document.getElementById('s-'+name).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
+  rememberScreen(name);
 }
 
 function navDiary(name,btn){
@@ -2090,6 +2106,7 @@ function navDiary(name,btn){
   document.getElementById('s-'+name).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
+  rememberScreen(name);
   renderDailyMatrix();
   renderDiaryCards('all');
 }
@@ -2099,6 +2116,7 @@ function navAi(name,btn){
   document.getElementById('s-'+name).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
+  rememberScreen(name);
   setTimeout(function(){
     var bar=document.getElementById('aiProgBar');
     if(bar) bar.style.width='45%';

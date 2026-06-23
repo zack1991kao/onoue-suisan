@@ -1787,15 +1787,10 @@ async function loadAppOrders() {
     console.warn('[Supabase] loadAppOrders failed, using local only:', e.message);
   }
 }
-// サンプル + DB + ローカル（オフライン分）をキーで重複排除して統合
+// 受注は Supabase の orders を唯一の正データとする → PC版と端末間で完全一致
 function getAllOrders() {
-  var seen = {};
-  var out = [];
-  dbOrders.concat(loadUserOrders()).concat(ORDERS).forEach(function(o){
-    var k = orderKey(o);
-    if (seen[k]) return;
-    seen[k] = 1; out.push(o);
-  });
+  var seen = {}, out = [];
+  dbOrders.forEach(function(o){ var k=orderKey(o); if(seen[k])return; seen[k]=1; out.push(o); });
   return out;
 }
 
@@ -1903,6 +1898,7 @@ function updateHeader(title, step, showBack) {
 // ===== TAB SWITCH =====
 function switchTab(tab) {
   state.tab = tab;
+  try{ localStorage.setItem('onoue_app_tab', tab); }catch(e){}  // リロード後に同じタブを復元するため記憶
   // feedタブ以外ではテンキーを隠す
   var numpad = document.getElementById('numpad');
   if (numpad) { numpad.classList.remove('active'); }
@@ -3073,6 +3069,9 @@ async function initApp() {
   subscribeRealtime();
   subscribeNotifications();
   requestNotifyPermission();
+  // リロード前に開いていたタブを復元（毎回ホームに戻らないように）
+  var savedTab; try{ savedTab=localStorage.getItem('onoue_app_tab'); }catch(e){}
+  if(savedTab && ['home','feed','calendar','move'].indexOf(savedTab)>=0 && savedTab!=='home'){ switchTab(savedTab); }
 }
 initApp();
 

@@ -2,7 +2,7 @@
 // 方針: 静的UIファイルはキャッシュ優先（オフラインでもシェル表示）
 //       Supabase / CDN などの通信はネットワーク優先（常に最新データ）
 
-var CACHE_NAME = 'onoue-shell-v18';
+var CACHE_NAME = 'onoue-shell-v19';
 var SHELL_FILES = [
   './',
   './index.html',
@@ -41,29 +41,38 @@ self.addEventListener('fetch', function(e) {
 
   var url = new URL(req.url);
 
-  // 同一オリジンのHTML/アイコン/manifest → キャッシュ優先（オフライン対応）
   var isShell = url.origin === self.location.origin;
   if (isShell) {
-    e.respondWith(
-      caches.match(req).then(function(cached) {
-        if (cached) {
-          // バックグラウンドで更新（stale-while-revalidate）
-          fetch(req).then(function(res) {
-            if (res && res.status === 200) {
-              caches.open(CACHE_NAME).then(function(c) { c.put(req, res.clone()); });
-            }
-          }).catch(function() {});
-          return cached;
-        }
-        return fetch(req).then(function(res) {
+    // HTML/ナビゲーションは「ネットワーク優先」＝最新コードを常に取得（オフライン時のみキャッシュ）。
+    // これによりリロードで毎回最新版が読まれ、端末間のコード差（カレンダー不一致等）が起きない。
+    var isHtml = req.mode === 'navigate'
+      || url.pathname === '/' || url.pathname.endsWith('/')
+      || url.pathname.endsWith('.html');
+    if (isHtml) {
+      e.respondWith(
+        fetch(req).then(function(res) {
           if (res && res.status === 200) {
             var clone = res.clone();
             caches.open(CACHE_NAME).then(function(c) { c.put(req, clone); });
           }
           return res;
         }).catch(function() {
-          // HTMLナビゲーション失敗時は index にフォールバック
-          if (req.mode === 'navigate') return caches.match('./index.html');
+          return caches.match(req).then(function(cached) {
+            return cached || caches.match('./index.html');
+          });
+        })
+      );
+      return;
+    }
+    // アイコン/manifest等の静的資産はキャッシュ優先（高速・オフライン対応）
+    e.respondWith(
+      caches.match(req).then(function(cached) {
+        return cached || fetch(req).then(function(res) {
+          if (res && res.status === 200) {
+            var clone = res.clone();
+            caches.open(CACHE_NAME).then(function(c) { c.put(req, clone); });
+          }
+          return res;
         });
       })
     );
