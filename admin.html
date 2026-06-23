@@ -757,8 +757,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div class="page-header">
     <div><h2>📒 養殖日誌</h2></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-secondary" onclick="alert('Excelエクスポート')">📥 Excel出力</button>
-      <button class="btn btn-primary" onclick="showToast('保存しました ✓')">💾 保存</button>
+      <button class="btn btn-secondary" onclick="exportDailyMatrixCsv()">📥 Excel出力</button>
+      <button class="btn btn-primary" onclick="saveDailyMatrix()">💾 保存</button>
     </div>
   </div>
 
@@ -773,7 +773,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div class="tab-pane active" id="diary-tp-daily" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
     <div class="filter-row" style="margin-bottom:8px">
       <span class="filter-label">記録日：</span>
-      <input type="date" id="diaryDate" value="2026-05-20">
+      <input type="date" id="diaryDate">
       <span style="font-size:11px;color:var(--sub);margin-left:8px">
         <span style="display:inline-block;width:12px;height:12px;background:#fde68a;border-radius:2px;vertical-align:middle;margin-right:3px"></span>未入力
         <span style="display:inline-block;width:12px;height:12px;background:#fff;border:1px solid var(--border);border-radius:2px;vertical-align:middle;margin-left:8px;margin-right:3px"></span>入力済
@@ -787,7 +787,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
   </div>
 
   <!-- 月別マトリクス -->
-  <div class="tab-pane" id="diary-tp-monthly" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+  <div class="tab-pane" id="diary-tp-monthly" style="flex:1;overflow:hidden;flex-direction:column">
     <div class="filter-row">
       <span class="filter-label">月：</span>
       <select id="monthlyMonthSel" onchange="renderMonthlyMatrix()">
@@ -2064,11 +2064,13 @@ function swTab(screen,tab,btn){
 
 function swTabDiary(screen,tab,btn){
   var pfx=screen+'-tp-';
-  document.querySelectorAll('[id^="'+pfx+'"]').forEach(function(p){p.classList.remove('active');});
+  // 日別/月別ペインはインラインstyleでdisplayを持つためclass切替だけでは隠れない。
+  // 表示/非表示を明示制御する（非アクティブは確実にdisplay:none）。
+  document.querySelectorAll('[id^="'+pfx+'"]').forEach(function(p){p.classList.remove('active'); p.style.display='none';});
   var tabsEl=document.querySelector('#s-'+screen+' .tabs');
   if(tabsEl) tabsEl.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
   var pane=document.getElementById(pfx+tab);
-  if(pane) pane.classList.add('active');
+  if(pane){ pane.classList.add('active'); pane.style.display=(tab==='daily'||tab==='monthly')?'flex':'block'; }
   btn.classList.add('active');
   if(tab==='daily')  renderDailyMatrix();
   if(tab==='monthly') renderMonthlyMatrix();
@@ -3145,39 +3147,62 @@ function cellFilled(inp){
   td.classList.add('filled');
 }
 
+// 養殖日誌 日別マトリクスの入力項目（スマホ版 feed_logs と一致）
+var BAITS=['p7','p8','p9','チェリー8','チェリー9','紅 6mm','紅 8mm','PBP 6mm','Nまだいさくら 8mm','Nまだいさくら 10mm','Nシマアジ 6mm','NKMS','ノーサン','ヒガシマル','ひめ桜 s6','ひめ桜 s7','ひめ桜 3mm','ひめ桜 4mm','その他'];
+var DRUGS=['オキシテトラサイクリン','フロルフェニコール','スルファモノメトキシン','エンロフロキサシン','プラジクアンテル','トリクロルホン','マラカイトグリーン','ホルマリン','その他'];
+function _attr(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
+function _optList(arr,sel,blankLabel){
+  var o = (blankLabel!=null) ? '<option value="">'+blankLabel+'</option>' : '';
+  arr.forEach(function(x){ o+='<option'+(x===sel?' selected':'')+'>'+x+'</option>'; });
+  return o;
+}
 function renderDailyMatrix(){
   var tbl=document.getElementById('dailyMatrix');
   if(!tbl)return;
+  // 記録日を当日既定に（旧固定値 2026-05-20 を置換）
+  var dd=document.getElementById('diaryDate');
+  if(dd && (!dd.value || dd.value==='2026-05-20')) dd.value=new Date().toISOString().slice(0,10);
+  var selStyle='width:100%;height:26px;font-size:11px;border:1px solid var(--border);border-radius:3px;padding:0 4px;font-family:inherit';
+  var txtStyle='width:100%;height:26px;border:1px solid var(--border);border-radius:3px;font-size:11px;padding:0 6px;font-family:inherit';
   var head='<thead><tr>';
   head+='<th class="row-head">いけす名</th>';
   head+='<th style="min-width:72px">給餌量(kg)</th>';
+  head+='<th style="min-width:108px">餌の種類</th>';
+  head+='<th style="min-width:108px">餌②</th>';
   head+='<th style="min-width:62px">斃死数(尾)</th>';
   head+='<th style="min-width:62px">B品数(尾)</th>';
+  head+='<th style="min-width:108px">薬剤</th>';
+  head+='<th style="min-width:60px">薬量</th>';
   head+='<th style="min-width:82px">状態</th>';
   head+='<th style="min-width:140px">メモ</th>';
   head+='</tr></thead>';
+  var COLS=10;
   var body='<tbody>';
   ['団地','太喜','瀬後の浦','横島','楠森','葛崎'].forEach(function(area){
     var ponds=POND_CONFIG.filter(function(p){return p.area===area && p.status!=='skip';});
     if(!ponds.length)return;
-    body+='<tr class="m-area-sep"><td colspan="6">▌ '+area+'エリア（'+ponds.length+'基）</td></tr>';
+    body+='<tr class="m-area-sep"><td colspan="'+COLS+'">▌ '+area+'エリア（'+ponds.length+'基）</td></tr>';
     ponds.forEach(function(p){
       var uc=p.status==='todo'?'unfilled':'filled';
       var feedVal=p.status==='todo'?'':(p.feedKg||p.feed||'');
       var yr=POND_YR[p.id];
       var yrLabel=yr?'<span style="font-size:10px;color:#94a3b8;margin-left:4px;">'+yr+'年魚</span>':'';
-      body+='<tr>';
-      body+='<td class="row-label">'+p.id+yrLabel+'</td>';
-      body+='<td class="'+uc+'"><input type="number" value="'+feedVal+'" placeholder="—" onchange="cellFilled(this)"></td>';
-      body+='<td class="'+(p.mort>0?'filled':uc)+'"><input type="number" value="'+(p.mort||'')+'" placeholder="0" onchange="cellFilled(this)"></td>';
-      body+='<td class="'+(p.bgrade>0?'filled':uc)+'"><input type="number" value="'+(p.bgrade||'')+'" placeholder="0" onchange="cellFilled(this)"></td>';
-      var sel='<select style="width:76px;height:26px;font-size:11px;border:1px solid var(--border);border-radius:3px;padding:0 4px">';
       var opts=['正常','給餌済','異常あり','絶食'];
       var selIdx=p.status==='done'?1:p.status==='alert'?2:0;
-      opts.forEach(function(o,i){sel+='<option'+(i===selIdx?' selected':'')+'>'+o+'</option>';});
-      sel+='</select>';
-      body+='<td style="padding:2px 4px">'+sel+'</td>';
-      body+='<td><input type="text" value="'+(p.memo||'')+'" placeholder="メモ..." style="width:100%;height:26px;border:1px solid var(--border);border-radius:3px;font-size:11px;padding:0 6px;font-family:inherit"></td>';
+      var statusSel='<select data-field="status" style="'+selStyle+'">';
+      opts.forEach(function(o,i){statusSel+='<option'+(i===selIdx?' selected':'')+'>'+o+'</option>';});
+      statusSel+='</select>';
+      body+='<tr data-pid="'+p.id+'">';
+      body+='<td class="row-label">'+p.id+yrLabel+'</td>';
+      body+='<td class="'+uc+'"><input type="number" step="0.1" data-field="feed_kg" value="'+feedVal+'" placeholder="—" onchange="cellFilled(this)"></td>';
+      body+='<td style="padding:2px 4px"><select data-field="bait" style="'+selStyle+'">'+_optList(BAITS,p.bait,'—')+'</select></td>';
+      body+='<td style="padding:2px 4px"><select data-field="bait2" style="'+selStyle+'">'+_optList(BAITS,p.bait2,'なし')+'</select></td>';
+      body+='<td class="'+(p.mort>0?'filled':uc)+'"><input type="number" data-field="mort" value="'+(p.mort||'')+'" placeholder="0" onchange="cellFilled(this)"></td>';
+      body+='<td class="'+(p.bgrade>0?'filled':uc)+'"><input type="number" data-field="bgrade" value="'+(p.bgrade||'')+'" placeholder="0" onchange="cellFilled(this)"></td>';
+      body+='<td style="padding:2px 4px"><select data-field="drug" style="'+selStyle+'">'+_optList(DRUGS,p.drug,'なし')+'</select></td>';
+      body+='<td style="padding:2px 4px"><input type="text" data-field="drug_amt" value="'+_attr(p.drug_amt)+'" placeholder="—" style="'+txtStyle+'"></td>';
+      body+='<td style="padding:2px 4px">'+statusSel+'</td>';
+      body+='<td><input type="text" data-field="memo" value="'+_attr(p.memo)+'" placeholder="メモ..." style="'+txtStyle+'"></td>';
       body+='</tr>';
     });
   });
@@ -3191,6 +3216,74 @@ function markAllFilled(){
     var inp=td.querySelector('input');if(inp&&!inp.value)inp.value='0';
   });
   showToast('すべて入力済みにしました');
+}
+
+// 日別マトリクスをDB保存（スマホ版 saveFeedList と同じ書込：ponds update + feed_logs insert）
+async function saveDailyMatrix(){
+  var date=(document.getElementById('diaryDate')||{}).value;
+  if(!date){ alert('記録日を指定してください'); return; }
+  var trs=[].slice.call(document.querySelectorAll('#dailyMatrix tr[data-pid]'));
+  var collected=[];
+  trs.forEach(function(tr){
+    var pid=tr.getAttribute('data-pid');
+    function v(f){ var el=tr.querySelector('[data-field="'+f+'"]'); return el?el.value:''; }
+    var feed=parseFloat(v('feed_kg'))||0, mort=parseInt(v('mort'))||0, bgrade=parseInt(v('bgrade'))||0;
+    var bait=v('bait'), bait2=v('bait2'), drug=v('drug'), drugAmt=v('drug_amt'), status=v('status'), memo=(v('memo')||'').trim();
+    // 入力が一切ない行はスキップ（給餌0/斃死0/B品0/餌なし/薬なし/メモなし）
+    var hasInput = feed>0||mort>0||bgrade>0||(bait&&bait!=='')||(drug&&drug!=='')||memo!=='';
+    if(!hasInput) return;
+    collected.push({pid:pid,feed:feed,mort:mort,bgrade:bgrade,bait:bait,bait2:bait2,drug:drug,drugAmt:drugAmt,memo:memo,
+      pondStatus:(status==='異常あり')?'alert':'done', flag:(status==='異常あり')});
+  });
+  if(!collected.length){ alert('入力された行がありません'); return; }
+  // ① ponds を並列update（.select('id')で0件＝RLS/権限の静かな失敗を検知）
+  var results=await Promise.all(collected.map(function(c){
+    return sb.from('ponds').update({
+        status:c.pondStatus, feed_kg:c.feed, mort:c.mort, bgrade:c.bgrade,
+        bait:c.bait||'', bait2:c.bait2||'', updated_at:new Date().toISOString()
+      }).eq('id',c.pid).select('id')
+      .then(function(r){ return {c:c, ok:!r.error && r.data && r.data.length>0}; })
+      .catch(function(){ return {c:c, ok:false}; });
+  }));
+  var okOnes=results.filter(function(x){return x.ok;});
+  var fail=results.length-okOnes.length;
+  if(!okOnes.length){ alert('⚠ 保存できませんでした（書き込み権限をご確認ください）'); return; }
+  // ② feed_logs バルクinsert（成功した行のみ・best-effort）
+  try{
+    await sb.from('feed_logs').insert(okOnes.map(function(x){ var c=x.c; return {
+      pond_id:c.pid, log_date:date, feed_kg:c.feed, bait:c.bait||'', bait2:c.bait2||'',
+      mort:c.mort, bgrade:c.bgrade,
+      drug:(c.drug&&c.drug!=='')?c.drug:null,
+      drug_amt:(c.drugAmt!==''&&c.drugAmt!=null)?(parseFloat(c.drugAmt)||null):null,
+      flag:c.flag, memo:c.memo||''
+    };}));
+  }catch(e){ console.warn('[Supabase] feed_logs bulk insert skipped:', e.message); }
+  // ③ メモリ反映＋再描画
+  okOnes.forEach(function(x){ var c=x.c; var p=POND_CONFIG.find(function(y){return y.id===c.pid;});
+    if(p){ p.status=c.pondStatus; p.feedKg=c.feed; p.feed_kg=c.feed; p.mort=c.mort; p.bgrade=c.bgrade; p.bait=c.bait; p.bait2=c.bait2; p.drug=c.drug; p.drug_amt=c.drugAmt; p.memo=c.memo; }
+  });
+  renderDailyMatrix();
+  if(typeof refreshDashboard==='function') refreshDashboard();
+  if(typeof renderInv==='function'){ renderInv(); if(typeof renderInvSummary==='function') renderInvSummary(); }
+  showToast(okOnes.length+'件の記録を保存しました'+(fail>0?('（'+fail+'件は権限/通信で失敗）'):' ✓'));
+}
+
+// 日別マトリクスの内容をCSV（Shift-JIS）で出力＝Excelで開ける
+function exportDailyMatrixCsv(){
+  if(typeof downloadCsv!=='function'){ alert('CSV出力を利用できません'); return; }
+  var date=(document.getElementById('diaryDate')||{}).value||'';
+  var rows=[['記録日','エリア','いけす名','魚種','年齢','給餌量(kg)','餌の種類','餌②','斃死数(尾)','B品数(尾)','薬剤','薬量','状態','メモ']];
+  var trs=[].slice.call(document.querySelectorAll('#dailyMatrix tr[data-pid]'));
+  trs.forEach(function(tr){
+    var pid=tr.getAttribute('data-pid');
+    var p=POND_CONFIG.find(function(x){return x.id===pid;})||{};
+    function v(f){ var el=tr.querySelector('[data-field="'+f+'"]'); return el?el.value:''; }
+    var yr=POND_YR[pid];
+    rows.push([date, p.area||'', pid, p.species||'', (yr?yr+'年魚':''),
+      v('feed_kg'), v('bait'), v('bait2'), v('mort'), v('bgrade'), v('drug'), v('drug_amt'), v('status'), v('memo')]);
+  });
+  downloadCsv(rows, '尾上水産_養殖日誌_'+(date||'')+'.csv');
+  showToast('養殖日誌を出力しました（'+(rows.length-1)+'基）');
 }
 
 // ══════════════════════════════════════════
