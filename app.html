@@ -2654,17 +2654,23 @@ function renderCalendar() {
       : '<span class="cal-num' + numCls + '">' + d + '</span>';
     var chips = '';
     if (orderMap[dateStr]) {
-      orderMap[dateStr].slice(0, 2).forEach(function(o) {
+      var dayOrders = orderMap[dateStr];
+      dayOrders.slice(0, 2).forEach(function(o) {
         chips += '<span class="cal-order-chip ' + (o.status==='confirmed'?'chip-confirmed':'chip-tentative') + '">' + o.buyer + '</span>';
       });
+      if (dayOrders.length > 2) {
+        chips += '<span class="cal-order-chip" style="background:#e2e8f0;color:#64748b">+' + (dayOrders.length - 2) + '</span>';
+      }
     }
     cells += '<div class="cal-cell' + cellCls + '" onclick="openOrderPanel(\'' + dateStr + '\')">' + numContent + chips + '</div>';
   }
   document.getElementById('calGrid').innerHTML = cells;
   var moStr = String(mo).padStart(2,'0');
-  var monthOrders = allOrd.filter(function(o){ return o.date.startsWith(yr+'-'+moStr) || o.date.startsWith(yr+'-0'+mo+'-') || o.date.startsWith(yr+'-'+moStr+'-'); });
-  var allOrders = allOrd.filter(function(o){ return o.date >= yr+'-'+moStr; }).sort(function(a,b){ return a.date > b.date ? 1 : -1; });
-  var listHtml = allOrders.slice(0, 12).map(function(o) {
+  // 受注一覧はカレンダーと同じ「表示中の月」だけを表示（打ち切りなし）→ 両者が必ず一致する
+  var monthPrefix = yr + '-' + moStr;
+  var allOrders = allOrd.filter(function(o){ return (o.date||'').slice(0,7) === monthPrefix; })
+                        .sort(function(a,b){ return a.date > b.date ? 1 : -1; });
+  var listHtml = allOrders.map(function(o) {
     var d2 = new Date(o.date);
     var mm = d2.getMonth()+1;
     var dd = d2.getDate();
