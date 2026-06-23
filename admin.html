@@ -838,8 +838,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
 <!-- ══ SCREEN 5: LOTS ══ -->
 <div class="screen" id="s-lots">
   <div class="page-header">
-    <div><h2>ロット管理</h2></div>
-    <button class="btn btn-primary" onclick="openNewLot()">＋ 新規ロット登録</button>
+    <div><h2>ロット管理</h2><div class="phsub">いけすへの池入れ（仕入れ・地魚）と、魚種×年齢ごとの「ロット」を管理します</div></div>
+    <button class="btn btn-primary" onclick="openNewLot()">＋ 池入れを登録</button>
   </div>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px" id="lotSummary"></div>
   <div class="tbl-wrap">
@@ -1224,7 +1224,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
 
 <div class="overlay" id="mNewLot">
   <div class="modal">
-    <div class="mhd"><h3>新規ロット登録（入荷）</h3><button class="mclose" onclick="closeM('mNewLot')">✕</button></div>
+    <div class="mhd"><h3>🐟 池入れの登録</h3><button class="mclose" onclick="closeM('mNewLot')">✕</button></div>
     <div class="mbody">
       <div class="fr2">
         <div class="fg"><label>入荷区分</label>
@@ -1249,7 +1249,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
       <div style="text-align:right;font-weight:700;margin-top:8px">合計：<span id="lotTotal">0</span> 尾<span id="lotAmountWrap">　／　仕入金額：<span id="lotAmount">0</span> 円</span></div>
       <div class="fg" style="margin-top:8px"><label>備考</label><textarea class="fc" id="lotMemo" rows="2"></textarea></div>
       <div style="background:var(--blue-bg);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--blue)">
-        保存すると各いけすの在庫・魚種・年魚が更新され、入荷記録（外部受入）として履歴に残ります。地魚（自社漁獲）は仕入金額なしで登録できます。
+        保存すると各いけすの在庫・魚種・年魚が更新され、池入れの記録として履歴に残ります。地魚（自社漁獲）は仕入金額なしで登録できます。
       </div>
     </div>
     <div class="mfoot">
@@ -3268,7 +3268,7 @@ async function saveLot(){
   closeM('mNewLot');
   var totQty=rows.reduce(function(s,r){return s+r.qty;},0);
   var totAmt=(kind!=='local' && unitPrice>0)?unitPrice*totQty:0;
-  showToast(rows.length+'件のいけすに'+kindLabel+'を登録しました（'+totQty.toLocaleString()+'尾'+(totAmt>0?('／'+totAmt.toLocaleString()+'円'):'')+'）');
+  showToast(rows.length+'件のいけすへ池入れしました（'+kindLabel+'・'+totQty.toLocaleString()+'尾'+(totAmt>0?('／'+totAmt.toLocaleString()+'円'):'')+'）');
   refreshDashboard();
   renderInv();
   renderInvSummary();
@@ -3320,7 +3320,7 @@ function openLotDetail(i){
     +'<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">死亡記録・ロス率（feed_logs蓄積後に有効化）</div>'
     +'<div style="padding:16px;text-align:center;color:var(--sub);font-size:13px;background:var(--bg);border-radius:6px">給餌・死亡記録がDBに蓄積されると、ロス率と推移グラフが表示されます。</div></div>';
   openDetail(l.species+' '+l.label+' 詳細',html,
-    '<button class="btn btn-primary btn-sm" onclick="openM(\'mNewLot\')">新規ロット登録</button>');
+    '<button class="btn btn-primary btn-sm" onclick="openM(\'mNewLot\')">池入れを登録</button>');
 }
 
 // ══════════════════════════════════════════
