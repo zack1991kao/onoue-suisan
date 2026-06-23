@@ -1203,6 +1203,16 @@ body.ai-mode-on .ai-element-flex{display:flex}
           <select class="fc" id="payMethod"><option>振込</option><option>現金</option><option>手形</option><option>その他</option></select>
         </div>
       </div>
+      <div class="fg"><label>入金先口座（会計の借方）</label>
+        <select class="fc" id="payBank">
+          <option value="134">肥後銀行 普通（134）</option>
+          <option value="135">熊本銀行 普通（135）</option>
+          <option value="131">天信 普通（131）</option>
+          <option value="132">農協 普通（132）</option>
+          <option value="133">天信漁協 普通（133）</option>
+          <option value="111">現金（111）</option>
+        </select>
+      </div>
       <div class="fg"><label>摘要・メモ</label><input type="text" class="fc" id="payMemo" placeholder="例：5月分まとめ入金"></div>
     </div>
     <div class="mfoot">
@@ -1663,9 +1673,15 @@ async function loadShipments(){
 }
 async function loadPayments(){
   try{
+    // bank列を含めて取得。未追加(04 SQL前)ならエラーになるので列なしで再取得
     var res = await sb.from('payments')
-      .select('id,shipment_id,pay_date,buyer,amount,method,memo')
+      .select('id,shipment_id,pay_date,buyer,amount,method,memo,bank')
       .order('pay_date',{ascending:false}).limit(500);
+    if(res.error){
+      res = await sb.from('payments')
+        .select('id,shipment_id,pay_date,buyer,amount,method,memo')
+        .order('pay_date',{ascending:false}).limit(500);
+    }
     if(res.error) throw res.error;
     paymentsCache = res.data || [];
   }catch(e){
@@ -1752,6 +1768,7 @@ function openPaymentForm(shipmentId){
   document.getElementById('payAmount').value = Math.round(rest);
   document.getElementById('payBuyer').value = s.buyer||'';
   document.getElementById('payMemo').value = '';
+  var pb=document.getElementById('payBank'); if(pb) pb.value='134';  // 既定：肥後銀行
   openM('mAddPayment');
 }
 
@@ -1763,6 +1780,7 @@ async function savePayment(){
   var payDate = document.getElementById('payDate').value;
   var amount  = parseFloat(document.getElementById('payAmount').value)||0;
   var method  = document.getElementById('payMethod').value;
+  var bank    = (document.getElementById('payBank')||{}).value||'134';  // 借方口座コード
   var memo    = document.getElementById('payMemo').value;
   if(amount<=0){ alert('入金額を正しく入力してください'); return; }
 
@@ -1788,15 +1806,20 @@ async function savePayment(){
     var ins = await sb.from('payments').insert({
       shipment_id: sid, pay_date: payDate||null, buyer: s.buyer,
       amount: amount, method: method, memo: memo
-    });
+    }).select('id');
     if(ins.error) throw ins.error;
+    // 入金先口座を記録（bank列が未追加(04 SQL前)でも本体は保存済みなので best-effort）
+    if(ins.data && ins.data[0] && ins.data[0].id){
+      try{ await sb.from('payments').update({bank:bank}).eq('id', ins.data[0].id); }
+      catch(e2){ console.warn('[Supabase] payments.bank 未対応（04 SQL未適用？）:', e2.message); }
+    }
   }catch(e){
     console.warn('[Supabase] payments insert failed (消込は保存済み):', e);
   }
 
   // メモリ更新＋再描画
   s.paid = fullyPaid; s.paid_amount = newPaid;
-  paymentsCache.unshift({ shipment_id:sid, pay_date:payDate, buyer:s.buyer, amount:amount, method:method, memo:memo });
+  paymentsCache.unshift({ shipment_id:sid, pay_date:payDate, buyer:s.buyer, amount:amount, method:method, memo:memo, bank:bank });
   closeM('mAddPayment');
   showToast(fullyPaid ? '入金を記録し消込しました' : '一部入金を記録しました');
   renderPaymentsScreen();
@@ -1815,9 +1838,9 @@ var ACCT = {
   urikake:  {code:'152', name:'売掛金'},      // 借方/貸方（補助＝取引先コード）
   genkin:   {code:'111', name:'現金'}         // 借方（現金入金）
 };
-// 入金先の普通預金口座（PCA: 131天信/132農協/133天信漁協/134肥後銀行/135熊本銀行）
-// ※当面は肥後銀行を既定。口座を分けて記帳する場合は入金画面にDB列(bank等)を追加して切替。
-var BANK_DEPOSIT = {code:'134', name:'肥後銀行 普通'};
+// 入金先の普通預金口座（PCA: 131天信/132農協/133天信漁協/134肥後銀行/135熊本銀行/111現金）
+var BANK_DEPOSIT = {code:'134', name:'肥後銀行 普通'};  // 口座未指定時の既定
+var BANK_ACCT = {'111':'現金','131':'天信 普通','132':'農協 普通','133':'天信漁協 普通','134':'肥後銀行 普通','135':'熊本銀行 普通'};
 // 消費税情報＝PCA消費税区分コード（テキスト不可）。B6:売上8%軽 / 00:対象外
 var TAX = { sale8:'B6', none:'00' };
 
@@ -1907,7 +1930,9 @@ function exportAccountingCsv(){
     .sort(function(a,b){ return (a.pay_date||'').localeCompare(b.pay_date||''); })
     .forEach(function(p){
       var amt=Math.round(p.amount||0); if(amt<=0) return;
-      var dr = (p.method==='現金') ? ACCT.genkin : BANK_DEPOSIT;  // 現金→111 / 振込等→既定銀行
+      // 借方＝入金先口座（payBankで選択）。未指定時は現金→111／それ以外→既定銀行
+      var bankCode = p.bank || ((p.method==='現金') ? '111' : BANK_DEPOSIT.code);
+      var dr = { code:bankCode, name:(BANK_ACCT[bankCode]||BANK_DEPOSIT.name) };
       no++;
       rows.push(journalRow(no, p.pay_date,
         {bumon:0, code:dr.code, name:dr.name, taxinfo:TAX.none, amount:amt, tax:0},
