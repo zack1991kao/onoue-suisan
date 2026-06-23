@@ -2019,6 +2019,7 @@ function subscribeRealtime(){
 }
 
 async function init(){
+  var _restoredScreen = applySavedScreen();  // 最初に画面を復元＝ダッシュボードのちらつきを防ぐ
   try { await sb.auth.getSession(); } catch(e){}  // セッション復元（RLS有効化後の認証付きクエリ用）
   await loadPonds();
   await loadOrders();
@@ -2054,20 +2055,27 @@ async function init(){
   renderBuyerMaster();
   populateOrderBuyers();   // 受注モーダルの取引先をPCA実マスタ(BUYERS)に統一
   subscribeRealtime();
-  restoreScreen();         // リロード前に開いていた画面を復元
+  // 復元画面に固有の描画が必要なもの（initで描画されない画面）を仕上げ
+  if(_restoredScreen==='diary'){ renderDailyMatrix(); renderDiaryCards('all'); }
 }
-// リロード後、前回開いていた画面を復元（ダッシュボード固定で戻らないように）
-function restoreScreen(){
+// リロード直後に同期で画面クラスだけ復元（ちらつき防止）。データ描画はinitが担当。
+function applySavedScreen(){
   var s; try{ s=localStorage.getItem('onoue_admin_screen'); }catch(e){}
-  if(!s || s==='dashboard') return;
-  if((s==='payments'||s==='settings') && !isAdmin()) return;  // 権限画面は管理者のみ復元
+  if(!s || s==='dashboard') return null;
+  if((s==='payments'||s==='settings') && !isAdmin()) return null;  // 権限画面は管理者のみ
+  var el=document.getElementById('s-'+s);
+  if(!el) return null;
+  document.querySelectorAll('.screen').forEach(function(x){x.classList.remove('active');});
+  el.classList.add('active');
   var btn=[].slice.call(document.querySelectorAll('.nav-btn')).find(function(b){
     var oc=b.getAttribute('onclick')||'';
     return oc.indexOf("'"+s+"'")>=0
       || (s==='payments' && /navPayments/.test(oc))
       || (s==='settings' && /navSettings/.test(oc));
   });
-  if(btn) btn.click();  // 対応するナビ関数(this付き)で正しく遷移
+  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  return s;
 }
 // 受注・出荷の取引先ドロップダウンを BUYERS（PCA売掛金マスタ）から生成
 function populateOrderBuyers(){

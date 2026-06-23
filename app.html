@@ -3054,7 +3054,17 @@ function requestNotifyPermission() {
 }
 
 // ===== INIT =====
+function applySavedTabClass(){
+  var t; try{ t=localStorage.getItem('onoue_app_tab'); }catch(e){}
+  if(!t || t==='home' || ['home','feed','calendar','move'].indexOf(t)<0) return;
+  document.querySelectorAll('.tab-content').forEach(function(s){s.classList.remove('active');});
+  var el=document.getElementById('tab-'+t); if(el) el.classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  var ids={home:'tabHome',feed:'tabFeed',calendar:'tabCalendar',move:'tabMove'};
+  var btn=document.getElementById(ids[t]); if(btn) btn.classList.add('active');
+}
 async function initApp() {
+  applySavedTabClass();  // 最初にタブを復元＝ホーム画面のちらつきを防ぐ
   try { await sb.auth.getSession(); } catch(e){}  // セッション復元（RLS有効化後の認証付きクエリ用）
   await loadPonds();
   await loadAppOrders();
