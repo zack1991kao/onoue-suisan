@@ -563,7 +563,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
 <div class="screen" id="s-orders">
   <div class="page-header">
     <div><h2>注文管理</h2></div>
-    <button class="btn btn-primary" onclick="openM('mNewOrder')">＋ 新規注文</button>
+    <button class="btn btn-primary" onclick="openNewOrder()">＋ 新規注文</button>
   </div>
   <div class="tabs" id="orderTabs">
     <button class="tab-btn active" onclick="swTab('orders','cal',this)">📅 カレンダー</button>
@@ -944,7 +944,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
           <thead><tr><th>取引先名</th><th>区分</th><th>連絡先</th><th></th></tr></thead>
           <tbody id="buyerMasterBody"></tbody>
         </table></div>
-        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openM('mNewOrder')">＋ 追加</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openNewOrder()">＋ 追加</button>
       </div>
     </div>
     <div>
@@ -1099,31 +1099,30 @@ body.ai-mode-on .ai-element-flex{display:flex}
 
 <div class="overlay" id="mNewOrder">
   <div class="modal">
-    <div class="mhd"><h3>新規注文登録</h3><button class="mclose" onclick="closeM('mNewOrder')">✕</button></div>
+    <div class="mhd"><h3>📋 受注を追加</h3><button class="mclose" onclick="closeM('mNewOrder')">✕</button></div>
     <div class="mbody">
-      <div class="fr2">
-        <div class="fg"><label>受注日</label><input type="date" class="fc" id="noDate" value="2026-05-20"></div>
-        <div class="fg"><label>出荷予定日</label><input type="date" class="fc" id="noShipDate" value="2026-05-23"></div>
+      <!-- スマホ版と同じ入力項目に統一（日付/取引先(+その他)/魚種/サイズ/数量/確定・仮）-->
+      <div class="fg"><label>受注日</label><input type="date" class="fc" id="noDate"></div>
+      <div class="fg"><label>取引先</label>
+        <select class="fc" id="noBuyer" onchange="onNoBuyerChange()"></select>
+        <input type="text" class="fc" id="noBuyerOther" placeholder="取引先名を入力（例：田中商店）" style="display:none;margin-top:6px">
       </div>
       <div class="fr2">
-        <div class="fg"><label>業者名</label>
-          <select class="fc" id="noBuyer"><option>ニチモウ</option><option>信源</option><option>オーシャン</option><option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option></select>
-        </div>
         <div class="fg"><label>魚種</label><select class="fc" id="noSpecies"><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select></div>
-      </div>
-      <div class="fr2">
         <div class="fg"><label>サイズ</label>
-          <select class="fc" id="noSize"><option>〜1.0kg</option><option>1.0〜1.5kg</option><option>1.5〜2.0kg</option><option>2.0kg〜</option></select>
+          <select class="fc" id="noSize">
+            <option>0.8kg〜</option><option>1.0kg〜</option><option>1.0〜1.5kg</option>
+            <option>1.5〜2.0kg</option><option>2.0kg〜</option>
+            <option>2.5kg〜</option><option>3.0kg〜</option><option>3.5kg〜</option><option>4.0kg〜</option>
+          </select>
         </div>
-        <div class="fg"><label>数量（尾）</label><input type="number" class="fc" id="noQty" placeholder="例：50"></div>
       </div>
       <div class="fr2">
-        <div class="fg"><label>受付経路</label>
-          <select class="fc" id="noRoute"><option>電話</option><option>LINE</option><option>FAX</option><option>直接</option></select>
+        <div class="fg"><label>数量（尾）</label><input type="number" class="fc" id="noQty" placeholder="例：100"></div>
+        <div class="fg"><label>ステータス</label>
+          <select class="fc" id="noStatus"><option value="confirmed">確定</option><option value="tentative">仮</option></select>
         </div>
-        <div class="fg"><label>ロット指定</label><input type="text" class="fc" id="noLot" placeholder="例：Lot.43,5,1〜2"></div>
       </div>
-      <div class="fg"><label>備考</label><textarea class="fc" id="noMemo" rows="2"></textarea></div>
     </div>
     <div class="mfoot">
       <button class="btn btn-secondary" onclick="closeM('mNewOrder')">キャンセル</button>
@@ -2464,13 +2463,8 @@ function tankActDiary(id){
 }
 function tankActNewOrder(id){
   var p=POND_CONFIG.find(function(x){return x.id===id;}); if(!p)return;
-  closeM('mDetail'); openM('mNewOrder');
-  var sp=document.getElementById('noSpecies');
-  if(sp && p.species){
-    for(var i=0;i<sp.options.length;i++){
-      if(sp.options[i].value===p.species || sp.options[i].text===p.species){ sp.selectedIndex=i; break; }
-    }
-  }
+  closeM('mDetail');
+  openNewOrder(p.species);   // 魚種をプリセットして開く
 }
 
 // feed_logs から該当いけすの給餌履歴を取得して表示＋推移グラフ描画
@@ -2664,20 +2658,43 @@ function mdShort(isoDate){
   if(parts.length<3)return isoDate;
   return parseInt(parts[1],10)+'/'+parseInt(parts[2],10);
 }
+// 受注モーダルを開いてスマホ版と同じ初期状態にリセット
+function openNewOrder(presetSpecies){
+  var d=new Date();
+  document.getElementById('noDate').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  var nb=document.getElementById('noBuyer'); if(nb) nb.value='';
+  var nbo=document.getElementById('noBuyerOther'); if(nbo){ nbo.value=''; nbo.style.display='none'; }
+  document.getElementById('noSpecies').value=presetSpecies||'マダイ';
+  document.getElementById('noSize').selectedIndex=0;
+  document.getElementById('noQty').value='';
+  document.getElementById('noStatus').value='confirmed';
+  openM('mNewOrder');
+}
+// 取引先で「その他」を選んだら手入力欄を表示（スマホ版と同じ）
+function onNoBuyerChange(){
+  var v=document.getElementById('noBuyer').value;
+  var ob=document.getElementById('noBuyerOther');
+  if(ob) ob.style.display=(v==='その他')?'block':'none';
+}
 async function saveOrder(){
   var date=document.getElementById('noDate').value;
-  var shipDate=document.getElementById('noShipDate').value;
   var buyer=document.getElementById('noBuyer').value;
+  if(buyer==='その他'){
+    var other=(document.getElementById('noBuyerOther').value||'').trim();
+    if(!other){ alert('「その他」の取引先名を入力してください'); return; }
+    buyer=other;
+  }
   var species=document.getElementById('noSpecies').value;
   var size=document.getElementById('noSize').value;
   var qty=parseInt(document.getElementById('noQty').value)||0;
-  var route=document.getElementById('noRoute').value;
-  var lot=document.getElementById('noLot').value;
-  var memo=document.getElementById('noMemo').value;
-  if(!qty){alert('数量を入力してください');return;}
+  var st=document.getElementById('noStatus').value;          // confirmed / tentative
+  if(!date){ alert('受注日を入力してください'); return; }
+  if(!buyer){ alert('取引先を選択してください'); return; }
+  if(!qty){ alert('数量を入力してください'); return; }
+  var memoTag=(st==='tentative')?'仮':'確定';                 // 仮/確定はmemoで往復（スマホ版と統一）
 
   // メモリ更新（一覧の先頭に追加・楽観UI）
-  var o={date:mdShort(date),order_date:date,buyer:buyer,species:species,size:size,qty:qty,shipDate:mdShort(shipDate),route:route,status:'pending',lot:lot,memo:memo};
+  var o={date:mdShort(date),order_date:date,buyer:buyer,species:species,size:size,qty:qty,shipDate:'',route:'',status:'pending',lot:'',memo:memoTag};
   orders.unshift(o);
   renderCalendar();
   renderOrderList();
@@ -2686,19 +2703,19 @@ async function saveOrder(){
   // DB write（.select('id')で0件挿入＝RLS/権限の静かな失敗を検知）
   try{
     var r=await sb.from('orders').insert({
-      order_date:date||null, ship_date:shipDate||null, buyer:buyer, species:species,
-      size:size, qty:qty, route:route, status:'pending', lot:lot||'', memo:memo||''
+      order_date:date||null, ship_date:null, buyer:buyer, species:species,
+      size:size, qty:qty, route:'', status:'pending', lot:'', memo:memoTag
     }).select('id');
     if(r.error)throw r.error;
     if(!r.data || r.data.length===0){
-      orders.shift(); renderOrderList();   // 楽観UIを巻き戻し
+      orders.shift(); renderOrderList(); renderCalendar();   // 楽観UIを巻き戻し
       alert('⚠ 注文をDBに保存できませんでした（書き込み権限をご確認ください）');
       return;
     }
-    showToast('注文を登録しました');
+    showToast('注文を登録しました（'+memoTag+'）');
   }catch(e){
     console.error('[Supabase] saveOrder failed:',e);
-    orders.shift(); renderOrderList();      // 楽観UIを巻き戻し
+    orders.shift(); renderOrderList(); renderCalendar();      // 楽観UIを巻き戻し
     alert('注文のDB保存に失敗しました。通信を確認してください');
   }
 }
