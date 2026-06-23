@@ -1757,25 +1757,8 @@ const DRUGS = [
   'マラカイトグリーン','ホルマリン','その他'
 ];
 
-var ORDERS = [
-  {date:'2026-05-02',buyer:'ニチモウ',   fish:'マダイ',   spec:'2.0kg〜 120尾', status:'confirmed'},
-  {date:'2026-05-05',buyer:'信源',       fish:'マダイ',   spec:'1.5〜2.0kg 80尾',status:'confirmed'},
-  {date:'2026-05-07',buyer:'オーシャン', fish:'カンパチ', spec:'2.0kg〜 60尾',  status:'confirmed'},
-  {date:'2026-05-09',buyer:'龍ヶ岳',    fish:'マダイ',   spec:'1.0〜1.5kg 200尾',status:'confirmed'},
-  {date:'2026-05-12',buyer:'ニチモウ',   fish:'マダイ',   spec:'2.0kg〜 150尾', status:'confirmed'},
-  {date:'2026-05-14',buyer:'和潮',       fish:'シマアジ', spec:'0.8kg〜 100尾', status:'confirmed'},
-  {date:'2026-05-16',buyer:'信源',       fish:'マダイ',   spec:'1.5〜2.0kg 90尾',status:'confirmed'},
-  {date:'2026-05-19',buyer:'紀勝',       fish:'カンパチ', spec:'2.0kg〜 75尾',  status:'confirmed'},
-  {date:'2026-05-21',buyer:'大海水産',   fish:'マダイ',   spec:'2.0kg〜 180尾', status:'confirmed'},
-  {date:'2026-05-23',buyer:'オーシャン', fish:'マダイ',   spec:'1.0〜1.5kg 120尾',status:'confirmed'},
-  {date:'2026-05-26',buyer:'ニチモウ',   fish:'カンパチ', spec:'2.5kg〜 50尾',  status:'tentative'},
-  {date:'2026-05-28',buyer:'龍ヶ岳',    fish:'マダイ',   spec:'2.0kg〜 160尾', status:'tentative'},
-  {date:'2026-05-30',buyer:'信源',       fish:'シマアジ', spec:'1.0kg〜 80尾',  status:'tentative'},
-  {date:'2026-06-02',buyer:'和潮',       fish:'マダイ',   spec:'2.0kg〜 140尾', status:'tentative'},
-  {date:'2026-06-04',buyer:'紀勝',       fish:'マダイ',   spec:'1.5〜2.0kg 100尾',status:'tentative'},
-  {date:'2026-06-09',buyer:'ニチモウ',   fish:'マダイ',   spec:'2.0kg〜 130尾', status:'tentative'},
-  {date:'2026-06-11',buyer:'大海水産',   fish:'カンパチ', spec:'2.5kg〜 60尾',  status:'tentative'},
-];
+// 受注は Supabase の orders から取得（PC版と完全共有）。サンプルは持たない。
+var ORDERS = [];
 
 var USER_ORDERS_KEY = 'onoue_user_orders';
 function loadUserOrders() {
@@ -1894,7 +1877,7 @@ const state = {
   moveStep: 1, moveFromArea:'団地', moveToArea:'団地',
   mv: { from:null, to:null, count:null, reason:null, external:false },
   sheetIkesu: null,
-  calYear: 2026, calMonth: 5
+  calYear: new Date().getFullYear(), calMonth: new Date().getMonth()+1  // 初期表示は当月
 };
 
 // ===== UTILITY =====

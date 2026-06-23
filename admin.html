@@ -1528,18 +1528,8 @@ var AREA_BOXES_PC=[
   {area:'横島',    lx:86, ly:494,bx:84, by:496,bw:120,bh:220},
   {area:'葛崎',    lx:246,ly:506,bx:244,by:508,bw:62, bh:120}
 ];
-const orders=[
-  {date:'5/20',buyer:'ニチモウ',species:'マダイ',size:'1.0〜1.5kg',qty:50,shipDate:'5/22',route:'LINE',status:'pending'},
-  {date:'5/20',buyer:'信源',species:'カンパチ',size:'1.5〜2.0kg',qty:80,shipDate:'5/23',route:'電話',status:'pending'},
-  {date:'5/19',buyer:'オーシャン',species:'マダイ',size:'〜1.0kg',qty:120,shipDate:'5/21',route:'FAX',status:'shipped'},
-  {date:'5/19',buyer:'龍ヶ岳',species:'シマアジ',size:'1.0〜1.5kg',qty:30,shipDate:'5/22',route:'LINE',status:'pending'},
-  {date:'5/18',buyer:'和潮',species:'マダイ',size:'〜1.0kg',qty:60,shipDate:'5/20',route:'電話',status:'shipped'},
-  {date:'5/17',buyer:'紀勝',species:'マダイ',size:'1.5〜2.0kg',qty:40,shipDate:'5/19',route:'LINE',status:'shipped'},
-  {date:'5/16',buyer:'大海水産',species:'カンパチ',size:'2.0kg〜',qty:25,shipDate:'5/18',route:'電話',status:'shipped'},
-  {date:'5/15',buyer:'ニチモウ',species:'マダイ',size:'1.0〜1.5kg',qty:70,shipDate:'5/21',route:'LINE',status:'pending'},
-  {date:'5/14',buyer:'信源',species:'マダイ',size:'〜1.0kg',qty:90,shipDate:'5/17',route:'FAX',status:'shipped'},
-  {date:'5/13',buyer:'オーシャン',species:'シマアジ',size:'1.0〜1.5kg',qty:35,shipDate:'5/16',route:'電話',status:'shipped'},
-];
+// 受注は Supabase の orders テーブルから取得（スマホ版と完全共有）。サンプルは持たない。
+const orders=[];
 
 const lots=[
   {id:'2024-04-A',date:'2024/4/15',vendor:'XX種苗',species:'マダイ',intro:100000,current:78500,loss:21.5,status:'育成中'},
@@ -1551,23 +1541,25 @@ const lots=[
 
 // 元帳は shipments / payments の実データから集計（renderLedger 参照）。旧サンプル生成は廃止。
 
+// カレンダー用の日付マップ。受注(DB)から動的生成＝スマホ版と完全共有
 const calOrders={};
-[[3,'ニチモウ',50,'confirmed'],[4,'信源',80,'confirmed'],
- [7,'オーシャン',120,'confirmed'],[9,'龍ヶ岳',30,'tentative'],
- [12,'和潮',60,'confirmed'],[14,'紀勝',40,'tentative'],
- [16,'信源',25,'confirmed'],[19,'大海水産',70,'confirmed'],
- [21,'ニチモウ',90,'confirmed'],[23,'龍ヶ岳',35,'tentative'],
- [26,'オーシャン',100,'confirmed'],[28,'紀勝',60,'confirmed']].forEach(function([d,b,q,st]){
-  var k='2026-5-'+d;
-  if(!calOrders[k])calOrders[k]=[];
-  calOrders[k].push({buyer:b,qty:q,status:st});
-});
+function buildCalOrders(){
+  for(var k in calOrders){ delete calOrders[k]; }
+  orders.forEach(function(o){
+    var d=o.order_date; if(!d) return;
+    var pr=String(d).split('-'); if(pr.length<3) return;
+    var key=parseInt(pr[0],10)+'-'+parseInt(pr[1],10)+'-'+parseInt(pr[2],10);  // renderCalendarのキー(ゼロ埋めなし)と一致
+    if(!calOrders[key]) calOrders[key]=[];
+    calOrders[key].push({buyer:o.buyer, qty:o.qty, status:(o.memo==='仮'?'tentative':'confirmed')});
+  });
+}
 
 var shipRows=[
   {no:1,species:'鯛',pond:'',qty:0,gross:0,futa:0,mizu:0,price:'',lot:''},
 ];
 
-var calYear=2026,calMonth=5;
+var _calNow=new Date();
+var calYear=_calNow.getFullYear(), calMonth=_calNow.getMonth()+1;  // 初期表示は当月
 var costVisible=true;
 var currentLedger='ニチモウ';
 
@@ -1639,16 +1631,16 @@ async function loadOrders() {
   try {
     var res = await sb.from('orders').select('*').order('order_date', { ascending: false });
     if (res.error) throw res.error;
-    if (res.data && res.data.length > 0) {
-      orders.length = 0;
-      res.data.forEach(function(row) {
-        orders.push({
-          date: mdShort(row.order_date), buyer: row.buyer, species: row.species,
-          size: row.size, qty: row.qty, shipDate: mdShort(row.ship_date),
-          route: row.route, status: row.status, lot: row.lot || '', memo: row.memo || ''
-        });
+    // DBの内容で常に置き換え（0件なら空＝スマホ版と同じ実データ表示）
+    orders.length = 0;
+    (res.data || []).forEach(function(row) {
+      orders.push({
+        date: mdShort(row.order_date), buyer: row.buyer, species: row.species,
+        size: row.size, qty: row.qty, shipDate: mdShort(row.ship_date),
+        route: row.route, status: row.status, lot: row.lot || '', memo: row.memo || '',
+        order_date: row.order_date  // カレンダー突合用に生日付も保持
       });
-    }
+    });
   } catch (e) {
     console.warn('[Supabase] loadOrders failed, using fallback:', e.message);
   }
@@ -2637,8 +2629,9 @@ async function saveOrder(){
   if(!qty){alert('数量を入力してください');return;}
 
   // メモリ更新（一覧の先頭に追加・楽観UI）
-  var o={date:mdShort(date),buyer:buyer,species:species,size:size,qty:qty,shipDate:mdShort(shipDate),route:route,status:'pending',lot:lot,memo:memo};
+  var o={date:mdShort(date),order_date:date,buyer:buyer,species:species,size:size,qty:qty,shipDate:mdShort(shipDate),route:route,status:'pending',lot:lot,memo:memo};
   orders.unshift(o);
+  renderCalendar();
   renderOrderList();
   closeM('mNewOrder');
 
@@ -2714,6 +2707,7 @@ function openOrderDetail(idx){
 // CALENDAR
 // ══════════════════════════════════════════
 function renderCalendar(){
+  buildCalOrders();  // 毎回 受注(DB)から最新を反映
   var grid=document.getElementById('calGrid');
   while(grid.children.length>7)grid.removeChild(grid.lastChild);
   document.getElementById('calLabel').textContent=calYear+'年'+calMonth+'月';
