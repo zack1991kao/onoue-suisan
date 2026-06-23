@@ -1405,8 +1405,10 @@ body.ai-mode-on .ai-home-banner{display:flex}
       <div class="order-label">取引先</div>
       <select id="orderBuyer" class="order-select" onchange="onOrderBuyerChange()">
         <option value="">選択してください</option>
-        <option>ニチモウ</option><option>信源</option><option>オーシャン</option>
-        <option>龍ヶ岳</option><option>和潮</option><option>紀勝</option><option>大海水産</option>
+        <option>大海水産</option><option>脇川水産</option><option>海水養殖</option>
+        <option>天草漁協（本渡）</option><option>ニチモウ</option><option>山家</option>
+        <option>オーシャンプロテック</option><option>陣内鮮魚店</option><option>よしやホテル</option>
+        <option>吉中鮮魚店</option><option>和潮</option>
         <option>その他</option>
       </select>
       <input type="text" id="orderBuyerOther" class="order-input" placeholder="取引先名を入力（例：田中商店）" style="display:none;margin-top:8px;">
@@ -1742,13 +1744,10 @@ function yrToLabel(yr) {
 }
 
 const BAITS = [
-  'p7','p8','p9',
-  'チェリー8','チェリー9',
-  '紅 6mm','紅 8mm','PBP 6mm',
-  'Nまだいさくら 8mm','Nまだいさくら 10mm',
-  'Nシマアジ 6mm','NKMS',
-  'ノーサン','ヒガシマル',
-  'ひめ桜 s6','ひめ桜 s7','ひめ桜 3mm','ひめ桜 4mm',
+  'マダイチェリー P9','マダイチェリー P8','マダイペレット P7','ゴールドパワー',
+  '紅40 P6','紅40 P8','PBP','インフィニティ',
+  'Nまだいさくら 6P','Nまだいさくら 8P','Nまだいさくら 10P','Nしまあじ 6P','NKMS マッシュ',
+  'ひめ桜 S6','ひめ桜 S7','ひめ桜50 3','ひめ桜50 4','ひめ桜50 5',
   'その他'
 ];
 

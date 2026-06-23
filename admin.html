@@ -1291,8 +1291,8 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // ══════════════════════════════════════════
 // DATA
 // ══════════════════════════════════════════
-// 売掛金(152)取引先マスタ（PCA補助科目に対応。表示名はbuyerSub()でコード変換される）
-const BUYERS=['大道漁協','大海水産','ニチモウ','太喜水産','宮木水産','天草漁協 本渡','山家','脇川水産','県海水養殖漁協','吉中水産','松島センター','ＫＴＲ','天草漁協 高戸','五十嵐水産','よしやホテル','陣内鮮魚店','オーシャンプロテック','その他'];
+// 取引先マスタ（社長提供の実リスト。会計コードは buyerSub() で変換）
+const BUYERS=['大海水産','脇川水産','海水養殖','天草漁協（本渡）','ニチモウ','山家','オーシャンプロテック','陣内鮮魚店','よしやホテル','吉中鮮魚店','和潮','その他'];
 const POND_CONFIG=[
   {id:'団地-01',area:'団地',sh:'sq',species:'マダイ',  stock:12000,bait:'ひめ桜 s7',    status:'todo',feed:0,mort:0,bgrade:0},
   {id:'団地-02',area:'団地',sh:'sq',species:'シマアジ',stock:2500, bait:'Nシマアジ 6mm',status:'todo',feed:0,mort:0,bgrade:0},
@@ -1794,10 +1794,11 @@ var TAX = { sale8:'B6', none:'00' };
 // 取引先 → 売掛金(152)の補助科目コード変換（会計士マスタ準拠）
 var BUYER_SUB = {
   '大道漁協':'117','大海水産':'118','ニチモウ':'278','太喜水産':'285',
-  '宮木水産':'292','天草漁協 本渡':'313','山家':'339','脇川水産':'365',
-  '県海水養殖漁協':'402','吉中水産':'438','松島センター':'477','ＫＴＲ':'486',
-  '天草漁協 高戸':'561','五十嵐水産':'586','よしやホテル':'587','陣内鮮魚店':'588',
-  'オーシャンプロテック':'589','その他':'999'
+  '宮木水産':'292','天草漁協 本渡':'313','天草漁協（本渡）':'313','山家':'339',
+  '脇川水産':'365','県海水養殖漁協':'402','海水養殖':'402','吉中水産':'438','吉中鮮魚店':'438',
+  '松島センター':'477','ＫＴＲ':'486','天草漁協 高戸':'561','五十嵐水産':'586',
+  'よしやホテル':'587','陣内鮮魚店':'588','オーシャンプロテック':'589','その他':'999'
+  // 和潮：PCA売掛金マスタにコード無し → 999(その他)に集約（会計士より、その他はインボイス番号要の場合あり）
 };
 function buyerSub(name){
   if(!name) return '999';
@@ -2224,11 +2225,34 @@ function renderLotMini(){
   }).join('');
 }
 
+var _feedCostText='—';
 function toggleCost(){
   if(!requireAdmin())return;
   costVisible=!costVisible;
-  // 餌価格マスター未登録のため金額は未算出。表示/非表示の切替のみ。
-  document.getElementById('costVal').textContent=costVisible?'—':'———';
+  document.getElementById('costVal').textContent=costVisible?_feedCostText:'———';
+}
+// 今月の餌代＝今月のfeed_logsの給餌量(kg)×餌の円/kg（=円/袋÷1袋kg）。管理者のみ。
+async function loadFeedCost(){
+  var cv=document.getElementById('costVal'); var cs=document.getElementById('costSub');
+  if(!cv || !isAdmin()) return;
+  try{
+    var d=new Date();
+    var ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    var nx=new Date(d.getFullYear(), d.getMonth()+1, 1);  // 翌月1日（月末の無効日付を避ける）
+    var nxStr=nx.getFullYear()+'-'+String(nx.getMonth()+1).padStart(2,'0')+'-01';
+    var res=await sb.from('feed_logs').select('feed_kg,bait,log_date').gte('log_date',ym+'-01').lt('log_date',nxStr);
+    if(res.error) throw res.error;
+    var total=0, unknown=0, kgSum=0;
+    (res.data||[]).forEach(function(r){
+      var kg=parseFloat(r.feed_kg)||0; if(kg<=0) return; kgSum+=kg;
+      var bag=FEED_PRICES[r.bait];
+      if(bag!=null && bag>0) total += kg*(bag/BAG_KG);
+      else unknown++;
+    });
+    _feedCostText='¥'+Math.round(total).toLocaleString();
+    if(cs) cs.textContent='今月の給餌'+Math.round(kgSum).toLocaleString()+'kgから算出（餌1袋'+BAG_KG+'kg換算'+(unknown?('・価格未登録'+unknown+'件除外'):'')+'）';
+    if(costVisible) cv.textContent=_feedCostText;
+  }catch(e){ console.warn('[餌代] 算出スキップ:', e.message); }
 }
 
 // ══════════════════════════════════════════
@@ -3209,8 +3233,15 @@ function cellFilled(inp){
   td.classList.add('filled');
 }
 
-// 養殖日誌 日別マトリクスの入力項目（スマホ版 feed_logs と一致）
-var BAITS=['p7','p8','p9','チェリー8','チェリー9','紅 6mm','紅 8mm','PBP 6mm','Nまだいさくら 8mm','Nまだいさくら 10mm','Nシマアジ 6mm','NKMS','ノーサン','ヒガシマル','ひめ桜 s6','ひめ桜 s7','ひめ桜 3mm','ひめ桜 4mm','その他'];
+// 餌マスタ（社長提供：メーカー別・価格は円/袋）。BAITS=給餌入力の選択肢
+var FEED_PRICES={
+  'マダイチェリー P9':5050,'マダイチェリー P8':5050,'マダイペレット P7':5530,'ゴールドパワー':4690,
+  '紅40 P6':4780,'紅40 P8':4780,'PBP':0,'インフィニティ':0,
+  'Nまだいさくら 6P':5160,'Nまだいさくら 8P':5160,'Nまだいさくら 10P':5160,'Nしまあじ 6P':5760,'NKMS マッシュ':5030,
+  'ひめ桜 S6':6320,'ひめ桜 S7':6320,'ひめ桜50 3':5460,'ひめ桜50 4':5460,'ひめ桜50 5':5460
+};
+var BAG_KG=20; // 餌1袋の重量（kg換算）。要確認のため定数化
+var BAITS=Object.keys(FEED_PRICES).concat(['その他']);
 var DRUGS=['オキシテトラサイクリン','フロルフェニコール','スルファモノメトキシン','エンロフロキサシン','プラジクアンテル','トリクロルホン','マラカイトグリーン','ホルマリン','その他'];
 function _attr(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
 function _optList(arr,sel,blankLabel){
@@ -3460,8 +3491,8 @@ async function applyRole(){
     var pr = await sb.from('profiles').select('role').eq('id',uid).maybeSingle();
     if(!pr.error && pr.data && pr.data.role==='admin'){
       sessionStorage.setItem(ADMIN_KEY,'ok');
-      var cv=document.getElementById('costVal');
-      if(cv){ cv.textContent='—'; costVisible=true; }  // 餌価格マスター登録後に算出
+      costVisible=true;
+      loadFeedCost();   // 今月の餌代を算出して表示（管理者のみ）
     }
   }catch(e){ console.warn('[Auth] role fetch skipped:', e.message); }
 }
