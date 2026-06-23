@@ -2,7 +2,7 @@
 // 方針: 静的UIファイルはキャッシュ優先（オフラインでもシェル表示）
 //       Supabase / CDN などの通信はネットワーク優先（常に最新データ）
 
-var CACHE_NAME = 'onoue-shell-v9';
+var CACHE_NAME = 'onoue-shell-v10';
 var SHELL_FILES = [
   './',
   './index.html',
