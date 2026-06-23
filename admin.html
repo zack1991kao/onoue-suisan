@@ -630,12 +630,12 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <div class="tbl-wrap">
       <table id="shipTable">
         <thead><tr>
-          <th>No</th><th>魚種</th><th>総尾数</th><th>総キロ</th>
+          <th>No</th><th>魚種</th><th>出荷元いけす</th><th>総尾数</th><th>総キロ</th>
           <th>フタ重</th><th>水引</th><th>正味キロ</th><th>単価(円)</th><th>金額(円)</th><th>ロット</th><th></th>
         </tr></thead>
         <tbody id="shipBody"></tbody>
         <tfoot><tr class="ship-total-row">
-          <td colspan="6" style="font-weight:700">合計</td>
+          <td colspan="7" style="font-weight:700">合計</td>
           <td id="shipTotalNet" style="font-weight:700;text-align:right"></td>
           <td></td>
           <td id="shipTotalAmt" style="font-weight:700;text-align:right;color:var(--blue)"></td>
@@ -1211,11 +1211,20 @@ body.ai-mode-on .ai-element-flex{display:flex}
 
 <div class="overlay" id="mNewLot">
   <div class="modal">
-    <div class="mhd"><h3>新規ロット登録（仕入れ）</h3><button class="mclose" onclick="closeM('mNewLot')">✕</button></div>
+    <div class="mhd"><h3>新規ロット登録（入荷）</h3><button class="mclose" onclick="closeM('mNewLot')">✕</button></div>
     <div class="mbody">
       <div class="fr2">
+        <div class="fg"><label>入荷区分</label>
+          <select class="fc" id="lotKind" onchange="onLotKindChange()">
+            <option value="purchase">仕入れ（購入）</option>
+            <option value="local">地魚（自社漁獲）</option>
+            <option value="other">その他</option>
+          </select></div>
         <div class="fg"><label>導入日</label><input type="date" class="fc" id="lotDate"></div>
-        <div class="fg"><label>種苗業者</label><input type="text" class="fc" id="lotVendor" placeholder="例：XX種苗"></div>
+      </div>
+      <div class="fr2">
+        <div class="fg"><label id="lotVendorLabel">仕入先</label><input type="text" class="fc" id="lotVendor" placeholder="例：㈱天海"></div>
+        <div class="fg" id="lotPriceWrap"><label>仕入単価（円/尾）</label><input type="number" class="fc" id="lotUnitPrice" placeholder="例：120" oninput="lotRecalc()"></div>
       </div>
       <div class="fr2">
         <div class="fg"><label>魚種</label><select class="fc" id="lotSpecies"><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select></div>
@@ -1224,10 +1233,10 @@ body.ai-mode-on .ai-element-flex{display:flex}
       <label style="font-size:12px;font-weight:700;color:var(--sub)">配置先いけす（複数に分けて入力できます）</label>
       <div id="lotCageRows" style="margin:6px 0"></div>
       <button class="btn btn-secondary btn-sm" type="button" onclick="addLotCageRow()">＋ 配置先を追加</button>
-      <div style="text-align:right;font-weight:700;margin-top:8px">合計：<span id="lotTotal">0</span> 尾</div>
+      <div style="text-align:right;font-weight:700;margin-top:8px">合計：<span id="lotTotal">0</span> 尾<span id="lotAmountWrap">　／　仕入金額：<span id="lotAmount">0</span> 円</span></div>
       <div class="fg" style="margin-top:8px"><label>備考</label><textarea class="fc" id="lotMemo" rows="2"></textarea></div>
       <div style="background:var(--blue-bg);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--blue)">
-        保存すると各いけすの在庫・魚種・年魚が更新され、仕入れ記録（外部受入）として履歴に残ります。
+        保存すると各いけすの在庫・魚種・年魚が更新され、入荷記録（外部受入）として履歴に残ります。地魚（自社漁獲）は仕入金額なしで登録できます。
       </div>
     </div>
     <div class="mfoot">
@@ -1515,9 +1524,7 @@ const calOrders={};
 });
 
 var shipRows=[
-  {no:1,species:'鯛',qty:6,gross:18.9,futa:0.5,mizu:0.9,price:'',lot:'Lot.43,5,1〜2'},
-  {no:2,species:'鯛',qty:8,gross:20.0,futa:0.6,mizu:1.2,price:'',lot:''},
-  {no:3,species:'鯛',qty:10,gross:24.5,futa:0.7,mizu:1.4,price:'',lot:''},
+  {no:1,species:'鯛',pond:'',qty:0,gross:0,futa:0,mizu:0,price:'',lot:''},
 ];
 
 var calYear=2026,calMonth=5;
@@ -2001,11 +2008,11 @@ async function init(){
   populateOrderBuyers();   // 受注モーダルの取引先をPCA実マスタ(BUYERS)に統一
   subscribeRealtime();
 }
-// 受注モーダルの取引先ドロップダウンを BUYERS（PCA売掛金マスタ）から生成
+// 受注・出荷の取引先ドロップダウンを BUYERS（PCA売掛金マスタ）から生成
 function populateOrderBuyers(){
-  var sel=document.getElementById('noBuyer');
-  if(!sel)return;
-  sel.innerHTML=BUYERS.map(function(b){return '<option>'+b+'</option>';}).join('');
+  var html=BUYERS.map(function(b){return '<option>'+b+'</option>';}).join('');
+  var no=document.getElementById('noBuyer'); if(no) no.innerHTML=html;
+  var sh=document.getElementById('shipBuyerSel'); if(sh) sh.innerHTML=html;
 }
 
 function setDate(){
@@ -2596,7 +2603,21 @@ async function saveShipment(){
       alert('⚠ 出荷をDBに保存できませんでした（出荷は管理者のみ書込可。権限をご確認ください）');
       return;
     }
-    showToast('出荷を保存しました ✓');
+    // 出荷元いけすの在庫を減算（出荷＝在庫減）
+    var decRows=rows.filter(function(r){ return r.pond && (r.qty>0); });
+    if(decRows.length){
+      await Promise.all(decRows.map(function(r){
+        var p=POND_CONFIG.find(function(x){return x.id===r.pond;});
+        if(!p) return Promise.resolve();
+        var ns=Math.max(0,(p.stock||0)-(r.qty||0));
+        return sb.from('ponds').update({stock:ns, updated_at:new Date().toISOString()}).eq('id',r.pond).select('id')
+          .then(function(rr){ if(!rr.error && rr.data && rr.data.length){ p.stock=ns; } })
+          .catch(function(){});
+      }));
+      refreshDashboard(); if(typeof renderInv==='function'){ renderInv(); if(typeof renderInvSummary==='function') renderInvSummary(); }
+    }
+    var noCage=rows.filter(function(r){ return (r.qty>0) && !r.pond; }).length;
+    showToast('出荷を保存しました ✓'+(decRows.length?('／在庫'+decRows.length+'件を減算'):'')+(noCage?('（いけす未選択'+noCage+'件は在庫減算なし）'):''));
   }catch(e){
     console.error('[Supabase] saveShipment failed:',e);
     alert('出荷のDB保存に失敗しました。通信を確認してください');
@@ -2649,9 +2670,16 @@ function chMonth(d){calMonth+=d;if(calMonth>12){calMonth=1;calYear++;}if(calMont
 // ══════════════════════════════════════════
 // SHIPMENT
 // ══════════════════════════════════════════
+// 出荷元いけす候補（稼働中のみ・魚種と在庫を併記してPC不慣れでも選びやすく）
+function shipCageOptions(selected){
+  var arr=POND_CONFIG.filter(function(p){return p.status!=='skip';});
+  return '<option value="">選択…</option>'+arr.map(function(p){
+    return '<option value="'+p.id+'"'+(p.id===selected?' selected':'')+'>'+p.id+'（'+(p.species||'')+' '+(p.stock||0).toLocaleString()+'尾）</option>';
+  }).join('');
+}
 function renderShipTable(){
   document.getElementById('shipBody').innerHTML=shipRows.map(function(r,i){
-    return '<tr><td>'+r.no+'</td><td><select class="ipt" style="width:72px" onchange="shipRows['+i+'].species=this.value"><option '+(r.species==='鯛'?'selected':'')+'>鯛</option><option '+(r.species==='カンパチ'?'selected':'')+'>カンパチ</option><option '+(r.species==='シマアジ'?'selected':'')+'>シマアジ</option></select></td><td><input class="ipt ipt-num" style="width:52px" value="'+r.qty+'" oninput="shipRows['+i+'].qty=+this.value"></td><td><input class="ipt ipt-num" style="width:60px" value="'+r.gross+'" oninput="shipRows['+i+'].gross=+this.value;calcShip()"></td><td><input class="ipt ipt-num" style="width:52px" value="'+r.futa+'" oninput="shipRows['+i+'].futa=+this.value;calcShip()"></td><td><input class="ipt ipt-num" style="width:52px" value="'+r.mizu+'" oninput="shipRows['+i+'].mizu=+this.value;calcShip()"></td><td style="text-align:right;font-weight:700" id="snet'+i+'">'+(r.gross-r.futa-r.mizu).toFixed(1)+'</td><td><input class="ipt ipt-num" style="width:65px" value="'+r.price+'" oninput="shipRows['+i+'].price=+this.value;calcShip()"></td><td style="text-align:right;font-weight:700;color:var(--blue)" id="samt'+i+'">'+Math.round((r.gross-r.futa-r.mizu)*r.price).toLocaleString()+'</td><td><input class="ipt" style="width:100px" value="'+r.lot+'"></td><td><span style="cursor:pointer;color:var(--red);font-size:13px" onclick="shipRows.splice('+i+',1);renderShipTable()">✕</span></td></tr>';
+    return '<tr><td>'+r.no+'</td><td><select class="ipt" style="width:72px" onchange="shipRows['+i+'].species=this.value"><option '+(r.species==='鯛'?'selected':'')+'>鯛</option><option '+(r.species==='カンパチ'?'selected':'')+'>カンパチ</option><option '+(r.species==='シマアジ'?'selected':'')+'>シマアジ</option></select></td><td><select class="ipt" style="width:150px" onchange="shipRows['+i+'].pond=this.value">'+shipCageOptions(r.pond)+'</select></td><td><input class="ipt ipt-num" style="width:52px" value="'+r.qty+'" oninput="shipRows['+i+'].qty=+this.value"></td><td><input class="ipt ipt-num" style="width:60px" value="'+r.gross+'" oninput="shipRows['+i+'].gross=+this.value;calcShip()"></td><td><input class="ipt ipt-num" style="width:52px" value="'+r.futa+'" oninput="shipRows['+i+'].futa=+this.value;calcShip()"></td><td><input class="ipt ipt-num" style="width:52px" value="'+r.mizu+'" oninput="shipRows['+i+'].mizu=+this.value;calcShip()"></td><td style="text-align:right;font-weight:700" id="snet'+i+'">'+(r.gross-r.futa-r.mizu).toFixed(1)+'</td><td><input class="ipt ipt-num" style="width:65px" value="'+r.price+'" oninput="shipRows['+i+'].price=+this.value;calcShip()"></td><td style="text-align:right;font-weight:700;color:var(--blue)" id="samt'+i+'">'+Math.round((r.gross-r.futa-r.mizu)*r.price).toLocaleString()+'</td><td><input class="ipt" style="width:100px" value="'+r.lot+'"></td><td><span style="cursor:pointer;color:var(--red);font-size:13px" onclick="shipRows.splice('+i+',1);renderShipTable()">✕</span></td></tr>';
   }).join('');
   calcShip();
 }
@@ -2670,7 +2698,7 @@ function calcShip(){
   document.getElementById('shipTotalAmt').textContent='¥'+totAmt.toLocaleString();
 }
 function addShipRow(){
-  shipRows.push({no:shipRows.length+1,species:'鯛',qty:0,gross:0,futa:0,mizu:0,price:'',lot:''});
+  shipRows.push({no:shipRows.length+1,species:'鯛',pond:'',qty:0,gross:0,futa:0,mizu:0,price:'',lot:''});
   renderShipTable();
 }
 
@@ -3001,20 +3029,49 @@ function lotRecalc(){
   var tot=0;
   document.querySelectorAll('#lotCageRows .lot-cage-qty').forEach(function(i){ tot += parseInt(i.value)||0; });
   document.getElementById('lotTotal').textContent = tot.toLocaleString();
+  var up=parseFloat((document.getElementById('lotUnitPrice')||{}).value)||0;
+  var amtEl=document.getElementById('lotAmount');
+  if(amtEl) amtEl.textContent=(tot*up).toLocaleString();
+}
+// 入荷区分に応じて入力欄の表示/ラベルを切替（地魚は仕入金額なし）
+function onLotKindChange(){
+  var kind=(document.getElementById('lotKind')||{}).value||'purchase';
+  var vLabel=document.getElementById('lotVendorLabel');
+  var vInput=document.getElementById('lotVendor');
+  var priceWrap=document.getElementById('lotPriceWrap');
+  var amtWrap=document.getElementById('lotAmountWrap');
+  if(kind==='local'){
+    if(vLabel)vLabel.textContent='漁獲場所・備考';
+    if(vInput)vInput.placeholder='例：牛深沖';
+    if(priceWrap)priceWrap.style.display='none';
+    if(amtWrap)amtWrap.style.display='none';
+  }else{
+    if(vLabel)vLabel.textContent=(kind==='other')?'仕入先・入手先':'仕入先';
+    if(vInput)vInput.placeholder='例：㈱天海';
+    if(priceWrap)priceWrap.style.display='';
+    if(amtWrap)amtWrap.style.display='';
+  }
 }
 function openNewLot(){
   document.getElementById('lotCageRows').innerHTML='';
   var d=new Date();
   document.getElementById('lotDate').value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  document.getElementById('lotKind').value='purchase';
   document.getElementById('lotVendor').value='';
+  document.getElementById('lotUnitPrice').value='';
   document.getElementById('lotMemo').value='';
   document.getElementById('lotTotal').textContent='0';
+  document.getElementById('lotAmount').textContent='0';
+  onLotKindChange();
   addLotCageRow();
   openM('mNewLot');
 }
 async function saveLot(){
   var date=document.getElementById('lotDate').value;
+  var kind=(document.getElementById('lotKind')||{}).value||'purchase';
+  var kindLabel=(kind==='local')?'地魚（自社漁獲）':(kind==='other')?'その他入荷':'仕入れ';
   var vendor=document.getElementById('lotVendor').value.trim();
+  var unitPrice=parseFloat((document.getElementById('lotUnitPrice')||{}).value)||0;
   var species=document.getElementById('lotSpecies').value;
   var yr=parseInt(document.getElementById('lotYr').value)||1;
   var memo=document.getElementById('lotMemo').value.trim();
@@ -3044,19 +3101,24 @@ async function saveLot(){
       // メモリ反映
       p.stock=newStock; p.species=species; p.yr=yr; if(p.status==='skip')p.status='todo';
     }catch(e){ console.error('[Supabase] saveLot pond update failed:',e); failed=true; break; }
-    // ② 仕入れ記録（外部受入として move_logs）
+    // ② 入荷記録（外部受入として move_logs。区分・仕入先・単価・金額を履歴に明記）
     try{
+      var rowAmt=(kind!=='local' && unitPrice>0) ? unitPrice*rows[i].qty : 0;
+      var reason=kindLabel+(vendor?'（'+vendor+'）':'')
+        +((kind!=='local' && unitPrice>0)?('｜単価'+unitPrice+'円/尾｜金額'+rowAmt.toLocaleString()+'円'):'');
       var ml=await sb.from('move_logs').insert({
         log_date:date||null, from_pond:null, to_pond:rows[i].id,
-        count:rows[i].qty, reason:'仕入れ／ロット導入'+(vendor?'（'+vendor+'）':''), external:true
+        count:rows[i].qty, reason:reason, external:true
       });
-      if(ml.error) console.warn('[Supabase] move_logs(仕入れ) skipped:', ml.error.message);
-    }catch(e){ console.warn('[Supabase] move_logs(仕入れ) skipped:', e); }
+      if(ml.error) console.warn('[Supabase] move_logs(入荷) skipped:', ml.error.message);
+    }catch(e){ console.warn('[Supabase] move_logs(入荷) skipped:', e); }
   }
   if(failed){ alert('⚠ DBに保存できませんでした（権限・通信をご確認ください）'); return; }
 
   closeM('mNewLot');
-  showToast(rows.length+'件のいけすに仕入れを登録しました');
+  var totQty=rows.reduce(function(s,r){return s+r.qty;},0);
+  var totAmt=(kind!=='local' && unitPrice>0)?unitPrice*totQty:0;
+  showToast(rows.length+'件のいけすに'+kindLabel+'を登録しました（'+totQty.toLocaleString()+'尾'+(totAmt>0?('／'+totAmt.toLocaleString()+'円'):'')+'）');
   refreshDashboard();
   renderInv();
   renderInvSummary();
@@ -3197,7 +3259,7 @@ function renderDailyMatrix(){
       body+='<td class="'+uc+'"><input type="number" step="0.1" data-field="feed_kg" value="'+feedVal+'" placeholder="—" onchange="cellFilled(this)"></td>';
       body+='<td style="padding:2px 4px"><select data-field="bait" style="'+selStyle+'">'+_optList(BAITS,p.bait,'—')+'</select></td>';
       body+='<td style="padding:2px 4px"><select data-field="bait2" style="'+selStyle+'">'+_optList(BAITS,p.bait2,'なし')+'</select></td>';
-      body+='<td class="'+(p.mort>0?'filled':uc)+'"><input type="number" data-field="mort" value="'+(p.mort||'')+'" placeholder="0" onchange="cellFilled(this)"></td>';
+      body+='<td class="'+uc+'"><input type="number" data-field="mort" value="" placeholder="0" onchange="cellFilled(this)" title="今回新たに死んだ数（保存すると在庫から引かれます）"></td>';
       body+='<td class="'+(p.bgrade>0?'filled':uc)+'"><input type="number" data-field="bgrade" value="'+(p.bgrade||'')+'" placeholder="0" onchange="cellFilled(this)"></td>';
       body+='<td style="padding:2px 4px"><select data-field="drug" style="'+selStyle+'">'+_optList(DRUGS,p.drug,'なし')+'</select></td>';
       body+='<td style="padding:2px 4px"><input type="text" data-field="drug_amt" value="'+_attr(p.drug_amt)+'" placeholder="—" style="'+txtStyle+'"></td>';
@@ -3232,16 +3294,22 @@ async function saveDailyMatrix(){
     // 入力が一切ない行はスキップ（給餌0/斃死0/B品0/餌なし/薬なし/メモなし）
     var hasInput = feed>0||mort>0||bgrade>0||(bait&&bait!=='')||(drug&&drug!=='')||memo!=='';
     if(!hasInput) return;
+    // 斃死があれば在庫尾数から差し引く（今回入力分のみ）
+    var pondNow=POND_CONFIG.find(function(x){return x.id===pid;});
+    var curStock=pondNow?(pondNow.stock||0):0;
+    var newStock=(mort>0)?Math.max(0,curStock-mort):null;
     collected.push({pid:pid,feed:feed,mort:mort,bgrade:bgrade,bait:bait,bait2:bait2,drug:drug,drugAmt:drugAmt,memo:memo,
-      pondStatus:(status==='異常あり')?'alert':'done', flag:(status==='異常あり')});
+      pondStatus:(status==='異常あり')?'alert':'done', flag:(status==='異常あり'), newStock:newStock});
   });
   if(!collected.length){ alert('入力された行がありません'); return; }
   // ① ponds を並列update（.select('id')で0件＝RLS/権限の静かな失敗を検知）
   var results=await Promise.all(collected.map(function(c){
-    return sb.from('ponds').update({
+    var upd={
         status:c.pondStatus, feed_kg:c.feed, mort:c.mort, bgrade:c.bgrade,
         bait:c.bait||'', bait2:c.bait2||'', updated_at:new Date().toISOString()
-      }).eq('id',c.pid).select('id')
+      };
+    if(c.newStock!=null) upd.stock=c.newStock;   // 斃死分を在庫減算
+    return sb.from('ponds').update(upd).eq('id',c.pid).select('id')
       .then(function(r){ return {c:c, ok:!r.error && r.data && r.data.length>0}; })
       .catch(function(){ return {c:c, ok:false}; });
   }));
@@ -3260,7 +3328,7 @@ async function saveDailyMatrix(){
   }catch(e){ console.warn('[Supabase] feed_logs bulk insert skipped:', e.message); }
   // ③ メモリ反映＋再描画
   okOnes.forEach(function(x){ var c=x.c; var p=POND_CONFIG.find(function(y){return y.id===c.pid;});
-    if(p){ p.status=c.pondStatus; p.feedKg=c.feed; p.feed_kg=c.feed; p.mort=c.mort; p.bgrade=c.bgrade; p.bait=c.bait; p.bait2=c.bait2; p.drug=c.drug; p.drug_amt=c.drugAmt; p.memo=c.memo; }
+    if(p){ p.status=c.pondStatus; p.feedKg=c.feed; p.feed_kg=c.feed; p.mort=c.mort; p.bgrade=c.bgrade; p.bait=c.bait; p.bait2=c.bait2; p.drug=c.drug; p.drug_amt=c.drugAmt; p.memo=c.memo; if(c.newStock!=null) p.stock=c.newStock; }
   });
   renderDailyMatrix();
   if(typeof refreshDashboard==='function') refreshDashboard();

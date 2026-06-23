@@ -2146,7 +2146,9 @@ function openRecordPanel(id) {
 
   // 既存値セット
   document.getElementById('recFeed').value = p.feed || '';
-  document.getElementById('recMort').value = p.mort || '';
+  // 斃死数は「今回新たに死んだ数」を入れるイベント入力。前回値を残すと保存のたびに
+  // 在庫から二重で引かれてしまうため、毎回ゼロ（空）から入力する。
+  document.getElementById('recMort').value = '';
   document.getElementById('recBgrade').value = p.bgrade || '';
   document.getElementById('recDrugAmt').value = p.drugAmt || '';
   document.getElementById('recMemo').value = p.memo || '';
@@ -2255,8 +2257,8 @@ async function saveRecord() {
   var d = new Date();
   var logDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 
-  // ① 在庫・状態の更新を最優先（ログ保存が失敗してもここは守る）
-  var ok = await dbUpdatePond(p.id, {
+  // 斃死があれば在庫尾数から差し引く（死亡＝在庫減。今回入力分のみ）
+  var fields = {
     status:     p.status,
     feed_kg:    p.feedKg || 0,
     mort:       p.mort || 0,
@@ -2264,7 +2266,13 @@ async function saveRecord() {
     bait:       p.bait,
     bait2:      p.bait2 || '',
     updated_at: new Date().toISOString()
-  });
+  };
+  if (mort > 0) {
+    p.stock = Math.max(0, (p.stock || 0) - mort);
+    fields.stock = p.stock;   // 在庫を減算してDBにも反映
+  }
+  // ① 在庫・状態の更新を最優先（ログ保存が失敗してもここは守る）
+  var ok = await dbUpdatePond(p.id, fields);
   if (!ok) return; // 失敗時は dbUpdatePond 内で警告済み
 
   // ② 給餌ログ（補助的。失敗しても在庫保存は成立済み）
