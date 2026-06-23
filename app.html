@@ -3024,11 +3024,15 @@ function showNotifBanner(msg, color) {
 }
 function subscribeNotifications() {
   try {
-    // E1: 受注（orders insert）→ 全員のスマホに表示
+    // E1: 受注（orders 変更）→ 全員のスマホに通知＋カレンダーをライブ更新（PC作成分も即反映）
     sb.channel('app-orders-notif')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, function(payload) {
-        var o = payload.new || {};
-        showNotifBanner('🗓 新しい受注：' + (o.buyer||'') + '　' + (o.species||'') + ' ' + (o.qty||0) + '尾', '#1d4ed8');
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, function(payload) {
+        if (payload.eventType === 'INSERT') {
+          var o = payload.new || {};
+          showNotifBanner('🗓 新しい受注：' + (o.buyer||'') + '　' + (o.species||'') + ' ' + (o.qty||0) + '尾', '#1d4ed8');
+        }
+        // 受注の追加/変更/削除いずれもカレンダー・一覧を最新化
+        loadAppOrders().then(function(){ renderCalendar(); }).catch(function(){});
       })
       .subscribe();
     // E2: 異常フラグ（feed_logs で flag=true の insert）→ 表示
