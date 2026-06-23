@@ -802,7 +802,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
         <option value="bgrade">B品数(尾)</option>
       </select>
       <span style="flex:1"></span>
-      <button class="btn btn-secondary btn-sm" onclick="alert('Excelエクスポート')">📥 Excel出力</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportMonthlyMatrixCsv()">📥 Excel出力</button>
     </div>
     <div class="matrix-wrap">
       <table class="matrix-table" id="monthlyMatrix"></table>
@@ -3489,46 +3489,82 @@ function exportDailyMatrixCsv(){
 // ══════════════════════════════════════════
 // DIARY — 月別マトリクス
 // ══════════════════════════════════════════
-function renderMonthlyMatrix(){
+// 月選択を直近6ヶ月で生成（YYYY-MM）
+function populateMonthSel(){
+  var sel=document.getElementById('monthlyMonthSel'); if(!sel) return;
+  var d=new Date(); var opts='';
+  for(var i=0;i<6;i++){
+    var dt=new Date(d.getFullYear(), d.getMonth()-i, 1);
+    var ym=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+    opts+='<option value="'+ym+'"'+(i===0?' selected':'')+'>'+dt.getFullYear()+'年'+(dt.getMonth()+1)+'月</option>';
+  }
+  sel.innerHTML=opts;
+}
+// 月別マトリクス＝feed_logsを いけす×日 で集計（給餌量/斃死/B品）
+async function renderMonthlyMatrix(){
   var tbl=document.getElementById('monthlyMatrix');
   if(!tbl)return;
-  var todayDay=new Date().getDate();
+  var sel=document.getElementById('monthlyMonthSel');
+  var ym=sel?sel.value:'';
+  if(!/^\d{4}-\d{2}$/.test(ym)){ populateMonthSel(); ym=sel?sel.value:''; }
   var dataType=(document.getElementById('monthlyDataSel')||{}).value||'feed';
-  var days=31;
-
-  // Column header
+  var field=(dataType==='mort')?'mort':(dataType==='bgrade')?'bgrade':'feed_kg';
+  var y=+ym.split('-')[0], mo=+ym.split('-')[1];
+  var days=new Date(y, mo, 0).getDate();
+  var todayDay=(new Date().getFullYear()===y && (new Date().getMonth()+1)===mo)?new Date().getDate():-1;
+  // 集計（pond_id -> {day: sum}）
+  var map={};
+  try{
+    var nx=new Date(y, mo, 1); var nxStr=nx.getFullYear()+'-'+String(nx.getMonth()+1).padStart(2,'0')+'-01';
+    var res=await sb.from('feed_logs').select('pond_id,log_date,feed_kg,mort,bgrade').gte('log_date',ym+'-01').lt('log_date',nxStr);
+    if(!res.error){
+      (res.data||[]).forEach(function(r){
+        var day=parseInt(String(r.log_date).slice(8,10)); if(!day) return;
+        var v=parseFloat(r[field])||0; if(!v) return;
+        if(!map[r.pond_id]) map[r.pond_id]={};
+        map[r.pond_id][day]=(map[r.pond_id][day]||0)+v;
+      });
+    }
+  }catch(e){ console.warn('[月別] 集計スキップ:', e.message); }
+  var fmt=function(v){ return v?(field==='feed_kg'?(Math.round(v*10)/10):v):''; };
   var head='<thead><tr><th class="row-head">いけす名</th>';
   for(var d=1;d<=days;d++){
     var isT=(d===todayDay);
-    var bg=isT?';background:#0f2540':'';
-    head+='<th style="min-width:34px;text-align:center'+bg+'">'+(isT?'<strong>'+d+'</strong>':d)+'</th>';
+    head+='<th style="min-width:34px;text-align:center'+(isT?';background:#0f2540':'')+'">'+(isT?'<strong>'+d+'</strong>':d)+'</th>';
   }
   head+='<th style="min-width:56px;text-align:right;background:#0f2540">合計</th></tr></thead>';
-
   var body='<tbody>';
-  // TODO: feed_logs 蓄積後に実データ化。現在は入力待ちプレースホルダ
   ['団地','太喜','瀬後の浦','横島','楠森','葛崎'].forEach(function(area){
     var ponds=POND_CONFIG.filter(function(p){return p.area===area&&p.status!=='skip';});
     if(!ponds.length)return;
     body+='<tr class="m-area-sep"><td colspan="'+(days+2)+'">▌ '+area+'エリア</td></tr>';
     ponds.forEach(function(p){
       body+='<tr><td class="row-label">'+p.id+'</td>';
-      var total=0;
-      for(var d=1;d<=days;d++){
-        if(d>todayDay){
-          body+='<td></td>';
-        } else if(d===todayDay&&p.status==='todo'){
-          body+='<td class="unfilled"></td>';
-        } else {
-          var bg2=d===todayDay?'background:#eff6ff;':'';
-          body+='<td style="text-align:center;font-size:11px;'+bg2+'"></td>';
-        }
+      var total=0; var pm=map[p.id]||{};
+      for(var d2=1;d2<=days;d2++){
+        var v=pm[d2]||0; total+=v;
+        body+='<td style="text-align:center;font-size:11px">'+fmt(v)+'</td>';
       }
-      body+='<td style="text-align:right;font-weight:700;font-size:11px;background:#f8fafc">'+total+'</td></tr>';
+      body+='<td style="text-align:right;font-weight:700;font-size:11px;background:#f8fafc">'+(total?fmt(total):0)+'</td></tr>';
     });
   });
   body+='</tbody>';
   tbl.innerHTML=head+body;
+}
+// 月別マトリクスをCSV(Shift-JIS)出力
+function exportMonthlyMatrixCsv(){
+  if(typeof downloadCsv!=='function'){ alert('CSV出力を利用できません'); return; }
+  var tbl=document.getElementById('monthlyMatrix'); if(!tbl) return;
+  var ym=(document.getElementById('monthlyMonthSel')||{}).value||'';
+  var dataType=(document.getElementById('monthlyDataSel')||{}).value||'feed';
+  var label=(dataType==='mort')?'斃死数':(dataType==='bgrade')?'B品数':'給餌量';
+  var rows=[];
+  tbl.querySelectorAll('tr').forEach(function(tr){
+    var cells=[].slice.call(tr.querySelectorAll('th,td')).map(function(c){return c.textContent.trim();});
+    if(cells.length) rows.push(cells);
+  });
+  downloadCsv(rows, '尾上水産_養殖日誌月別_'+label+'_'+ym+'.csv');
+  showToast('月別マトリクス（'+label+'）を出力しました');
 }
 
 // ══════════════════════════════════════════
