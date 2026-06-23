@@ -2037,8 +2037,7 @@ async function init(){
   }
   renderPending();
   renderTankGrid('all');
-  drawFeedChart();
-  drawMortChart();
+  loadDashTrends();
   renderHeatmap();
   renderAlertList();
   renderLotMini();
@@ -2332,11 +2331,34 @@ function drawLineChart(svgId,data,color,W,H){
   svg.innerHTML=gridHtml+'<path d="'+areaD+'" fill="'+color+'" fill-opacity="0.07" stroke="none"/><path d="'+pathD+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linejoin="round"/>'+dots;
 }
 
-function drawFeedChart(){
-  drawLineChart('feedChart',[4820,4950,4780,5100,4890,4760,5020,4930,4850,5180,4920,4840,5050,4880],'#2563eb',700,130);
-}
-function drawMortChart(){
-  drawLineChart('mortChart',[8,5,12,7,4,9,6,14,5,8,11,6,9,7,3,8,12,5,7,10,4,8,6,9,5,12,7,8,6,4],'#dc2626',300,110);
+// ダッシュボードの推移グラフを feed_logs から実データ化（給餌量14日／死亡30日）
+async function loadDashTrends(){
+  function key(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  try{
+    var today=new Date();
+    var start=new Date(today.getFullYear(),today.getMonth(),today.getDate()-29);
+    var res=await sb.from('feed_logs').select('log_date,feed_kg,mort').gte('log_date',key(start));
+    if(res.error) throw res.error;
+    var feedByDay={}, mortByDay={};
+    (res.data||[]).forEach(function(r){
+      var k=String(r.log_date).slice(0,10);
+      feedByDay[k]=(feedByDay[k]||0)+(parseFloat(r.feed_kg)||0);
+      mortByDay[k]=(mortByDay[k]||0)+(parseInt(r.mort)||0);
+    });
+    var feed14=[], mort30=[];
+    for(var i=29;i>=0;i--){
+      var d=new Date(today.getFullYear(),today.getMonth(),today.getDate()-i);
+      var k=key(d);
+      mort30.push(mortByDay[k]||0);
+      if(i<=13) feed14.push(Math.round((feedByDay[k]||0)*10)/10);
+    }
+    drawLineChart('feedChart', feed14, '#2563eb', 700, 130);
+    drawLineChart('mortChart', mort30, '#dc2626', 300, 110);
+  }catch(e){
+    console.warn('[推移グラフ] 実データ取得スキップ:', e.message);
+    drawLineChart('feedChart', new Array(14).fill(0), '#2563eb', 700, 130);
+    drawLineChart('mortChart', new Array(30).fill(0), '#dc2626', 300, 110);
+  }
 }
 
 // ══════════════════════════════════════════
