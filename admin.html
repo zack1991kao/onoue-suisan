@@ -459,6 +459,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
 
   <div class="page-header">
     <div><h2>ダッシュボード</h2><div class="phsub" id="dashDateSub">読み込み中...</div></div>
+    <a class="btn btn-secondary btn-sm" href="https://telemeter-area.jp/amakusa/kumakai_csvDL.htm" target="_blank" rel="noopener" title="水温テレメーターのCSVダウンロード（パスワードを入力して取得）">🌡 水温データ（テレメーター）</a>
   </div>
 
   <div class="summary-row">
@@ -1101,27 +1102,18 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div class="modal">
     <div class="mhd"><h3>📋 受注を追加</h3><button class="mclose" onclick="closeM('mNewOrder')">✕</button></div>
     <div class="mbody">
-      <!-- スマホ版と同じ入力項目に統一（日付/取引先(+その他)/魚種/サイズ/数量/確定・仮）-->
+      <!-- 1取引先で複数サイズ・数量に対応（明細行を追加できる）-->
       <div class="fg"><label>受注日</label><input type="date" class="fc" id="noDate"></div>
       <div class="fg"><label>取引先</label>
         <select class="fc" id="noBuyer" onchange="onNoBuyerChange()"></select>
         <input type="text" class="fc" id="noBuyerOther" placeholder="取引先名を入力（例：田中商店）" style="display:none;margin-top:6px">
       </div>
-      <div class="fr2">
-        <div class="fg"><label>魚種</label><select class="fc" id="noSpecies"><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select></div>
-        <div class="fg"><label>サイズ</label>
-          <select class="fc" id="noSize">
-            <option>0.8kg〜</option><option>1.0kg〜</option><option>1.0〜1.5kg</option>
-            <option>1.5〜2.0kg</option><option>2.0kg〜</option>
-            <option>2.5kg〜</option><option>3.0kg〜</option><option>3.5kg〜</option><option>4.0kg〜</option>
-          </select>
-        </div>
+      <div class="fg"><label>明細（魚種・サイズ・数量）</label>
+        <div id="noLines"></div>
+        <button class="btn btn-secondary btn-sm" type="button" onclick="addOrderLine()">＋ サイズ・数量を追加</button>
       </div>
-      <div class="fr2">
-        <div class="fg"><label>数量（尾）</label><input type="number" class="fc" id="noQty" placeholder="例：100"></div>
-        <div class="fg"><label>ステータス</label>
-          <select class="fc" id="noStatus"><option value="confirmed">確定</option><option value="tentative">仮</option></select>
-        </div>
+      <div class="fg"><label>ステータス</label>
+        <select class="fc" id="noStatus"><option value="confirmed">確定</option><option value="tentative">仮</option></select>
       </div>
     </div>
     <div class="mfoot">
@@ -2636,7 +2628,7 @@ function renderOrderList(){
   var rows=orders.filter(function(o){return(sf==='all'||o.status===sf)&&(bf==='all'||o.buyer===bf)&&(spf==='all'||o.species===spf);});
   document.getElementById('orderListBody').innerHTML=rows.map(function(o){
     var stTag=(o.memo==='仮')?'<span class="stag stag-pending">仮</span>':'<span class="stag stag-done">確定</span>';
-    return '<tr class="clickable" onclick="openDayOrders(\''+(o.order_date||'')+'\')"><td>'+o.date+'</td><td><strong>'+o.buyer+'</strong></td><td>'+o.species+'</td><td style="text-align:right">'+o.qty+'</td><td>'+(o.size||'')+'</td><td>'+(o.shipDate||'')+'</td><td><span class="chip chip-gray">'+(o.route||'')+'</span></td><td>'+stTag+'</td><td><span class="action-link" onclick="event.stopPropagation();openDayOrders(\''+(o.order_date||'')+'\')">編集</span></td></tr>';
+    return '<tr class="clickable" onclick="openDayOrders(\''+(o.order_date||'')+'\')"><td>'+o.date+'</td><td><strong>'+o.buyer+'</strong></td><td>'+o.species+'</td><td style="text-align:right">'+o.qty+'</td><td>'+(o.size||'')+'</td><td>'+(o.shipDate||'')+'</td><td><span class="chip chip-gray">'+(o.route||'')+'</span></td><td>'+stTag+'</td><td><span class="action-link" onclick="event.stopPropagation();openDayOrders(\''+(o.order_date||'')+'\')">編集</span>　<span class="action-link" style="color:var(--red)" onclick="event.stopPropagation();deleteDayOrder('+(o.id||'null')+')">削除</span></td></tr>';
   }).join('');
 }
 
@@ -2647,17 +2639,28 @@ function mdShort(isoDate){
   if(parts.length<3)return isoDate;
   return parseInt(parts[1],10)+'/'+parseInt(parts[2],10);
 }
-// 受注モーダルを開いてスマホ版と同じ初期状態にリセット（dateStr指定で受注日プリセット）
+// 受注明細の1行（魚種・サイズ・数量）を追加。1取引先で複数サイズ・数量に対応
+function addOrderLine(species,size,qty){
+  var wrap=document.getElementById('noLines'); if(!wrap) return;
+  var div=document.createElement('div');
+  div.className='no-line';
+  div.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:6px';
+  div.innerHTML='<select class="fc no-sp" style="flex:1">'+_selOpts(ORDER_SPECIES,species||'マダイ')+'</select>'
+    +'<select class="fc no-sz" style="flex:1.3">'+_selOpts(ORDER_SIZES,size||ORDER_SIZES[0])+'</select>'
+    +'<input type="number" class="fc no-qt" style="width:88px" placeholder="数量" value="'+(qty||'')+'">'
+    +'<span title="この行を削除" style="cursor:pointer;color:var(--red);font-size:18px;padding:0 4px" onclick="this.parentNode.remove()">✕</span>';
+  wrap.appendChild(div);
+}
+// 受注モーダルを開いて初期化（dateStr指定で受注日プリセット・presetSpeciesで最初の明細の魚種）
 function openNewOrder(presetSpecies, dateStr){
   var d=new Date();
   var def=dateStr || (d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
   document.getElementById('noDate').value=def;
   var nb=document.getElementById('noBuyer'); if(nb) nb.value='';
   var nbo=document.getElementById('noBuyerOther'); if(nbo){ nbo.value=''; nbo.style.display='none'; }
-  document.getElementById('noSpecies').value=presetSpecies||'マダイ';
-  document.getElementById('noSize').selectedIndex=0;
-  document.getElementById('noQty').value='';
   document.getElementById('noStatus').value='confirmed';
+  document.getElementById('noLines').innerHTML='';
+  addOrderLine(presetSpecies);   // 最初の1明細
   openM('mNewOrder');
 }
 // 取引先で「その他」を選んだら手入力欄を表示（スマホ版と同じ）
@@ -2741,38 +2744,40 @@ async function saveOrder(){
     if(!other){ alert('「その他」の取引先名を入力してください'); return; }
     buyer=other;
   }
-  var species=document.getElementById('noSpecies').value;
-  var size=document.getElementById('noSize').value;
-  var qty=parseInt(document.getElementById('noQty').value)||0;
   var st=document.getElementById('noStatus').value;          // confirmed / tentative
+  // 明細（魚種・サイズ・数量）を収集。1取引先で複数サイズ・数量に対応
+  var lines=[].slice.call(document.querySelectorAll('#noLines .no-line')).map(function(l){
+    return { species:l.querySelector('.no-sp').value, size:l.querySelector('.no-sz').value, qty:parseInt(l.querySelector('.no-qt').value)||0 };
+  }).filter(function(x){ return x.qty>0; });
   if(!date){ alert('受注日を入力してください'); return; }
   if(!buyer){ alert('取引先を選択してください'); return; }
-  if(!qty){ alert('数量を入力してください'); return; }
+  if(!lines.length){ alert('サイズと数量を1件以上入力してください'); return; }
   var memoTag=(st==='tentative')?'仮':'確定';                 // 仮/確定はmemoで往復（スマホ版と統一）
 
-  // メモリ更新（一覧の先頭に追加・楽観UI）
-  var o={date:mdShort(date),order_date:date,buyer:buyer,species:species,size:size,qty:qty,shipDate:'',route:'',status:'pending',lot:'',memo:memoTag};
-  orders.unshift(o);
+  // メモリ更新（明細ごとに1件・楽観UI）
+  lines.forEach(function(ln){
+    orders.unshift({date:mdShort(date),order_date:date,buyer:buyer,species:ln.species,size:ln.size,qty:ln.qty,shipDate:'',route:'',status:'pending',lot:'',memo:memoTag});
+  });
   renderCalendar();
   renderOrderList();
   closeM('mNewOrder');
 
-  // DB write（.select('id')で0件挿入＝RLS/権限の静かな失敗を検知）
+  // DB write（明細ごとに1行をまとめてinsert・.select('id')で0件＝権限失敗検知）
   try{
-    var r=await sb.from('orders').insert({
-      order_date:date||null, ship_date:null, buyer:buyer, species:species,
-      size:size, qty:qty, route:'', status:'pending', lot:'', memo:memoTag
-    }).select('id');
+    var rows=lines.map(function(ln){
+      return { order_date:date||null, ship_date:null, buyer:buyer, species:ln.species, size:ln.size, qty:ln.qty, route:'', status:'pending', lot:'', memo:memoTag };
+    });
+    var r=await sb.from('orders').insert(rows).select('id');
     if(r.error)throw r.error;
     if(!r.data || r.data.length===0){
-      orders.shift(); renderOrderList(); renderCalendar();   // 楽観UIを巻き戻し
+      orders.splice(0, lines.length); renderOrderList(); renderCalendar();   // 楽観UIを巻き戻し
       alert('⚠ 注文をDBに保存できませんでした（書き込み権限をご確認ください）');
       return;
     }
-    showToast('注文を登録しました（'+memoTag+'）');
+    showToast(lines.length+'件の受注を登録しました（'+memoTag+'）');
   }catch(e){
     console.error('[Supabase] saveOrder failed:',e);
-    orders.shift(); renderOrderList(); renderCalendar();      // 楽観UIを巻き戻し
+    orders.splice(0, lines.length); renderOrderList(); renderCalendar();      // 楽観UIを巻き戻し
     alert('注文のDB保存に失敗しました。通信を確認してください');
   }
 }
