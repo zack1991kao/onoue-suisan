@@ -3218,8 +3218,10 @@ if ('serviceWorker' in navigator) {
 function resolveEmail(v){
   v=(v||'').trim().toLowerCase();
   if(v.indexOf('@')>=0) return v;                              // メール直接
-  if(/^\d+$/.test(v)) return 'staff'+parseInt(v,10)+'@onoue.local'; // 番号→staffN
-  return v + '@onoue.local';                                   // staff01 等のID
+  // 番号→staff0N（2桁ゼロ埋め）。管理者は「kanri1」等→kanri0N。実アカウント形式に一致させる
+  var m=v.match(/^(kanri|staff)?0*(\d+)$/);
+  if(m){ var pre=m[1]||'staff'; return pre + ('0'+m[2]).slice(-2) + '@onoue.local'; }
+  return v + '@onoue.local';
 }
 function resolvePassword(p){
   p=(p||'');

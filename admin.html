@@ -397,8 +397,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div style="background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
     <div style="text-align:center;font-size:40px;margin-bottom:8px;">🐠</div>
     <h2 style="text-align:center;font-size:18px;font-weight:700;color:#0f172a;margin-bottom:4px;">尾上水産 管理システム</h2>
-    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:22px;">ID（番号）と4桁のPINでログイン</p>
-    <input id="lgUser" inputmode="numeric" placeholder="ID（例：1）" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:2px;">
+    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:22px;">ID（管理者は kanri1 等）と4桁のPINでログイン</p>
+    <input id="lgUser" placeholder="ID（例：kanri1）" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:2px;">
     <input id="lgPass" type="password" inputmode="numeric" maxlength="4" placeholder="PIN（4桁）" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:18px;margin-bottom:14px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:6px;">
     <button onclick="doLogin()" style="width:100%;padding:14px;background:#1b3a5c;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">ログイン</button>
     <div id="lgErr" style="display:none;color:#b91c1c;font-size:13px;text-align:center;margin-top:10px;">ユーザー名またはパスワードが違います</div>
@@ -3808,7 +3808,9 @@ var ADMIN_KEY='onoue_admin';   // 管理者解除フラグ（profilesのrole=adm
 function resolveEmail(v){
   v=(v||'').trim().toLowerCase();
   if(v.indexOf('@')>=0) return v;
-  if(/^\d+$/.test(v)) return 'staff'+parseInt(v,10)+'@onoue.local';
+  // 管理者は「kanri1」等→kanri0N、スタッフは番号→staff0N（2桁ゼロ埋め＝実アカウント形式）
+  var m=v.match(/^(kanri|staff)?0*(\d+)$/);
+  if(m){ var pre=m[1]||'staff'; return pre + ('0'+m[2]).slice(-2) + '@onoue.local'; }
   return v + '@onoue.local';
 }
 function resolvePassword(p){ p=(p||''); return /^\d{4}$/.test(p) ? ('onoue'+p) : p; }
@@ -3856,8 +3858,8 @@ function requireAdmin(){
 function navSettings(el){ if(!requireAdmin())return; nav('settings',el); }
 // ===== アカウント管理（管理者のみ）=====
 function navAccounts(el){ if(!requireAdmin())return; nav('accounts',el); loadAccounts(); }
-// email "staff1@onoue.local" → 番号 "1"
-function acctNo(email){ var m=(email||'').match(/^staff(\d+)@/i); return m?m[1]:'—'; }
+// email "staff01@onoue.local" → "01" ／ "kanri01@..." → "管01"
+function acctNo(email){ var m=(email||'').match(/^(kanri|staff)(\d+)@/i); if(!m)return '—'; return (m[1].toLowerCase()==='kanri'?'管':'')+m[2]; }
 async function loadAccounts(){
   var body=document.getElementById('accountsBody');
   if(!body) return;
