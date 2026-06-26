@@ -26,21 +26,29 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const url = new URL(req.url);
   const loc = (url.searchParams.get("loc") || "yokoshima_1.5").replace(/[^a-zA-Z0-9_.]/g, "");
-  try {
-    const res = await fetch(`${BASE}${loc}now.csv`, { headers: { "User-Agent": "onoue-suisan/1.0" } });
+  // CSVを取得して水温行(列index3が水温)を配列化
+  async function readCsv(suffix: string) {
+    const res = await fetch(`${BASE}${loc}${suffix}`, { headers: { "User-Agent": "onoue-suisan/1.0" } });
     if (!res.ok) throw new Error("csv status " + res.status);
-    // CSVはShift-JIS。水温列は数値なのでlatin1でも可だが念のためShift-JISでデコード。
     const buf = await res.arrayBuffer();
     let text: string;
     try { text = new TextDecoder("shift_jis").decode(buf); }
     catch { text = new TextDecoder("utf-8").decode(buf); }
     const lines = text.trim().split(/\r?\n/).slice(1).filter((l) => l.trim());
-    const rows = lines
+    return lines
       .map((l) => { const c = l.split(","); return { t: c[0], temp: parseFloat(c[3]), sal: parseFloat(c[4]) }; })
       .filter((r) => !isNaN(r.temp));
+  }
+  try {
+    // 当月(now)を優先。空（停止中のセンサー等）なら通年ファイルにフォールバックして最後の値を返す
+    let rows = await readCsv("now.csv");
+    let stale = false;
+    if (!rows.length) {
+      try { const hist = await readCsv(".csv"); if (hist.length) { rows = hist; stale = true; } } catch (_) { /* noop */ }
+    }
     const latest = rows.length ? rows[rows.length - 1] : null;
     const trend = rows.slice(-48).map((r) => r.temp); // 直近24時間（30分×48）
-    return new Response(JSON.stringify({ loc, latest, trend, count: rows.length }), {
+    return new Response(JSON.stringify({ loc, latest, trend, count: rows.length, stale }), {
       headers: { ...CORS, "Content-Type": "application/json" },
     });
   } catch (e) {
