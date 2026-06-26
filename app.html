@@ -1027,6 +1027,18 @@ body {
 }
 .os-confirmed { background: #dcfce7; color: #166534; }
 .os-tentative  { background: #fef9c3; color: #854d0e; }
+.order-cancel-x {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
 
 /* ===== AI Mode Toggle ===== */
 .ai-toggle-sp{
@@ -1265,11 +1277,11 @@ body.ai-mode-on .ai-home-banner{display:flex}
   <div style="background:#fff;border-radius:16px;padding:32px 24px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
     <div style="text-align:center;font-size:40px;margin-bottom:8px;">🐟</div>
     <h2 style="text-align:center;font-size:17px;font-weight:700;color:#0f172a;margin-bottom:4px;">尾上水産 スタッフ</h2>
-    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:20px;">ID（例：staff01）とパスワードでログイン</p>
-    <input id="lgUser" placeholder="ID または メール" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:16px;margin-bottom:10px;outline:none;box-sizing:border-box;">
-    <input id="lgPass" type="password" placeholder="パスワード" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:16px;margin-bottom:14px;outline:none;box-sizing:border-box;">
+    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:20px;">ID（番号）と4桁のPINでログイン</p>
+    <input id="lgUser" inputmode="numeric" placeholder="ID（例：1）" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:16px;margin-bottom:10px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:2px;">
+    <input id="lgPass" type="password" inputmode="numeric" maxlength="4" placeholder="PIN（4桁）" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:20px;margin-bottom:14px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:8px;">
     <button onclick="doLogin()" style="width:100%;padding:14px;background:#1b3a5c;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">ログイン</button>
-    <div id="lgErr" style="display:none;color:#b91c1c;font-size:13px;text-align:center;margin-top:10px;">ユーザー名またはパスワードが違います</div>
+    <div id="lgErr" style="display:none;color:#b91c1c;font-size:13px;text-align:center;margin-top:10px;">IDまたはPINが違います</div>
   </div>
 </div>
 <div class="phone" id="phone">
@@ -1548,6 +1560,16 @@ body.ai-mode-on .ai-home-banner{display:flex}
       <select class="rec-select" id="recBait2"></select>
     </div>
     <button class="rec-add-bait2-btn" id="recAddBait2Btn" onclick="toggleBait2Field()">＋ 配合餌を追加</button>
+    <div class="rec-field" id="recBait3Wrap" style="display:none;">
+      <div class="rec-label">生エサ（カンパチ用）</div>
+      <div class="rec-row">
+        <select class="rec-select" id="recBait3" style="flex:1.3"></select>
+        <div class="rec-field" style="flex:1;margin:0">
+          <input class="rec-input" type="number" id="recBait3Kg" inputmode="decimal" placeholder="kg">
+        </div>
+      </div>
+    </div>
+    <button class="rec-add-bait2-btn" id="recAddBait3Btn" onclick="toggleBait3Field()">＋ 生エサを追加</button>
     <div class="rec-row">
       <div class="rec-field" style="flex:1">
         <div class="rec-label">死魚数 (尾)</div>
@@ -1736,6 +1758,8 @@ const DRUGS = [
   'エンロフロキサシン','プラジクアンテル','トリクロルホン',
   'マラカイトグリーン','ホルマリン','その他'
 ];
+// 生エサ（カンパチ用）：イワシ・サバ・さんま（6/26 社長要望）
+const NAMA_ESA = ['イワシ', 'サバ', 'さんま'];
 
 // 受注は Supabase の orders から取得（PC版と完全共有）。サンプルは持たない。
 var ORDERS = [];
@@ -1751,10 +1775,11 @@ var dbOrders = [];
 function orderKey(o){ return (o.date||'')+'|'+(o.buyer||'')+'|'+(o.fish||'')+'|'+(o.spec||''); }
 async function loadAppOrders() {
   try {
-    var res = await sb.from('orders').select('order_date,buyer,species,size,qty,status,memo').order('order_date',{ascending:false}).limit(300);
+    var res = await sb.from('orders').select('id,order_date,buyer,species,size,qty,status,memo').order('order_date',{ascending:false}).limit(300);
     if (res.error) throw res.error;
     dbOrders = (res.data||[]).map(function(r){
       return {
+        id: r.id,
         date: r.order_date,
         buyer: r.buyer,
         fish: r.species,
@@ -1795,13 +1820,13 @@ var CAGE_MAP = {
   '団地-07':{x:120,y:64,sh:'sq'},'団地-08':{x:120,y:92,sh:'sq'},
   '団地-09':{x:120,y:120,sh:'sq'},'団地-10':{x:120,y:148,sh:'sq'},
   '団地-11':{x:120,y:176,sh:'sq'},'団地-12':{x:120,y:204,sh:'sq'},
-  '団地-13':{x:90,y:176,sh:'ci'},'団地-14':{x:90,y:244,sh:'sq'},
-  '団地-15':{x:90,y:272,sh:'sq'},'団地-16':{x:90,y:300,sh:'sq'},
-  '団地-17':{x:90,y:328,sh:'sq'},'団地-18':{x:90,y:356,sh:'sq'},
-  '団地-19':{x:150,y:244,sh:'sq'},'団地-20':{x:150,y:272,sh:'sq'},
-  '団地-21':{x:150,y:300,sh:'sq'},'団地-22':{x:120,y:244,sh:'sq'},
-  '団地-23':{x:120,y:272,sh:'sq'},'団地-24':{x:120,y:300,sh:'sq'},
-  '団地-25':{x:120,y:328,sh:'sq'},'団地-26':{x:120,y:356,sh:'sq'},
+  // 6/26 社長指示：13を先頭に左列、19・20・21を18の下へ、22-26を右列の2列構成
+  '団地-13':{x:90,y:176,sh:'ci'},
+  '団地-14':{x:90,y:204,sh:'sq'},'団地-15':{x:90,y:232,sh:'sq'},'団地-16':{x:90,y:260,sh:'sq'},
+  '団地-17':{x:90,y:288,sh:'sq'},'団地-18':{x:90,y:316,sh:'sq'},
+  '団地-19':{x:90,y:344,sh:'sq'},'団地-20':{x:90,y:372,sh:'sq'},'団地-21':{x:90,y:400,sh:'sq'},
+  '団地-22':{x:120,y:232,sh:'sq'},'団地-23':{x:120,y:260,sh:'sq'},'団地-24':{x:120,y:288,sh:'sq'},
+  '団地-25':{x:120,y:316,sh:'sq'},'団地-26':{x:120,y:344,sh:'sq'},
 
   '太喜-01':{x:200,y:10,sh:'sq'},'太喜-02':{x:200,y:38,sh:'sq'},
   '太喜-03':{x:200,y:66,sh:'sq'},'太喜-04':{x:200,y:94,sh:'sq'},
@@ -1817,12 +1842,13 @@ var CAGE_MAP = {
   '横島-01':{x:88,y:500,sh:'ci'},'横島-02':{x:88,y:532,sh:'sq'},
   '横島-03':{x:88,y:560,sh:'sq'},'横島-04':{x:88,y:588,sh:'sq'},
   '横島-05':{x:88,y:616,sh:'sq'},'横島-06':{x:88,y:644,sh:'sq'},
+  // 6/26 社長指示：8,9,10を左縦・16,17,18を右縦の2列に
   '横島-07':{x:88,y:672,sh:'sq'},'横島-08':{x:128,y:500,sh:'ci'},
-  '横島-09':{x:160,y:500,sh:'ci'},'横島-10':{x:192,y:500,sh:'ci'},
+  '横島-09':{x:128,y:528,sh:'ci'},'横島-10':{x:128,y:556,sh:'ci'},
   '横島-11':{x:112,y:572,sh:'sq'},'横島-12':{x:112,y:600,sh:'sq'},
   '横島-13':{x:112,y:628,sh:'sq'},'横島-14':{x:112,y:656,sh:'sq'},
-  '横島-15':{x:112,y:684,sh:'sq'},'横島-16':{x:128,y:532,sh:'ci'},
-  '横島-17':{x:160,y:532,sh:'ci'},'横島-18':{x:192,y:532,sh:'ci'},
+  '横島-15':{x:112,y:684,sh:'sq'},'横島-16':{x:162,y:500,sh:'ci'},
+  '横島-17':{x:162,y:528,sh:'ci'},'横島-18':{x:162,y:556,sh:'ci'},
   '横島-19':{x:144,y:572,sh:'sq'},'横島-20':{x:144,y:600,sh:'sq'},
   '横島-21':{x:144,y:628,sh:'sq'},'横島-22':{x:144,y:656,sh:'sq'},
   '横島-23':{x:144,y:684,sh:'sq'},'横島-24':{x:176,y:572,sh:'sq'},
@@ -1839,7 +1865,7 @@ var CAGE_MAP = {
 // 上端(団地/太喜/瀬後の浦)はviewBoxの上余白(-22)に収まる。
 var AREA_BOXES = [
   {area:'楠森',     lx:6,  ly:30, bx:5,  by:37, bw:63, bh:444},
-  {area:'団地',     lx:86, ly:-2, bx:86, by:5,  bw:92, bh:382},
+  {area:'団地',     lx:86, ly:-2, bx:86, by:5,  bw:92, bh:428},
   {area:'太喜',     lx:196,ly:-1, bx:196,by:6,  bw:30, bh:230},
   {area:'瀬後の浦', lx:250,ly:-1, bx:250,by:6,  bw:34, bh:292},
   {area:'横島',     lx:84, ly:489,bx:84, by:496,bw:120,bh:220},
@@ -1918,12 +1944,13 @@ function switchTab(tab) {
 function goHome() { switchTab('home'); }
 
 // ===== 水温（テレメーター）=====
+// 6/26 社長要望：王道(大道)と荒口(嵐口)。初期表示=王道1.5m。
+// ※荒口は1.5mのみテレメーターに公開データあり（5m/10mは未公開のため除外）。
 var WATER_LOCS = [
-  {loc:'yokoshima_1.5', name:'横島 1.5m'},
-  {loc:'yokoshima_5',   name:'横島 5m'},
-  {loc:'oodou_1.5',     name:'大道 1.5m'},
-  {loc:'oohirashima_1.5', name:'大平島 1.5m'},
-  {loc:'hukami_1.5m',   name:'深海 1.5m'}
+  {loc:'oodou_1.5',    name:'王道 1.5m'},
+  {loc:'oodou_5',      name:'王道 5m'},
+  {loc:'oodou_10',     name:'王道 10m'},
+  {loc:'arakuchi1.5m', name:'荒口 1.5m'}
 ];
 async function loadWaterTempApp() {
   var wrap = document.getElementById('waterCards');
@@ -2021,31 +2048,29 @@ function drawFishMap(areaFilter) {
     var num = parseInt(p.id.split('-')[1]).toString();
     var cx = cm.x + R, cy = cm.y + R;
     var tap = "onclick=\"homeSelectPond('" + p.id + "')\" style='cursor:pointer'";
+    // #5: 学年（年魚）。拡大時・空き以外はセル「内」に表示するため、番号を少し上げる（社長要望：枠の中に）
+    var yr = (areaFilter && p.status !== 'skip' && POND_YR[p.id]) ? POND_YR[p.id] : null;
+    var numY = yr ? (cm.y + 11) : (cy + 4);
     if (cm.sh === 'ci') {
       html += "<circle cx='" + cx + "' cy='" + cy + "' r='" + R + "'"
             + " fill='" + st.f + "' stroke='" + st.k + "' stroke-width='1.5' " + tap + "/>";
-      html += "<text x='" + cx + "' y='" + (cy + 4) + "' text-anchor='middle'"
-            + " font-size='9' font-weight='700' fill='" + st.t + "' " + FF
-            + " pointer-events='none'>" + num + "</text>";
     } else {
       html += "<rect x='" + cm.x + "' y='" + cm.y + "' width='" + SZ + "' height='" + SZ + "'"
             + " rx='2.5' fill='" + st.f + "' stroke='" + st.k + "' stroke-width='1.5' " + tap + "/>";
-      html += "<text x='" + cx + "' y='" + (cy + 4) + "' text-anchor='middle'"
-            + " font-size='9' font-weight='700' fill='" + st.t + "' " + FF
-            + " pointer-events='none'>" + num + "</text>";
     }
-    // #5: 学年（年魚）をセル下に表示（エリア絞り込み＝拡大時のみ・空き以外）
-    var hasYr = false;
-    if (areaFilter && p.status !== 'skip' && POND_YR[p.id]) {
-      hasYr = true;
-      html += "<text x='" + cx + "' y='" + (cm.y + SZ + 7) + "' text-anchor='middle'"
+    html += "<text x='" + cx + "' y='" + numY + "' text-anchor='middle'"
+          + " font-size='9' font-weight='700' fill='" + st.t + "' " + FF
+          + " pointer-events='none'>" + num + "</text>";
+    if (yr) {
+      // 番号の下・セル内に「N年」を小さく表示
+      html += "<text x='" + cx + "' y='" + (cm.y + SZ - 3) + "' text-anchor='middle'"
             + " font-size='7' font-weight='700' fill='#2563eb' " + FF
-            + " pointer-events='none'>" + POND_YR[p.id] + "年</text>";
+            + " pointer-events='none'>" + yr + "年</text>";
     }
-    // A4: 給餌済みのいけすは入力した給餌量(kg)を表示（年魚があれば2行目に回して重なり回避）
+    // A4: 給餌済みのいけすは入力した給餌量(kg)を枠の下に表示（年魚はセル内なので重ならない）
     if (areaFilter && p.status === 'done' && (p.feedKg || p.feed_kg || p.feed)) {
       var kg = p.feedKg || p.feed_kg || p.feed;
-      html += "<text x='" + cx + "' y='" + (cm.y + SZ + (hasYr ? 15 : 7)) + "' text-anchor='middle'"
+      html += "<text x='" + cx + "' y='" + (cm.y + SZ + 7) + "' text-anchor='middle'"
             + " font-size='7' font-weight='700' fill='#166534' " + FF
             + " pointer-events='none'>" + kg + "kg</text>";
     }
@@ -2144,6 +2169,15 @@ function openRecordPanel(id) {
     addBtn.textContent = '＋ 配合餌を追加';
   }
 
+  // 生エサ（カンパチ用）セレクト構築。毎回イベント入力なので開くたびに空から
+  var bait3El = document.getElementById('recBait3');
+  bait3El.innerHTML = NAMA_ESA.map(function(b) {
+    return '<option value="' + b + '">' + b + '</option>';
+  }).join('');
+  document.getElementById('recBait3Kg').value = '';
+  document.getElementById('recBait3Wrap').style.display = 'none';
+  document.getElementById('recAddBait3Btn').textContent = '＋ 生エサを追加';
+
   // 薬品セレクト構築
   var drugSel = document.getElementById('recDrugSelect');
   drugSel.innerHTML = DRUGS.map(function(d) {
@@ -2207,6 +2241,14 @@ function toggleBait2Field() {
   btn.textContent = visible ? '＋ 配合餌を追加' : '－ 配合餌を削除';
   if (visible) document.getElementById('recBait2').value = '';
 }
+function toggleBait3Field() {
+  var wrap = document.getElementById('recBait3Wrap');
+  var btn = document.getElementById('recAddBait3Btn');
+  var visible = wrap.style.display !== 'none';
+  wrap.style.display = visible ? 'none' : 'block';
+  btn.textContent = visible ? '＋ 生エサを追加' : '－ 生エサを削除';
+  if (visible) document.getElementById('recBait3Kg').value = '';
+}
 function toggleRecordDrug() {
   var row = document.getElementById('recDrugRow');
   var on = row.classList.toggle('on');
@@ -2234,6 +2276,15 @@ async function saveRecord() {
   var drugAmt = drugOn ? (parseFloat(document.getElementById('recDrugAmt').value) || 0) : 0;
   var flagOn = document.getElementById('recFlagRow').classList.contains('on');
   var memo = document.getElementById('recMemo').value.trim();
+  // 生エサ（カンパチ用）：入力があればmemoに必ず記録（履歴で確実に見える）＋feed_logsにも構造化
+  var bait3 = '', bait3Kg = 0;
+  if (document.getElementById('recBait3Wrap').style.display !== 'none') {
+    bait3 = document.getElementById('recBait3').value || '';
+    bait3Kg = parseFloat(document.getElementById('recBait3Kg').value) || 0;
+  }
+  if (bait3 && bait3Kg > 0) {
+    memo = '【生エサ】' + bait3 + ' ' + bait3Kg + 'kg' + (memo ? ' / ' + memo : '');
+  }
 
   // メモリ更新（既存ロジック）
   p.feed = feed;
@@ -2283,6 +2334,7 @@ async function saveRecord() {
 
   // ② 給餌ログ（補助的。失敗しても在庫保存は成立済み）
   try {
+    // 生エサは memo に記録済み（列追加なしで確実に残す）。構造化が必要になれば feed_logs に bait3 列を追加。
     var r2 = await sb.from('feed_logs').insert({
       pond_id:  p.id,
       log_date: logDate,
@@ -2684,10 +2736,13 @@ function renderCalendar() {
     var tag = o.status === 'confirmed'
       ? '<span class="order-status-tag os-confirmed">確定</span>'
       : '<span class="order-status-tag os-tentative">仮</span>';
+    var cancelBtn = (o.id != null)
+      ? '<button class="order-cancel-x" onclick="cancelAppOrder(\'' + o.id + '\')" title="この受注をキャンセル">✕</button>'
+      : '';
     return '<div class="order-item">' +
       '<div class="order-date">' + mm + '/' + dd + '</div>' +
       '<div class="order-detail"><div class="order-buyer">' + o.buyer + '</div><div class="order-spec">' + o.fish + '　' + o.spec + '</div></div>' +
-      tag + '</div>';
+      tag + cancelBtn + '</div>';
   }).join('');
   document.getElementById('ordersList').innerHTML = listHtml || '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:14px;">受注データはありません</div>';
 }
@@ -2768,6 +2823,27 @@ async function saveNewOrder() {
   } catch (e) {
     console.error('[Supabase] saveNewOrder failed:', e);
     alert('受注をDBに保存できませんでした。通信を確認のうえ、もう一度お試しください');
+  }
+}
+
+// 受注のキャンセル（削除）：一覧の✕から。DBから削除し、PC・他端末にも即反映（6/26 社長要望）
+async function cancelAppOrder(id) {
+  if (id == null || id === '') return;
+  if (!confirm('この受注をキャンセル（削除）しますか？')) return;
+  // 楽観的UI：メモリから除外して即再描画
+  var removed = dbOrders.filter(function(o){ return String(o.id) === String(id); });
+  dbOrders = dbOrders.filter(function(o){ return String(o.id) !== String(id); });
+  renderCalendar();
+  try {
+    var r = await sb.from('orders').delete().eq('id', id).select('id');
+    if (r.error) throw r.error;
+    if (!r.data || r.data.length === 0) throw new Error('0 rows deleted（権限/RLS の可能性）');
+  } catch (e) {
+    console.error('[Supabase] cancelAppOrder failed:', e);
+    alert('受注を削除できませんでした。通信を確認のうえ、もう一度お試しください');
+    // ロールバック：消した行を戻す
+    dbOrders = removed.concat(dbOrders);
+    renderCalendar();
   }
 }
 
@@ -2893,7 +2969,11 @@ async function moveSave() {
       if (!toP.species && fromP && fromP.species) toP.species = fromP.species;
     }
   }
-  if (fromP) fromP.stock = Math.max(0, (fromP.stock || 0) - cnt);
+  if (fromP) {
+    fromP.stock = Math.max(0, (fromP.stock || 0) - cnt);
+    // 移動で在庫が0になったら自動で「空き」(グレー)化（社長要望：移動元が空のまま赤く残るのを解消）
+    if (fromP.stock === 0) { fromP.status = 'skip'; fromP.species = ''; }
+  }
   drawFishMap(currentHomeArea);
 
   if (cnt <= 0 || !state.mv.to) return;
@@ -2906,7 +2986,7 @@ async function moveSave() {
   var ok = true;
   var nowIso = new Date().toISOString();
   if (toP)   ok = (await dbUpdatePond(toP.id,   { stock: toP.stock, status: toP.status, species: toP.species || '', updated_at: nowIso })) && ok;
-  if (fromP && ok) ok = (await dbUpdatePond(fromP.id, { stock: fromP.stock, status: fromP.status, updated_at: nowIso })) && ok;
+  if (fromP && ok) ok = (await dbUpdatePond(fromP.id, { stock: fromP.stock, status: fromP.status, species: fromP.species || '', updated_at: nowIso })) && ok;
   if (!ok) return; // 失敗時は dbUpdatePond 内で警告済み
 
   // ② 移動ログ（補助的。失敗しても在庫保存は成立済み）
@@ -3132,11 +3212,22 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ===== ログイン（Supabase Auth：メール/パスワード）=====
-function resolveEmail(v){ v=(v||'').trim().toLowerCase(); return v.indexOf('@')>=0 ? v : (v + '@onoue.local'); }
+// ===== ログイン（Supabase Auth）：画面はID（番号）＋4桁PIN。内部でメール/パスワードへ変換 =====
+// 番号「1」→ staff1@onoue.local ／ PIN「1234」→ パスワード「onoue1234」（Supabaseの最小6文字を満たす）
+// ※従来のメール／フルパスワードもそのまま使える（後方互換）
+function resolveEmail(v){
+  v=(v||'').trim().toLowerCase();
+  if(v.indexOf('@')>=0) return v;                              // メール直接
+  if(/^\d+$/.test(v)) return 'staff'+parseInt(v,10)+'@onoue.local'; // 番号→staffN
+  return v + '@onoue.local';                                   // staff01 等のID
+}
+function resolvePassword(p){
+  p=(p||'');
+  return /^\d{4}$/.test(p) ? ('onoue'+p) : p;                  // 4桁PIN→onoueXXXX／それ以外は従来パスワード
+}
 async function doLogin() {
   var email = resolveEmail(document.getElementById('lgUser').value);
-  var pass  = document.getElementById('lgPass').value;
+  var pass  = resolvePassword(document.getElementById('lgPass').value);
   document.getElementById('lgErr').style.display = 'none';
   try {
     var res = await sb.auth.signInWithPassword({ email: email, password: pass });

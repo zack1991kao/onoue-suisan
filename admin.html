@@ -397,9 +397,9 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div style="background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
     <div style="text-align:center;font-size:40px;margin-bottom:8px;">🐠</div>
     <h2 style="text-align:center;font-size:18px;font-weight:700;color:#0f172a;margin-bottom:4px;">尾上水産 管理システム</h2>
-    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:22px;">ID（例：kanri01）とパスワードでログイン</p>
-    <input id="lgUser" placeholder="ID または メール" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;box-sizing:border-box;">
-    <input id="lgPass" type="password" placeholder="パスワード" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:14px;outline:none;box-sizing:border-box;">
+    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:22px;">ID（番号）と4桁のPINでログイン</p>
+    <input id="lgUser" inputmode="numeric" placeholder="ID（例：1）" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:2px;">
+    <input id="lgPass" type="password" inputmode="numeric" maxlength="4" placeholder="PIN（4桁）" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:18px;margin-bottom:14px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:6px;">
     <button onclick="doLogin()" style="width:100%;padding:14px;background:#1b3a5c;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">ログイン</button>
     <div id="lgErr" style="display:none;color:#b91c1c;font-size:13px;text-align:center;margin-top:10px;">ユーザー名またはパスワードが違います</div>
   </div>
@@ -424,6 +424,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <button class="nav-btn" onclick="navPayments(this)"><span class="nav-icon">💰</span>入金管理 🔒</button>
     <button class="nav-btn" onclick="nav('history',this);loadHistory()"><span class="nav-icon">📜</span>履歴</button>
     <button class="nav-btn" onclick="navSettings(this)"><span class="nav-icon">⚙️</span>設定 🔒</button>
+    <button class="nav-btn" onclick="navAccounts(this)"><span class="nav-icon">👥</span>アカウント管理 🔒</button>
     <button class="nav-btn" onclick="navAi('ai',this)"><span class="nav-icon">🤖</span>AI機能</button>
   </nav>
   <div class="sidebar-footer">
@@ -492,11 +493,10 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <div class="scard" id="waterTempCard">
       <div class="slabel">🌡 海水温
         <select id="wtLoc" onchange="loadWaterTemp()" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:1px 2px;margin-left:4px">
-          <option value="yokoshima_1.5">横島1.5m</option>
-          <option value="yokoshima_5">横島5m</option>
-          <option value="oodou_1.5">大道1.5m</option>
-          <option value="oohirashima_1.5">大平島1.5m</option>
-          <option value="hukami_1.5m">深海1.5m</option>
+          <option value="oodou_1.5">王道1.5m</option>
+          <option value="oodou_5">王道5m</option>
+          <option value="oodou_10">王道10m</option>
+          <option value="arakuchi1.5m">荒口1.5m</option>
         </select>
       </div>
       <div class="sval" id="wtVal" style="font-size:24px">—</div>
@@ -979,6 +979,26 @@ body.ai-mode-on .ai-element-flex{display:flex}
           <p style="font-size:11px;color:var(--gray);margin-top:8px">対応フォーマット：給餌記録CSV・水温ログCSV</p>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ アカウント管理 ═══ -->
+<div class="screen" id="s-accounts">
+  <div class="page-header"><h2>アカウント管理</h2></div>
+  <div class="card">
+    <div style="font-size:13px;color:var(--sub);margin-bottom:12px">
+      スタッフ／管理者の一覧です。ログインは <b>ID（番号）＋4桁PIN</b> です（例：ID「1」＝staff1）。<br>
+      表示名・権限・有効/無効をここで変更できます。<b>新規アカウントの発行はSupabaseでの作成（Isaac作業）</b>が必要です。
+    </div>
+    <table class="data-table" id="accountsTable" style="width:100%">
+      <thead><tr>
+        <th>番号</th><th>アカウント</th><th>表示名（メモ）</th><th>権限</th><th>状態</th><th></th>
+      </tr></thead>
+      <tbody id="accountsBody"><tr><td colspan="6" style="text-align:center;color:var(--gray);padding:18px">読み込み中…</td></tr></tbody>
+    </table>
+    <div style="font-size:12px;color:var(--gray);margin-top:10px">
+      💡 退職者は「無効」にするとログインしてもデータにアクセスできなくなります（アカウントは残ります）。
     </div>
   </div>
 </div>
@@ -1469,13 +1489,12 @@ var CAGE_MAP={
   '団地-07':{x:120,y:64,sh:'sq'},'団地-08':{x:120,y:92,sh:'sq'},
   '団地-09':{x:120,y:120,sh:'sq'},'団地-10':{x:120,y:148,sh:'sq'},
   '団地-11':{x:120,y:176,sh:'sq'},'団地-12':{x:120,y:204,sh:'sq'},
-  '団地-13':{x:90,y:176,sh:'ci'},'団地-14':{x:90,y:244,sh:'sq'},
-  '団地-15':{x:90,y:272,sh:'sq'},'団地-16':{x:90,y:300,sh:'sq'},
-  '団地-17':{x:90,y:328,sh:'sq'},'団地-18':{x:90,y:356,sh:'sq'},
-  '団地-19':{x:150,y:244,sh:'sq'},'団地-20':{x:150,y:272,sh:'sq'},
-  '団地-21':{x:150,y:300,sh:'sq'},'団地-22':{x:120,y:244,sh:'sq'},
-  '団地-23':{x:120,y:272,sh:'sq'},'団地-24':{x:120,y:300,sh:'sq'},
-  '団地-25':{x:120,y:328,sh:'sq'},'団地-26':{x:120,y:356,sh:'sq'},
+  '団地-13':{x:90,y:176,sh:'ci'},
+  '団地-14':{x:90,y:204,sh:'sq'},'団地-15':{x:90,y:232,sh:'sq'},'団地-16':{x:90,y:260,sh:'sq'},
+  '団地-17':{x:90,y:288,sh:'sq'},'団地-18':{x:90,y:316,sh:'sq'},
+  '団地-19':{x:90,y:344,sh:'sq'},'団地-20':{x:90,y:372,sh:'sq'},'団地-21':{x:90,y:400,sh:'sq'},
+  '団地-22':{x:120,y:232,sh:'sq'},'団地-23':{x:120,y:260,sh:'sq'},'団地-24':{x:120,y:288,sh:'sq'},
+  '団地-25':{x:120,y:316,sh:'sq'},'団地-26':{x:120,y:344,sh:'sq'},
   '太喜-01':{x:200,y:10,sh:'sq'},'太喜-02':{x:200,y:38,sh:'sq'},
   '太喜-03':{x:200,y:66,sh:'sq'},'太喜-04':{x:200,y:94,sh:'sq'},
   '太喜-05':{x:200,y:122,sh:'sq'},'太喜-06':{x:200,y:150,sh:'sq'},
@@ -1489,11 +1508,11 @@ var CAGE_MAP={
   '横島-03':{x:88,y:560,sh:'sq'},'横島-04':{x:88,y:588,sh:'sq'},
   '横島-05':{x:88,y:616,sh:'sq'},'横島-06':{x:88,y:644,sh:'sq'},
   '横島-07':{x:88,y:672,sh:'sq'},'横島-08':{x:128,y:500,sh:'ci'},
-  '横島-09':{x:160,y:500,sh:'ci'},'横島-10':{x:192,y:500,sh:'ci'},
+  '横島-09':{x:128,y:528,sh:'ci'},'横島-10':{x:128,y:556,sh:'ci'},
   '横島-11':{x:112,y:572,sh:'sq'},'横島-12':{x:112,y:600,sh:'sq'},
   '横島-13':{x:112,y:628,sh:'sq'},'横島-14':{x:112,y:656,sh:'sq'},
-  '横島-15':{x:112,y:684,sh:'sq'},'横島-16':{x:128,y:532,sh:'ci'},
-  '横島-17':{x:160,y:532,sh:'ci'},'横島-18':{x:192,y:532,sh:'ci'},
+  '横島-15':{x:112,y:684,sh:'sq'},'横島-16':{x:162,y:500,sh:'ci'},
+  '横島-17':{x:162,y:528,sh:'ci'},'横島-18':{x:162,y:556,sh:'ci'},
   '横島-19':{x:144,y:572,sh:'sq'},'横島-20':{x:144,y:600,sh:'sq'},
   '横島-21':{x:144,y:628,sh:'sq'},'横島-22':{x:144,y:656,sh:'sq'},
   '横島-23':{x:144,y:684,sh:'sq'},'横島-24':{x:176,y:572,sh:'sq'},
@@ -1506,7 +1525,7 @@ var CAGE_MAP={
 };
 var AREA_BOXES_PC=[
   {area:'楠森',    lx:8,  ly:34, bx:5,  by:37, bw:63, bh:444},
-  {area:'団地',    lx:88, ly:4,  bx:86, by:5,  bw:92, bh:382},
+  {area:'団地',    lx:88, ly:4,  bx:86, by:5,  bw:92, bh:428},
   {area:'太喜',    lx:198,ly:6,  bx:196,by:6,  bw:30, bh:230},
   {area:'瀬後の浦',lx:252,ly:6,  bx:250,by:6,  bw:34, bh:292},
   {area:'横島',    lx:86, ly:494,bx:84, by:496,bw:120,bh:220},
@@ -3785,7 +3804,14 @@ if ('serviceWorker' in navigator) {
 
 // ===== ログイン（Supabase Auth）＋管理者ロール =====
 var ADMIN_KEY='onoue_admin';   // 管理者解除フラグ（profilesのrole=adminで自動セット）
-function resolveEmail(v){ v=(v||'').trim().toLowerCase(); return v.indexOf('@')>=0 ? v : (v + '@onoue.local'); }
+// 画面はID（番号）＋4桁PIN。内部でメール/パスワードへ変換（従来のメール/フルパスワードも可）
+function resolveEmail(v){
+  v=(v||'').trim().toLowerCase();
+  if(v.indexOf('@')>=0) return v;
+  if(/^\d+$/.test(v)) return 'staff'+parseInt(v,10)+'@onoue.local';
+  return v + '@onoue.local';
+}
+function resolvePassword(p){ p=(p||''); return /^\d{4}$/.test(p) ? ('onoue'+p) : p; }
 function isAdmin(){ return sessionStorage.getItem(ADMIN_KEY)==='ok'; }
 
 // ログイン中ユーザーの role を取得し、admin なら自動で管理者解除＋餌代表示
@@ -3804,7 +3830,7 @@ async function applyRole(){
 }
 async function doLogin(){
   var email=resolveEmail(document.getElementById('lgUser').value);
-  var pass=document.getElementById('lgPass').value;
+  var pass=resolvePassword(document.getElementById('lgPass').value);
   document.getElementById('lgErr').style.display='none';
   try{
     var res=await sb.auth.signInWithPassword({email:email,password:pass});
@@ -3828,6 +3854,62 @@ function requireAdmin(){
   return false;
 }
 function navSettings(el){ if(!requireAdmin())return; nav('settings',el); }
+// ===== アカウント管理（管理者のみ）=====
+function navAccounts(el){ if(!requireAdmin())return; nav('accounts',el); loadAccounts(); }
+// email "staff1@onoue.local" → 番号 "1"
+function acctNo(email){ var m=(email||'').match(/^staff(\d+)@/i); return m?m[1]:'—'; }
+async function loadAccounts(){
+  var body=document.getElementById('accountsBody');
+  if(!body) return;
+  body.innerHTML='<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:18px">読み込み中…</td></tr>';
+  try{
+    var r=await sb.from('profiles').select('id,email,role,active,name').order('email',{ascending:true});
+    if(r.error){
+      // name 列が無い等のとき name 抜きで再取得
+      r=await sb.from('profiles').select('id,email,role,active').order('email',{ascending:true});
+      if(r.error) throw r.error;
+    }
+    var rows=r.data||[];
+    if(!rows.length){ body.innerHTML='<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:18px">アカウントがありません</td></tr>'; return; }
+    body.innerHTML=rows.map(function(p){
+      var no=acctNo(p.email);
+      var roleSel='<select class="ipt acct-role" data-id="'+p.id+'" style="width:96px">'
+        +'<option value="staff"'+(p.role==='staff'?' selected':'')+'>スタッフ</option>'
+        +'<option value="admin"'+(p.role==='admin'?' selected':'')+'>管理者</option></select>';
+      var actSel='<select class="ipt acct-active" data-id="'+p.id+'" style="width:84px">'
+        +'<option value="true"'+(p.active!==false?' selected':'')+'>有効</option>'
+        +'<option value="false"'+(p.active===false?' selected':'')+'>無効</option></select>';
+      var nameInp='<input class="ipt acct-name" data-id="'+p.id+'" value="'+(p.name||'').replace(/"/g,'&quot;')+'" placeholder="氏名メモ" style="width:140px">';
+      return '<tr><td style="text-align:center;font-weight:700">'+no+'</td>'
+        +'<td style="font-size:12px;color:#475569">'+(p.email||'')+'</td>'
+        +'<td>'+nameInp+'</td><td>'+roleSel+'</td><td>'+actSel+'</td>'
+        +'<td><button class="btn btn-primary btn-sm" onclick="saveAccountRow(\''+p.id+'\')">保存</button></td></tr>';
+    }).join('');
+  }catch(e){
+    console.error('[Accounts] load failed:',e);
+    body.innerHTML='<tr><td colspan="6" style="text-align:center;color:#b91c1c;padding:18px">読み込みに失敗しました（管理者権限が必要です）</td></tr>';
+  }
+}
+async function saveAccountRow(id){
+  var nameEl=document.querySelector('.acct-name[data-id="'+id+'"]');
+  var roleEl=document.querySelector('.acct-role[data-id="'+id+'"]');
+  var actEl =document.querySelector('.acct-active[data-id="'+id+'"]');
+  var fields={ role: roleEl.value, active: (actEl.value==='true') };
+  // name 列が無い環境でも保存が通るよう、まず name 込みで試し、ダメなら name 抜きで再試行
+  var withName=Object.assign({ name: (nameEl?nameEl.value.trim():'') }, fields);
+  try{
+    var r=await sb.from('profiles').update(withName).eq('id',id).select('id');
+    if(r.error){
+      r=await sb.from('profiles').update(fields).eq('id',id).select('id');
+      if(r.error) throw r.error;
+    }
+    if(!r.data||!r.data.length) throw new Error('0 rows（権限/RLS）');
+    alert('保存しました');
+  }catch(e){
+    console.error('[Accounts] save failed:',e);
+    alert('保存できませんでした：'+(e.message||e));
+  }
+}
 function openLedger(el){
   if(!requireAdmin())return;
   swTab('orders','ledger',el);
