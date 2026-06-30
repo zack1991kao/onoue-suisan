@@ -167,16 +167,16 @@ body {
 <!-- 認証オーバーレイ -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-box">
-    <div class="auth-fish">🐟</div>
+    <div class="auth-fish"><img src="logo.png" alt="FISHERIES ONOUE" style="height:56px;width:auto;"></div>
     <h2>尾上水産 管理システム</h2>
-    <p>アクセスにはパスワードが必要です</p>
+    <p>管理者用のID（数字）とPINでログイン</p>
     <div class="auth-field">
-      <label>ユーザー名</label>
-      <input type="text" id="authUser" placeholder="例：staff01 / kanri01" autocomplete="username" autocapitalize="off">
+      <label>ID（数字）</label>
+      <input type="text" id="authUser" inputmode="numeric" placeholder="例：9" autocomplete="username" autocapitalize="off">
     </div>
     <div class="auth-field">
-      <label>パスワード</label>
-      <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password"
+      <label>PIN（4桁）</label>
+      <input type="password" id="authPass" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="current-password"
         onkeydown="if(event.key==='Enter')doAuth()">
     </div>
     <button class="auth-btn" onclick="doAuth()">ログイン</button>
@@ -231,28 +231,49 @@ var SUPABASE_URL = 'https://ssrbmvbcrqrvvgytpirv.supabase.co';
 var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzcmJtdmJjcnFydnZneXRwaXJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2OTUyMzAsImV4cCI6MjA5NzI3MTIzMH0.LPdwmWGOXTORuaXDGfVodBOb4sYHg67DPnfGk4V6fHA';
 var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-function resolveEmail(v){ v=(v||'').trim().toLowerCase(); return v.indexOf('@')>=0 ? v : (v + '@onoue.local'); }
+// 数字のみ：1-8=スタッフ(staff0N)／9以降=管理部(9→kanri01,10→kanri02,11→kanri03)
+function resolveEmail(v){
+  v=(v||'').trim().toLowerCase();
+  if(v.indexOf('@')>=0) return v;
+  var m=v.match(/^(kanri|staff)?0*(\d+)$/);
+  if(m){
+    var pre=m[1], n=parseInt(m[2],10);
+    if(!pre){ if(n>=9){ pre='kanri'; n=n-8; } else { pre='staff'; } }
+    return pre + ('0'+n).slice(-2) + '@onoue.local';
+  }
+  return v + '@onoue.local';
+}
+function resolvePassword(p){ p=(p||''); return /^\d{4}$/.test(p) ? ('onoue'+p) : p; }
 function showPortal(){
   document.getElementById('authOverlay').style.display = 'none';
   document.getElementById('mainContent').style.display = 'block';
 }
+// スタッフ(staff0N)はこのポータルを使わずスマホアプリへ。管理部(kanri)のみポータル表示。
+async function routeByRole(){
+  try{
+    var u=await sb.auth.getUser();
+    var email=(u&&u.data&&u.data.user)?(u.data.user.email||''):'';
+    if(email && /^staff\d/i.test(email)){ location.replace('app.html'); return; }
+  }catch(e){}
+  showPortal();
+}
 async function doAuth() {
   var email = resolveEmail(document.getElementById('authUser').value);
-  var pass  = document.getElementById('authPass').value;
+  var pass  = resolvePassword(document.getElementById('authPass').value);
   document.getElementById('authErr').style.display = 'none';
   try {
     var res = await sb.auth.signInWithPassword({ email: email, password: pass });
     if (res.error) throw res.error;
-    showPortal();
+    await routeByRole();
   } catch (e) {
     document.getElementById('authErr').style.display = 'block';
     document.getElementById('authPass').value = '';
     document.getElementById('authPass').focus();
   }
 }
-// 既にどこか(app/admin/index)でログイン済みならそのまま入れる（1ログインで全部）
+// 既にどこかでログイン済みなら：管理部はポータル、スタッフはアプリへ
 sb.auth.getSession().then(function(s){
-  if (s && s.data && s.data.session) showPortal();
+  if (s && s.data && s.data.session) routeByRole();
 });
 // スタッフ共有URL
 var base = location.origin + location.pathname.replace('index.html','').replace(/\/$/, '');

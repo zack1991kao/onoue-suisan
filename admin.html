@@ -397,8 +397,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
   <div style="background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
     <div style="text-align:center;margin-bottom:8px;"><img src="logo.png" alt="FISHERIES ONOUE" style="height:60px;width:auto;"></div>
     <h2 style="text-align:center;font-size:18px;font-weight:700;color:#0f172a;margin-bottom:4px;">尾上水産 管理システム</h2>
-    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:22px;">ID（管理者は kanri1 等）と4桁のPINでログイン</p>
-    <input id="lgUser" placeholder="ID（例：kanri1）" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:2px;">
+    <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:22px;">管理者用ID（数字）と4桁のPINでログイン</p>
+    <input id="lgUser" inputmode="numeric" placeholder="ID（例：9）" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:16px;margin-bottom:10px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:2px;">
     <input id="lgPass" type="password" inputmode="numeric" maxlength="4" placeholder="PIN（4桁）" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:18px;margin-bottom:14px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:6px;">
     <button onclick="doLogin()" style="width:100%;padding:14px;background:#1b3a5c;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">ログイン</button>
     <div id="lgErr" style="display:none;color:#b91c1c;font-size:13px;text-align:center;margin-top:10px;">ユーザー名またはパスワードが違います</div>
@@ -3825,10 +3825,30 @@ var ADMIN_KEY='onoue_admin';   // 管理者解除フラグ（profilesのrole=adm
 function resolveEmail(v){
   v=(v||'').trim().toLowerCase();
   if(v.indexOf('@')>=0) return v;
-  // 管理者は「kanri1」等→kanri0N、スタッフは番号→staff0N（2桁ゼロ埋め＝実アカウント形式）
+  // 数字のみ：1-8=スタッフ(staff0N)／9以降=管理部(9→kanri01,10→kanri02,11→kanri03)
+  // 明示プレフィックス(kanri1/staff3)は従来どおり尊重
   var m=v.match(/^(kanri|staff)?0*(\d+)$/);
-  if(m){ var pre=m[1]||'staff'; return pre + ('0'+m[2]).slice(-2) + '@onoue.local'; }
+  if(m){
+    var pre=m[1], n=parseInt(m[2],10);
+    if(!pre){ if(n>=9){ pre='kanri'; n=n-8; } else { pre='staff'; } }
+    return pre + ('0'+n).slice(-2) + '@onoue.local';
+  }
   return v + '@onoue.local';
+}
+// スタッフ(staff0N)はPC管理画面に入れない → スマホアプリへ送る。管理部(kanri)のみ許可。
+async function enforceManagementOnly(){
+  try{
+    var u=await sb.auth.getUser();
+    var email=(u&&u.data&&u.data.user)?(u.data.user.email||''):'';
+    if(email && /^staff\d/i.test(email)){
+      try{ await sb.auth.signOut(); }catch(_){}
+      sessionStorage.removeItem(ADMIN_KEY);
+      alert('スタッフの方はスマートフォンアプリをご利用ください。\nPCの管理画面は管理者専用です。');
+      location.replace('app.html');
+      return false;
+    }
+  }catch(e){ console.warn('[Auth] role guard skipped:', e.message); }
+  return true;
 }
 function resolvePassword(p){ p=(p||''); return /^\d{4}$/.test(p) ? ('onoue'+p) : p; }
 function isAdmin(){ return sessionStorage.getItem(ADMIN_KEY)==='ok'; }
@@ -3854,6 +3874,7 @@ async function doLogin(){
   try{
     var res=await sb.auth.signInWithPassword({email:email,password:pass});
     if(res.error)throw res.error;
+    if(!(await enforceManagementOnly())) return;   // スタッフはここで弾いてアプリへ
     document.getElementById('loginGate').style.display='none';
     await applyRole();
   }catch(e){
@@ -3943,8 +3964,14 @@ function openLedger(el){
   if(cv && !isAdmin()){ cv.textContent='———'; costVisible=false; }
   sb.auth.getSession().then(function(s){
     var authed=!!(s && s.data && s.data.session);
-    document.getElementById('loginGate').style.display = authed ? 'none' : 'flex';
-    if(authed) applyRole();
+    if(authed){
+      // スタッフのセッションでPC画面を開いた場合はアプリへ送り返す
+      enforceManagementOnly().then(function(ok){
+        if(ok){ document.getElementById('loginGate').style.display='none'; applyRole(); }
+      });
+    } else {
+      document.getElementById('loginGate').style.display='flex';
+    }
   }).catch(function(){
     document.getElementById('loginGate').style.display='flex';
   });
