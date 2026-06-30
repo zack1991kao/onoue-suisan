@@ -2,7 +2,7 @@
 // 方針: 静的UIファイルはキャッシュ優先（オフラインでもシェル表示）
 //       Supabase / CDN などの通信はネットワーク優先（常に最新データ）
 
-var CACHE_NAME = 'onoue-shell-v30';
+var CACHE_NAME = 'onoue-shell-v31';
 var SHELL_FILES = [
   './',
   './index.html',
@@ -11,7 +11,8 @@ var SHELL_FILES = [
   './staff.html',
   './manifest.webmanifest',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './logo.png'
 ];
 
 // インストール: シェルをキャッシュ
