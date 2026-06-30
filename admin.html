@@ -1603,6 +1603,43 @@ function setAiMode(on, save) {
 // ══════════════════════════════════════════
 // SUPABASE LOAD
 // ══════════════════════════════════════════
+// ── 日次リセット用ヘルパー（給餌は「毎日やる作業」＝今日やったかで色が決まる）──
+function feedTodayStr(){
+  var d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function feedDaysBetween(fromStr, toStr){
+  var a=new Date(fromStr+'T00:00:00'), b=new Date(toStr+'T00:00:00');
+  return Math.round((b-a)/86400000);
+}
+// 各いけすの最終給餌日を feed_logs から求め、status を当日基準で再計算（日付が変われば自動で赤に戻る）
+async function applyDailyFeedStatus(){
+  var today = feedTodayStr();
+  var lastFed = {};
+  try {
+    var r = await sb.from('feed_logs').select('pond_id,log_date');
+    if (!r.error && r.data) {
+      r.data.forEach(function(row){
+        var pid=row.pond_id, d=row.log_date;
+        if(!pid || !d) return;
+        if(!lastFed[pid] || d > lastFed[pid]) lastFed[pid] = d;
+      });
+    }
+  } catch(e) { console.warn('[Supabase] feed_logs load skipped:', e.message); }
+  POND_CONFIG.forEach(function(p){
+    if(p.status === 'skip'){ p.lastFed=null; p.daysSince=null; return; }
+    var lf = lastFed[p.id] || null;
+    p.lastFed = lf;
+    if(lf === today){
+      if(p.status !== 'alert') p.status = 'done';
+      p.daysSince = 0;
+    } else {
+      p.status = 'todo';
+      p.daysSince = lf ? feedDaysBetween(lf, today) : null;
+    }
+  });
+}
+
 async function loadPonds() {
   // 固定配列の並び順を維持するための基準（DBは更新行を末尾に返すため）
   var orderIdx = {};
@@ -1630,6 +1667,7 @@ async function loadPonds() {
     var el=document.getElementById('lastUpdated');
     if(el)el.textContent='最終更新: フォールバック（DB接続失敗）';
   }
+  await applyDailyFeedStatus();   // 当日基準で色を再計算（毎日リセット）
 }
 
 async function loadOrders() {
@@ -3108,6 +3146,10 @@ function drawAdminFishMap(svgId,opts){
     if(showLabels && st==='done' && fk){
       parts.push('<text x="'+cx+'" y="'+(cy+R+14)+'" text-anchor="middle" font-size="10" fill="#166534" font-family='+FF+' pointer-events="none"'+op+'>'+fk+'k</text>');
     }
+    // 未給餌(赤)は最終給餌からの経過日数を枠の下に表示（日次リセットの可視化）
+    if(showLabels && st==='todo' && p.daysSince!=null && p.daysSince>=1){
+      parts.push('<text x="'+cx+'" y="'+(cy+R+14)+'" text-anchor="middle" font-size="10" font-weight="700" fill="#dc2626" font-family='+FF+' pointer-events="none"'+op+'>'+p.daysSince+'日</text>');
+    }
   });
   svg.innerHTML=parts.join('');
   // 上端のエリア名(団地/太喜/瀬後の浦)が枠外で見切れるのを防ぐため、viewBox上方向に余白を確保。
@@ -3671,6 +3713,7 @@ async function saveDailyMatrix(){
   if(typeof refreshDashboard==='function') refreshDashboard();
   if(typeof renderInv==='function'){ renderInv(); if(typeof renderInvSummary==='function') renderInvSummary(); }
   showToast(okOnes.length+'件の記録を保存しました'+(fail>0?('（'+fail+'件は権限/通信で失敗）'):' ✓'));
+  scheduleReload();   // feed_logsコミット後に当日基準の色を最終確定
 }
 
 // 日別マトリクスの内容をCSV（Shift-JIS）で出力＝Excelで開ける

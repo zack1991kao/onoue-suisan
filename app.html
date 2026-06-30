@@ -2099,6 +2099,12 @@ function drawFishMap(areaFilter) {
             + " font-size='7' font-weight='700' fill='#166534' " + FF
             + " pointer-events='none'>" + kg + "kg</text>";
     }
+    // 未給餌(赤)のいけすは「最終給餌から何日経過したか」を枠の下に表示（日次リセットの可視化）
+    if (areaFilter && p.status === 'todo' && p.daysSince != null && p.daysSince >= 1) {
+      html += "<text x='" + cx + "' y='" + (cm.y + SZ + 7) + "' text-anchor='middle'"
+            + " font-size='7' font-weight='700' fill='#dc2626' " + FF
+            + " pointer-events='none'>" + p.daysSince + "日</text>";
+    }
   });
   svg.innerHTML = html;
   if (areaFilter) {
@@ -2377,6 +2383,8 @@ async function saveRecord() {
   } catch (e) {
     console.warn('[Supabase] feed_logs insert failed (在庫は保存済み):', e);
   }
+  // feed_logsコミット後に確実な再読込（当日基準の色を最終確定。給餌直後の赤戻り競合を防ぐ）
+  scheduleReload();
 }
 function recNavGo(tab) {
   closeRecordPanelDirect();
@@ -2580,6 +2588,8 @@ async function saveFeedList() {
   } catch (e) {
     console.warn('[Supabase] feed_logs insert failed (在庫は保存済み):', e);
   }
+  // feed_logsコミット後に確実な再読込（当日基準の色を最終確定）
+  scheduleReload();
 }
 function feedDoneRestart() {
   document.getElementById('feed-list-view').style.display = 'flex';
@@ -3067,6 +3077,47 @@ function setAiMode(on, save) {
 }
 
 // ===== SUPABASE LOAD =====
+// ── 日次リセット用ヘルパー（給餌は「毎日やる作業」＝今日やったかで色が決まる）──
+function feedTodayStr(){
+  var d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function feedDaysBetween(fromStr, toStr){     // YYYY-MM-DD（暦日）の差。0時境界
+  var a=new Date(fromStr+'T00:00:00'), b=new Date(toStr+'T00:00:00');
+  return Math.round((b-a)/86400000);
+}
+// 各いけすの「最終給餌日」を feed_logs から求め、status を当日基準で再計算する。
+// 色はDBの固定フラグでなく毎回ここで計算 → 日付が変われば自動で赤(todo)に戻る（リセット処理不要）。
+async function applyDailyFeedStatus(){
+  var today = feedTodayStr();
+  var lastFed = {};
+  try {
+    var r = await sb.from('feed_logs').select('pond_id,log_date');
+    if (!r.error && r.data) {
+      r.data.forEach(function(row){
+        var pid=row.pond_id, d=row.log_date;
+        if(!pid || !d) return;
+        // YYYY-MM-DD は文字列比較=日付比較。各いけすの最大(最新)日を採用
+        if(!lastFed[pid] || d > lastFed[pid]) lastFed[pid] = d;
+      });
+    }
+  } catch(e) { console.warn('[Supabase] feed_logs load skipped:', e.message); }
+  POND_CONFIG.forEach(function(p){
+    if(p.status === 'skip'){ p.lastFed=null; p.daysSince=null; return; }  // 空きいけすは対象外
+    var lf = lastFed[p.id] || null;
+    p.lastFed = lf;
+    if(lf === today){
+      // 今日すでに給餌済み → 緑。異常フラグ(alert)が立っていれば尊重
+      if(p.status !== 'alert') p.status = 'done';
+      p.daysSince = 0;
+    } else {
+      // 今日まだ → 赤に戻す（日次リセット）。最終給餌からの経過日数を持たせる
+      p.status = 'todo';
+      p.daysSince = lf ? feedDaysBetween(lf, today) : null;   // null = 給餌記録なし
+    }
+  });
+}
+
 async function loadPonds() {
   // 固定配列の並び順を維持するための基準（DBは更新行を末尾に返すため）
   var orderIdx = {};
@@ -3087,6 +3138,7 @@ async function loadPonds() {
   } catch (e) {
     console.warn('[Supabase] loadPonds failed, using fallback:', e.message);
   }
+  await applyDailyFeedStatus();   // 当日基準で色を再計算（毎日リセット）
 }
 
 // ponds の更新を実行し、成否を返す（RLS等による「0件更新の静かな失敗」も検知）
