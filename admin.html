@@ -1627,7 +1627,10 @@ async function applyDailyFeedStatus(){
     }
   } catch(e) { console.warn('[Supabase] feed_logs load skipped:', e.message); }
   POND_CONFIG.forEach(function(p){
-    if(p.status === 'skip'){ p.lastFed=null; p.daysSince=null; return; }
+    // 在庫0のいけすは経路を問わず自動でグレー(skip)化（斃死・出荷・移動で0になっても色が変わるように）
+    if(p.status === 'skip' || (Number(p.stock)||0) <= 0){
+      p.status='skip'; p.lastFed=null; p.daysSince=null; return;
+    }
     var lf = lastFed[p.id] || null;
     p.lastFed = lf;
     if(lf === today){
