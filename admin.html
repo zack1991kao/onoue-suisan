@@ -395,7 +395,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
 <!-- 簡易ログインゲート（暫定・UX層。真のアクセス制限はSupabase Auth+RLSで実施） -->
 <div id="loginGate" style="position:fixed;inset:0;background:#0f2437;z-index:99999;display:none;align-items:center;justify-content:center;padding:20px;">
   <div style="background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
-    <div style="text-align:center;font-size:40px;margin-bottom:8px;">🐠</div>
+    <div style="text-align:center;margin-bottom:8px;"><img src="logo.png" alt="FISHERIES ONOUE" style="height:60px;width:auto;"></div>
     <h2 style="text-align:center;font-size:18px;font-weight:700;color:#0f172a;margin-bottom:4px;">尾上水産 管理システム</h2>
     <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:22px;">ID（管理者は kanri1 等）と4桁のPINでログイン</p>
     <input id="lgUser" placeholder="ID（例：kanri1）" autocomplete="username" autocapitalize="off" style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:2px;">
@@ -407,7 +407,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
 <div class="app">
 
 <header>
-  <h1>🐟 尾上水産 養殖管理システム</h1>
+  <h1><img src="logo.png" alt="FISHERIES ONOUE" style="height:32px;width:auto;vertical-align:middle;margin-right:8px;">尾上水産 養殖管理システム</h1>
   <span class="hdate" id="hdate"></span>
   <a href="./staff.html" class="hdr-sp-link">📱 スマホ版</a>
   <button id="aiToggleBtn" class="ai-toggle-btn" onclick="toggleAiMode()">🔘 AI OFF</button>
@@ -3087,7 +3087,22 @@ function drawAdminFishMap(svgId,opts){
     }
     if(showLabels && st!=='skip'){
       var lbl=fishInitial(p.species);
-      parts.push('<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" font-size="13" font-weight="700" fill="'+t+'" font-family='+FF+' pointer-events="none"'+op+'>'+lbl+'</text>');
+      var yr=POND_YR[p.id];
+      var sk=p.stock||0;
+      var skStr=sk>=10000?Math.round(sk/1000)+'k':sk>=1000?(sk/1000).toFixed(1).replace('.0','')+'k':sk>0?String(sk):'';
+      if(yr&&skStr){
+        parts.push('<text x="'+cx+'" y="'+(cy-7)+'" text-anchor="middle" font-size="12" font-weight="700" fill="'+t+'" font-family='+FF+' pointer-events="none"'+op+'>'+lbl+'</text>');
+        parts.push('<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" font-size="10" fill="#2563eb" font-family='+FF+' pointer-events="none"'+op+'>'+yr+'年</text>');
+        parts.push('<text x="'+cx+'" y="'+(cy+17)+'" text-anchor="middle" font-size="9" fill="'+t+'" font-family='+FF+' pointer-events="none"'+op+'>'+skStr+'</text>');
+      }else if(yr){
+        parts.push('<text x="'+cx+'" y="'+(cy-2)+'" text-anchor="middle" font-size="12" font-weight="700" fill="'+t+'" font-family='+FF+' pointer-events="none"'+op+'>'+lbl+'</text>');
+        parts.push('<text x="'+cx+'" y="'+(cy+12)+'" text-anchor="middle" font-size="10" fill="#2563eb" font-family='+FF+' pointer-events="none"'+op+'>'+yr+'年</text>');
+      }else if(skStr){
+        parts.push('<text x="'+cx+'" y="'+(cy-2)+'" text-anchor="middle" font-size="12" font-weight="700" fill="'+t+'" font-family='+FF+' pointer-events="none"'+op+'>'+lbl+'</text>');
+        parts.push('<text x="'+cx+'" y="'+(cy+12)+'" text-anchor="middle" font-size="10" fill="'+t+'" font-family='+FF+' pointer-events="none"'+op+'>'+skStr+'</text>');
+      }else{
+        parts.push('<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" font-size="13" font-weight="700" fill="'+t+'" font-family='+FF+' pointer-events="none"'+op+'>'+lbl+'</text>');
+      }
     }
     var fk=p.feedKg||p.feed_kg;
     if(showLabels && st==='done' && fk){
