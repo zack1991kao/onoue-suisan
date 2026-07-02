@@ -89,10 +89,11 @@ body {
   color: #fff;
   text-align: center;
   flex: 1;
+  min-width: 5.6em;           /* 「尾上水産」が必ず全部出るよう最小幅を確保（右側に潰されない） */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 8px;
+  padding: 0 4px;
 }
 .hdr-step {
   font-size: 14px;
@@ -101,6 +102,7 @@ body {
   min-width: 60px;
   text-align: right;
 }
+.hdr-step:empty { min-width: 0; }   /* 中身が無いときは幅を取らない（タイトルが潰れるのを防ぐ） */
 
 /* ===== TAB CONTENT ===== */
 .tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
@@ -253,12 +255,13 @@ body {
   background: rgba(255,255,255,0.12);
   color: #fff;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  border-radius: 14px;
-  padding: 4px 10px;
+  border-radius: 12px;
+  padding: 3px 9px;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ===== POND GRID ===== */
@@ -1317,8 +1320,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
 <header class="app-header" id="appHeader">
   <button class="hdr-back" id="hdrBack" onclick="doBack()">← 戻る</button>
   <div class="hdr-title" id="hdrTitle">尾上水産</div>
-  <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-    <a href="./index.html" class="hdr-pc-link">PC版</a>
+  <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
     <button class="hdr-logout" onclick="doLogout()">⎋ ログアウト</button>
     <button id="aiToggleBtnSp" class="ai-toggle-sp" onclick="toggleAiMode()">　AI OFF</button>
     <div class="hdr-step" id="hdrStep"></div>
