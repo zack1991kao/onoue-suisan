@@ -1478,6 +1478,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
   <!-- Step 1：移動元 + 移動尾数 -->
   <div id="move-s1" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
     <div class="scroll">
+      <button onclick="openMoveHistory()" style="width:100%;margin-top:12px;height:44px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-family:inherit;font-weight:700;font-size:14px;color:var(--ink);cursor:pointer;">🕘 移動履歴を見る</button>
       <div class="section" style="margin-top:14px;">
         <div class="sec-label">移動元 <span class="badge-req">必須</span></div>
         <div class="area-tabs" id="moveFromTabs" style="margin:0 -16px;border-radius:0;border-top:2px solid var(--border);"></div>
@@ -1641,6 +1642,17 @@ body.ai-mode-on .ai-home-banner{display:flex}
 
     <button class="rec-save" onclick="saveRecord()">保存する</button>
     <button class="sheet-cancel" onclick="closeRecordPanelDirect()">キャンセル</button>
+  </div>
+</div>
+
+<!-- 移動履歴パネル -->
+<div class="sheet-overlay hidden" id="moveHistPanel" onclick="if(event.target===this)closeMoveHistory()">
+  <div class="rec-sheet">
+    <div class="rec-top">
+      <div class="rec-title">移動履歴</div>
+      <button class="rec-close" onclick="closeMoveHistory()">✕ 閉じる</button>
+    </div>
+    <div id="moveHistList" style="font-size:14px;">読み込み中...</div>
   </div>
 </div>
 
@@ -3099,6 +3111,37 @@ function moveRestart() {
   document.getElementById('moveBtn2').disabled = true;
   document.querySelectorAll('#moveReasonBtns .choice-btn').forEach(function(b){ b.classList.remove('selected'); });
   buildMoveGrids(); showMoveStep(1);
+}
+
+// ===== 移動履歴（スマホでも移動の記録を追える）=====
+function openMoveHistory() {
+  document.getElementById('moveHistPanel').classList.remove('hidden');
+  loadMoveHistory();
+}
+function closeMoveHistory() {
+  document.getElementById('moveHistPanel').classList.add('hidden');
+}
+async function loadMoveHistory() {
+  var el = document.getElementById('moveHistList');
+  el.innerHTML = '読み込み中...';
+  try {
+    var r = await sb.from('move_logs').select('log_date,from_pond,to_pond,count,reason,external').order('log_date',{ascending:false}).limit(60);
+    if (r.error) throw r.error;
+    var rows = r.data || [];
+    if (!rows.length) { el.innerHTML = '<div style="padding:24px 0;text-align:center;color:var(--ink2);">移動の記録はまだありません</div>'; return; }
+    el.innerHTML = rows.map(function(m){
+      var from = m.external ? '外部（種苗業者）' : (m.from_pond || '―');
+      var to = m.to_pond || '―';
+      return '<div style="padding:12px 4px;border-bottom:1px solid var(--border);">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'
+        + '<div style="font-weight:700;font-size:15px;">' + from + ' → ' + to + '</div>'
+        + '<div style="font-weight:700;color:var(--blue);white-space:nowrap;">' + (m.count||0).toLocaleString() + ' 尾</div></div>'
+        + '<div style="font-size:12px;color:var(--ink2);margin-top:3px;">' + (m.log_date||'日付なし') + (m.reason?('　／　'+m.reason):'') + '</div>'
+        + '</div>';
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="padding:24px 0;text-align:center;color:#b91c1c;">読み込みに失敗しました（通信をご確認ください）</div>';
+  }
 }
 
 // ===== AI MODE =====
