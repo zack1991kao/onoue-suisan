@@ -2,7 +2,7 @@
 // 方針: 静的UIファイルはキャッシュ優先（オフラインでもシェル表示）
 //       Supabase / CDN などの通信はネットワーク優先（常に最新データ）
 
-var CACHE_NAME = 'onoue-shell-v39';
+var CACHE_NAME = 'onoue-shell-v40';
 var SHELL_FILES = [
   './',
   './index.html',
@@ -51,7 +51,8 @@ self.addEventListener('fetch', function(e) {
       || url.pathname.endsWith('.html');
     if (isHtml) {
       e.respondWith(
-        fetch(req).then(function(res) {
+        // ブラウザHTTPキャッシュ(GitHub Pagesの短期キャッシュ含む)を迂回し、必ず最新HTMLを取得
+        fetch(req, { cache: 'no-store' }).then(function(res) {
           if (res && res.status === 200) {
             var clone = res.clone();
             caches.open(CACHE_NAME).then(function(c) { c.put(req, clone); });

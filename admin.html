@@ -3421,14 +3421,16 @@ async function saveMove(){
   if(!fromP||!toP){ alert('いけすが見つかりません'); return; }
   if(qty>(fromP.stock||0)){ if(!confirm('移動尾数が移動元の在庫（'+(fromP.stock||0).toLocaleString()+'尾）を超えています。このまま続けますか？')) return; }
   var fromNew=Math.max(0,(fromP.stock||0)-qty);
-  var toWasEmpty=(toP.status==='skip')||!toP.species;
+  // 空き判定は在庫0も含める（斃死等で0になったいけすは表示skip・魚種が残っていても実質空き）
+  var toWasEmpty=(toP.status==='skip')||!toP.species||(Number(toP.stock)||0)<=0;
   var toNew=(toP.stock||0)+qty;
   // ① 移動元を減算（.select('id')で0件＝権限失敗検知）
   var u1=await sb.from('ponds').update({stock:fromNew, updated_at:new Date().toISOString()}).eq('id',from).select('id');
   if(u1.error||!u1.data||!u1.data.length){ alert('⚠ 保存できませんでした（書き込み権限・通信をご確認ください）'); return; }
   // ② 移動先を加算（空きなら稼働化＋魚種/年魚を引き継ぎ）
   var toUpd={stock:toNew, updated_at:new Date().toISOString()};
-  if(toWasEmpty){ if(toP.status==='skip')toUpd.status='todo'; if(!toP.species)toUpd.species=fromP.species; if(!toP.yr)toUpd.yr=fromP.yr; }
+  // 空きいけすへ移した場合は、入ってきた魚の魚種・年魚で上書き（古い魚種が残らないように）
+  if(toWasEmpty){ toUpd.status='todo'; toUpd.species=fromP.species; toUpd.yr=fromP.yr; }
   var u2=await sb.from('ponds').update(toUpd).eq('id',to).select('id');
   if(u2.error||!u2.data||!u2.data.length){
     // 移動先失敗 → 移動元をロールバック
@@ -3440,11 +3442,20 @@ async function saveMove(){
   catch(e){ console.warn('[Supabase] move_logs skipped:', e); }
   // メモリ反映
   fromP.stock=fromNew; toP.stock=toNew;
-  if(toWasEmpty){ if(toP.status==='skip')toP.status='todo'; if(!toP.species)toP.species=fromP.species; if(!toP.yr)toP.yr=fromP.yr; }
+  if(toWasEmpty){ toP.status='todo'; toP.species=fromP.species; toP.yr=fromP.yr; }
+  // 移動元が0になったら空き(グレー)化
+  if(fromNew<=0){ fromP.status='skip'; }
   closeM('mMove');
   showToast(qty.toLocaleString()+'尾を '+from+' → '+to+' へ移動しました');
   refreshDashboard(); if(typeof renderInv==='function'){ renderInv(); if(typeof renderInvSummary==='function') renderInvSummary(); }
+  redrawAllFishMaps();   // 漁場図のアイコンを再描画（移動が即反映されるように）
   if(typeof loadHistory==='function') loadHistory();
+}
+// 画面内に存在する全ての漁場図SVGを再描画（移動・在庫変更などを即反映）
+function redrawAllFishMaps(){
+  ['adminFishMapSvg','dashFishMapSvg','heatFishMapSvg','invFishMapSvg'].forEach(function(id){
+    if(document.getElementById(id) && typeof drawAdminFishMap==='function') drawAdminFishMap(id);
+  });
 }
 function tankActMove(id){ closeM('mDetail'); openMoveModal(id); }
 
