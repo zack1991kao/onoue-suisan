@@ -3284,14 +3284,15 @@ function renderInv(){
 function buildLots(){
   var lotMap={};
   POND_CONFIG.forEach(function(p){
-    if(p.status==='skip'||!p.species)return;
+    if(p.status==='skip')return;          // 空きのみ除外。魚種/年魚が未設定でも落とさず可視化（総在庫と一致させる）
+    var sp=p.species||'（魚種未設定）';
     var yr=getPondYr(p);                 // DB(yr)優先→旧マップ→null。新規池入れも拾う
     var yrKey=yr||0;                      // 年魚不明(0)もまとめて表示（silent除外しない＝総在庫と一致）
-    var key=p.species+'_'+yrKey;
+    var key=sp+'_'+yrKey;
     if(!lotMap[key]){
       lotMap[key]={
-        id:'L'+(yr?(2026-yr):'?')+'-'+p.species.charAt(0),
-        species:p.species,yr:yr,
+        id:'L'+(yr?(2026-yr):'?')+'-'+sp.charAt(0),
+        species:sp,yr:yr,
         label:yr?yrToLabel(yr):'年魚不明（要設定）',ponds:[],stock:0
       };
     }
