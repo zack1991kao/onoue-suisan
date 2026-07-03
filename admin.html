@@ -1472,6 +1472,12 @@ var POND_YR = {
 function yrToLabel(yr) {
   return yr + '年魚（' + (2026-yr) + '年春入荷）';
 }
+// いけすの年魚：DB保存値(p.yr)を最優先。無ければ旧ハードコードマップ。両方無ければnull。
+// （新規池入れは ponds.yr に保存されるため、これを見ないとロット/表示から漏れる）
+function getPondYr(p) {
+  if (p && p.yr != null && p.yr !== '') return Number(p.yr);
+  return POND_YR[p && p.id] || null;
+}
 var CAGE_MAP={
   '楠森-01':{x:10,y:40,sh:'ci'},'楠森-02':{x:10,y:68,sh:'ci'},
   '楠森-03':{x:10,y:96,sh:'ci'},'楠森-04':{x:10,y:132,sh:'sq'},
@@ -2257,7 +2263,7 @@ function dashSortPonds(arr){
   var s=dashFilter.sort, a=arr.slice();
   if(s==='stock_desc')a.sort(function(x,y){return (y.stock||0)-(x.stock||0);});
   else if(s==='stock_asc')a.sort(function(x,y){return (x.stock||0)-(y.stock||0);});
-  else if(s==='age')a.sort(function(x,y){return (POND_YR[y.id]||0)-(POND_YR[x.id]||0);});
+  else if(s==='age')a.sort(function(x,y){return (getPondYr(y)||0)-(getPondYr(x)||0);});
   else if(s==='species')a.sort(function(x,y){return (x.species||'').localeCompare(y.species||'')|| x.id.localeCompare(y.id);});
   return a; // 'id' は POND_CONFIG 順
 }
@@ -2300,7 +2306,7 @@ function renderDashTankList(){
     +'<th style="padding:6px 8px;text-align:right">在庫尾数</th><th style="padding:6px 8px">状態</th></tr></thead><tbody>';
   html+=ponds.map(function(p){
     var si=pondStatusInfo(p.status);
-    var yr=POND_YR[p.id];
+    var yr=getPondYr(p);
     var yrLabel=yr?yrToLabel(yr):'―';
     return '<tr class="clickable" style="border-top:1px solid var(--line);cursor:pointer" onclick="adminTankClick(\''+p.id+'\')">'
       +'<td style="padding:6px 8px;font-weight:700">'+p.id+'</td>'
@@ -2461,7 +2467,7 @@ function openTankDetail(p){
   if(!p)return;
   var si=pondStatusInfo(p.status);
   var shapeStr=p.sh==='ci'?'● 円形':'■ 四角';
-  var yr=POND_YR[p.id];
+  var yr=getPondYr(p);
   var yrLabel=yr?yrToLabel(yr):'―';
   var baitStr=p.bait+(p.bait2?' / '+p.bait2:'');
   var stock=(p.stock||0).toLocaleString();
@@ -3128,7 +3134,7 @@ function drawAdminFishMap(svgId,opts){
     }
     if(showLabels && st!=='skip'){
       var lbl=fishInitial(p.species);
-      var yr=POND_YR[p.id];
+      var yr=getPondYr(p);
       var sk=p.stock||0;
       var skStr=sk>=10000?Math.round(sk/1000)+'k':sk>=1000?(sk/1000).toFixed(1).replace('.0','')+'k':sk>0?String(sk):'';
       if(yr&&skStr){
@@ -3243,7 +3249,7 @@ function renderInv(){
       +'<td colspan="5" style="background:#1b3a5c;color:#fff;font-weight:700;padding:8px 12px;font-size:13px;">'
       +area+'（'+activePonds.length+'/'+ponds.length+'基・'+areaTotal.toLocaleString()+'尾）</td></tr>';
     ponds.forEach(function(p){
-      var yr=POND_YR[p.id];
+      var yr=getPondYr(p);
       var yrLabel=yr?yrToLabel(yr):'―';
       var isSkip=p.status==='skip';
       var rowStyle=isSkip?'color:#94a3b8;background:#f8fafc;':'';
@@ -3279,14 +3285,14 @@ function buildLots(){
   var lotMap={};
   POND_CONFIG.forEach(function(p){
     if(p.status==='skip'||!p.species)return;
-    var yr=POND_YR[p.id];
-    if(!yr)return;
-    var key=p.species+'_'+yr;
+    var yr=getPondYr(p);                 // DB(yr)優先→旧マップ→null。新規池入れも拾う
+    var yrKey=yr||0;                      // 年魚不明(0)もまとめて表示（silent除外しない＝総在庫と一致）
+    var key=p.species+'_'+yrKey;
     if(!lotMap[key]){
       lotMap[key]={
-        id:'L'+(2026-yr)+'-'+p.species.charAt(0),
+        id:'L'+(yr?(2026-yr):'?')+'-'+p.species.charAt(0),
         species:p.species,yr:yr,
-        label:yrToLabel(yr),ponds:[],stock:0
+        label:yr?yrToLabel(yr):'年魚不明（要設定）',ponds:[],stock:0
       };
     }
     lotMap[key].ponds.push(p.id);
@@ -3294,7 +3300,7 @@ function buildLots(){
   });
   return Object.keys(lotMap).map(function(k){return lotMap[k];}).sort(function(a,b){
     if(a.species!==b.species)return a.species<b.species?-1:1;
-    return a.yr-b.yr;
+    return (a.yr||99)-(b.yr||99);
   });
 }
 function renderLotSummary(){
@@ -3629,7 +3635,7 @@ function renderDailyMatrix(){
     ponds.forEach(function(p){
       var uc=p.status==='todo'?'unfilled':'filled';
       var feedVal=p.status==='todo'?'':(p.feedKg||p.feed||'');
-      var yr=POND_YR[p.id];
+      var yr=getPondYr(p);
       var yrLabel=yr?'<span style="font-size:10px;color:#94a3b8;margin-left:4px;">'+yr+'年魚</span>':'';
       var opts=['正常','給餌済','異常あり','絶食'];
       var selIdx=p.status==='done'?1:p.status==='alert'?2:0;
@@ -3729,7 +3735,7 @@ function exportDailyMatrixCsv(){
     var pid=tr.getAttribute('data-pid');
     var p=POND_CONFIG.find(function(x){return x.id===pid;})||{};
     function v(f){ var el=tr.querySelector('[data-field="'+f+'"]'); return el?el.value:''; }
-    var yr=POND_YR[pid];
+    var yr=getPondYr(p);
     rows.push([date, p.area||'', pid, p.species||'', (yr?yr+'年魚':''),
       v('feed_kg'), v('bait'), v('bait2'), v('mort'), v('bgrade'), v('drug'), v('drug_amt'), v('status'), v('memo')]);
   });

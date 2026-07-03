@@ -1777,6 +1777,11 @@ var POND_YR = {
 function yrToLabel(yr) {
   return yr + '年魚（' + (2026-yr) + '年春入荷）';
 }
+// いけすの年魚：DB保存値(p.yr)を最優先。無ければ旧マップ。新規池入れも表示できるように。
+function getPondYr(p) {
+  if (p && p.yr != null && p.yr !== '') return Number(p.yr);
+  return POND_YR[p && p.id] || null;
+}
 
 const BAITS = [
   'マダイチェリー P9','マダイチェリー P8','マダイペレット P7','ゴールドパワー',
@@ -2093,7 +2098,7 @@ function drawFishMap(areaFilter) {
     var cx = cm.x + R, cy = cm.y + R;
     var tap = "onclick=\"homeSelectPond('" + p.id + "')\" style='cursor:pointer'";
     var sp = {'マダイ':'タイ','シマアジ':'シマ','カンパチ':'カン'}[p.species] || (p.species||'').slice(0,2);
-    var yr = (p.status !== 'skip' && POND_YR[p.id]) ? POND_YR[p.id] : null;
+    var yr = (p.status !== 'skip') ? getPondYr(p) : null;
     var sk = p.stock||0;
     var skStr = sk>=10000?Math.round(sk/1000)+'k':sk>=1000?(sk/1000).toFixed(1).replace('.0','')+'k':sk>0?String(sk):'';
     if (cm.sh === 'ci') {
@@ -2214,7 +2219,7 @@ function openRecordPanel(id) {
   var p = getPond(id);
   if (!p) return;
   state.sheetIkesu = id;
-  var yr = POND_YR[id];
+  var yr = getPondYr(p);
   var yrStr = yr ? '　' + yrToLabel(yr) : '';
   document.getElementById('recName').textContent = id + '　' + p.species + yrStr;
   var stEl = document.getElementById('recStock');
