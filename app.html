@@ -2084,7 +2084,7 @@ function svgStatusStyle(s) {
   if (s === 'done')  return {f:'#dcfce7', k:'#22c55e', t:'#166534'};
   if (s === 'todo')  return {f:'#fef2f2', k:'#ef4444', t:'#991b1b'};
   if (s === 'alert') return {f:'#fff7ed', k:'#d97706', t:'#7c2d12'};
-  return {f:'#f8fafc', k:'#e2e8f0', t:'#94a3b8'};
+  return {f:'#dfe3e8', k:'#b8c0cc', t:'#8a94a3'};
 }
 
 function drawFishMap(areaFilter) {
@@ -3379,7 +3379,7 @@ initApp();
 // ===== PWA: Service Worker 登録 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('sw.js').catch(function(e) {
+    navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).catch(function(e) {
       console.warn('[PWA] SW register failed:', e.message);
     });
   });

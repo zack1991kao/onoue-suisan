@@ -2467,11 +2467,13 @@ function openTankDetail(p){
   if(!p)return;
   var si=pondStatusInfo(p.status);
   var shapeStr=p.sh==='ci'?'● 円形':'■ 四角';
-  var yr=getPondYr(p);
-  var yrLabel=yr?yrToLabel(yr):'―';
-  var baitStr=p.bait+(p.bait2?' / '+p.bait2:'');
-  var stock=(p.stock||0).toLocaleString();
   var isSkip=p.status==='skip';
+  var yr=getPondYr(p);
+  // 空きいけすは魚種・年齢・餌を出さない（前の魚の情報が残って見えないように）
+  var speciesStr=isSkip?'空き':(p.species||'―');
+  var yrLabel=(isSkip||!yr)?'―':yrToLabel(yr);
+  var baitStr=isSkip?'―':(p.bait+(p.bait2?' / '+p.bait2:''));
+  var stock=(p.stock||0).toLocaleString();
   // PCでもこの画面から直接「給餌・斃死」を記録できるクイック入力（スマホと同じ感覚）
   var baitOpts=BAITS.map(function(b){return '<option value="'+b+'"'+(b===p.bait?' selected':'')+'>'+b+'</option>';}).join('');
   if(p.bait && BAITS.indexOf(p.bait)<0) baitOpts='<option value="'+p.bait+'" selected>'+p.bait+'</option>'+baitOpts;
@@ -2486,7 +2488,7 @@ function openTankDetail(p){
     +'<button class="btn btn-primary" style="width:100%;height:46px" onclick="saveTankQuick(\''+p.id+'\')">この内容で記録を保存</button>'
     +'</div>');
   var html='<div class="tank-detail-grid">'
-    +'<div class="td-stat"><div class="tds-label">魚種</div><div class="tds-val" style="font-size:18px">'+p.species+'</div></div>'
+    +'<div class="td-stat"><div class="tds-label">魚種</div><div class="tds-val" style="font-size:18px">'+speciesStr+'</div></div>'
     +'<div class="td-stat"><div class="tds-label">在庫尾数</div><div class="tds-val">'+stock+'</div><div class="tds-unit">尾</div></div>'
     +'<div class="td-stat"><div class="tds-label">形状</div><div class="tds-val" style="font-size:18px">'+shapeStr+'</div></div>'
     +'<div class="td-stat"><div class="tds-label">年齢</div><div class="tds-val" style="font-size:15px">'+yrLabel+'</div></div>'
@@ -3169,9 +3171,9 @@ function drawAdminFishMap(svgId,opts){
     if(!cm)return;
     var cx=cm.x*SC+R,cy=cm.y*SC+R;
     var st=p.status;
-    var f=st==='done'?'#dcfce7':st==='alert'?'#fff7ed':st==='skip'?'#f8fafc':'#fef2f2';
-    var k=st==='done'?'#22c55e':st==='alert'?'#d97706':st==='skip'?'#e2e8f0':'#ef4444';
-    var t=st==='done'?'#166534':st==='alert'?'#7c2d12':st==='skip'?'#94a3b8':'#991b1b';
+    var f=st==='done'?'#dcfce7':st==='alert'?'#fff7ed':st==='skip'?'#dfe3e8':'#fef2f2';
+    var k=st==='done'?'#22c55e':st==='alert'?'#d97706':st==='skip'?'#b8c0cc':'#ef4444';
+    var t=st==='done'?'#166534':st==='alert'?'#7c2d12':st==='skip'?'#8a94a3':'#991b1b';
     var tap=clickable?(' onclick="adminTankClick(\''+p.id+'\')" style="cursor:pointer"'):'';
     var op=(dimFn && dimFn(p))?' opacity="0.18"':'';  // 検索/絞り込みの非該当は淡色化
     if(p.sh==='ci'){
@@ -3470,6 +3472,10 @@ async function saveMove(){
   var fromNew=Math.max(0,(fromP.stock||0)-qty);
   // 空き判定は在庫0も含める（斃死等で0になったいけすは表示skip・魚種が残っていても実質空き）
   var toWasEmpty=(toP.status==='skip')||!toP.species||(Number(toP.stock)||0)<=0;
+  // 稼働中いけすへ「違う魚種」を移すと混在になる → 警告して確認
+  if(!toWasEmpty && fromP.species && toP.species && fromP.species!==toP.species){
+    if(!confirm('⚠ 魚種が違います。\n移動元：'+fromP.species+'　→　移動先：'+toP.species+'（'+to+'）\nこのいけすに違う魚種を混ぜてもよろしいですか？')) return;
+  }
   var toNew=(toP.stock||0)+qty;
   // ① 移動元を減算（.select('id')で0件＝権限失敗検知）
   var u1=await sb.from('ponds').update({stock:fromNew, updated_at:new Date().toISOString()}).eq('id',from).select('id');
@@ -3924,7 +3930,7 @@ init();
 // ===== PWA: Service Worker 登録 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('sw.js').catch(function(e) {
+    navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).catch(function(e) {
       console.warn('[PWA] SW register failed:', e.message);
     });
   });
