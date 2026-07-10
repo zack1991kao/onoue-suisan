@@ -1794,21 +1794,34 @@ function getPondYr(p) {
   return POND_YR[p && p.id] || null;
 }
 
-const BAITS = [
+// 餌・薬・生餌の選択肢は管理者が設定画面で管理するマスタ（DB）に連動。
+// 起動時に loadAppMasters() でDBから取得（未作成/未ログイン時は下のシードのまま）。
+var BAITS = [
   'マダイチェリー P9','マダイチェリー P8','マダイペレット P7','ゴールドパワー',
   '紅40 P6','紅40 P8','PBP','インフィニティ',
   'Nまだいさくら 6P','Nまだいさくら 8P','Nまだいさくら 10P','Nしまあじ 6P','NKMS マッシュ',
   'ひめ桜 S6','ひめ桜 S7','ひめ桜50 3','ひめ桜50 4','ひめ桜50 5',
   'その他'
 ];
-
-const DRUGS = [
+var DRUGS = [
   'オキシテトラサイクリン','フロルフェニコール','スルファモノメトキシン',
   'エンロフロキサシン','プラジクアンテル','トリクロルホン',
   'マラカイトグリーン','ホルマリン','その他'
 ];
-// 生エサ（カンパチ用）：イワシ・サバ・さんま（6/26 社長要望）
-const NAMA_ESA = ['イワシ', 'サバ', 'さんま'];
+var NAMA_ESA = ['イワシ', 'サバ', 'さんま'];
+// マスタをDBから取得して選択肢を最新化（管理者が追加/無効化したものを現場にも反映）
+async function loadAppMasters(){
+  try{
+    var res=await Promise.all([
+      sb.from('feed_master').select('name,active,sort_order').order('sort_order',{ascending:true}),
+      sb.from('drug_master').select('name,active,sort_order').order('sort_order',{ascending:true}),
+      sb.from('live_esa_master').select('name,active,sort_order').order('sort_order',{ascending:true})
+    ]);
+    if(!res[0].error && res[0].data && res[0].data.length) BAITS = res[0].data.filter(function(x){return x.active!==false;}).map(function(x){return x.name;}).concat(['その他']);
+    if(!res[1].error && res[1].data && res[1].data.length) DRUGS = res[1].data.filter(function(x){return x.active!==false;}).map(function(x){return x.name;});
+    if(!res[2].error && res[2].data && res[2].data.length) NAMA_ESA = res[2].data.filter(function(x){return x.active!==false;}).map(function(x){return x.name;});
+  }catch(e){ console.warn('[Supabase] loadAppMasters fallback(シード使用):', e.message||e); }
+}
 
 // 受注は Supabase の orders から取得（PC版と完全共有）。サンプルは持たない。
 var ORDERS = [];
@@ -3378,6 +3391,7 @@ function applySavedTabClass(){
 async function initApp() {
   applySavedTabClass();  // 最初にタブを復元＝ホーム画面のちらつきを防ぐ
   try { await sb.auth.getSession(); } catch(e){}  // セッション復元（RLS有効化後の認証付きクエリ用）
+  await loadAppMasters();   // 餌・薬・生餌の選択肢をマスタ(DB)から取得
   await loadPonds();
   await loadAppOrders();
   initAiMode();

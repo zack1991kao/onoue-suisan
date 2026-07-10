@@ -979,6 +979,24 @@ body.ai-mode-on .ai-element-flex{display:flex}
         <p style="font-size:11px;color:var(--gray);margin-top:8px">給餌入力の「餌の種類」もこの一覧に連動します（無効にすると選択肢から外れます。餌1袋＝20kg換算で餌代を算出）。</p>
       </div>
       <div class="settings-section" style="margin-top:22px">
+        <h3>🐟 生餌マスタ</h3>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>生餌の名前</th><th style="text-align:right">価格</th><th></th></tr></thead>
+          <tbody id="liveMasterBody"></tbody>
+        </table></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openMasterEdit('live',null)">＋ 追加</button>
+        <p style="font-size:11px;color:var(--gray);margin-top:8px">給餌入力の「生餌」の選択肢に連動します。価格は円/kg で登録してください。</p>
+      </div>
+      <div class="settings-section" style="margin-top:22px">
+        <h3>💊 薬マスタ</h3>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>薬の名前</th><th style="text-align:right">価格</th><th></th></tr></thead>
+          <tbody id="drugMasterBody"></tbody>
+        </table></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openMasterEdit('drug',null)">＋ 追加</button>
+        <p style="font-size:11px;color:var(--gray);margin-top:8px">給餌入力の「薬品」の選択肢に連動します。</p>
+      </div>
+      <div class="settings-section" style="margin-top:22px">
         <h3>💾 バックアップ・復元</h3>
         <div style="border:1px solid var(--border);border-radius:6px;padding:14px">
           <p style="font-size:12.5px;color:var(--sub);margin-bottom:10px">毎晩0時に自動でバックアップを取ります。日付を選べばその時点に戻せます（在庫・記録・受注・マスタなど全データ）。</p>
@@ -3710,7 +3728,23 @@ function renderSpeciesMaster(){
       +'<td>'+(s.price!=null?Number(s.price).toLocaleString():'―')+'</td>'
       +'<td>'+_mActBtns('species',i,act)+'</td></tr>';
   }).join('');
+  renderDrugMaster(); renderLiveMaster();
   loadBackups();
+}
+function _priceUnit(p,u){ return (p>0?Number(p).toLocaleString():'<span style="color:var(--gray)">未設定</span>')+(p>0&&u?(' '+u):''); }
+function renderDrugMaster(){
+  var el=document.getElementById('drugMasterBody'); if(!el) return;
+  el.innerHTML=DRUG_MASTER.map(function(d,i){ var act=d.active!==false;
+    return '<tr'+_mRowStyle(act)+'><td>'+d.name+(act?'':' <span class="chip chip-gray">無効</span>')+'</td>'
+      +'<td style="text-align:right">'+_priceUnit(d.price,d.unit)+'</td><td style="white-space:nowrap">'+_mActBtns('drug',i,act)+'</td></tr>';
+  }).join('');
+}
+function renderLiveMaster(){
+  var el=document.getElementById('liveMasterBody'); if(!el) return;
+  el.innerHTML=LIVE_MASTER.map(function(l,i){ var act=l.active!==false;
+    return '<tr'+_mRowStyle(act)+'><td>'+l.name+(act?'':' <span class="chip chip-gray">無効</span>')+'</td>'
+      +'<td style="text-align:right">'+_priceUnit(l.price,l.unit)+'</td><td style="white-space:nowrap">'+_mActBtns('live',i,act)+'</td></tr>';
+  }).join('');
 }
 
 // ===== バックアップ・復元 =====
@@ -3814,11 +3848,22 @@ var FEED_MASTER=[
 var BAG_KG=20; // 餌1袋の重量（kg換算）。要確認のため定数化
 // 互換の派生値（餌代計算=FEED_PRICES／給餌の選択肢=BAITS／受注の取引先=BUYERS）。有効(active)のみ採用
 var FEED_PRICES={}, BAITS=[];
+// 薬・生餌マスタ（08と同方式。価格つき。シード→DBで上書き）
+var DRUG_MASTER=[
+  {name:'オキシテトラサイクリン',price:0,unit:'円',active:true},{name:'フロルフェニコール',price:0,unit:'円',active:true},
+  {name:'スルファモノメトキシン',price:0,unit:'円',active:true},{name:'エンロフロキサシン',price:0,unit:'円',active:true},
+  {name:'プラジクアンテル',price:0,unit:'円',active:true},{name:'トリクロルホン',price:0,unit:'円',active:true},
+  {name:'マラカイトグリーン',price:0,unit:'円',active:true},{name:'ホルマリン',price:0,unit:'円',active:true},{name:'その他',price:0,unit:'円',active:true}
+];
+var LIVE_MASTER=[{name:'イワシ',price:0,unit:'円/kg',active:true},{name:'サバ',price:0,unit:'円/kg',active:true},{name:'さんま',price:0,unit:'円/kg',active:true}];
+var DRUGS=[], NAMA_ESA=[];
 function rebuildDerived(){
   BUYERS = BUYER_MASTER.filter(function(b){return b.active!==false;}).map(function(b){return b.name;}).concat(['その他']);
   var af = FEED_MASTER.filter(function(f){return f.active!==false;});
   FEED_PRICES = af.reduce(function(o,f){o[f.name]=f.price;return o;},{});
   BAITS = af.map(function(f){return f.name;}).concat(['その他']);
+  DRUGS = DRUG_MASTER.filter(function(d){return d.active!==false;}).map(function(d){return d.name;});
+  NAMA_ESA = LIVE_MASTER.filter(function(l){return l.active!==false;}).map(function(l){return l.name;});
 }
 rebuildDerived();
 // マスタをDBから読み込む（未作成/未ログイン時はシードのまま）。initApp から呼ぶ
@@ -3827,17 +3872,21 @@ async function loadMasters(){
     var res=await Promise.all([
       sb.from('feed_master').select('*').order('sort_order',{ascending:true}),
       sb.from('buyer_master').select('*').order('sort_order',{ascending:true}),
-      sb.from('species_master').select('*').order('sort_order',{ascending:true})
+      sb.from('species_master').select('*').order('sort_order',{ascending:true}),
+      sb.from('drug_master').select('*').order('sort_order',{ascending:true}),
+      sb.from('live_esa_master').select('*').order('sort_order',{ascending:true})
     ]);
     if(!res[0].error && res[0].data && res[0].data.length) FEED_MASTER=res[0].data;
     if(!res[1].error && res[1].data && res[1].data.length) BUYER_MASTER=res[1].data;
     if(!res[2].error && res[2].data && res[2].data.length) SPECIES_MASTER=res[2].data;
+    if(!res[3].error && res[3].data && res[3].data.length) DRUG_MASTER=res[3].data;
+    if(!res[4].error && res[4].data && res[4].data.length) LIVE_MASTER=res[4].data;
   }catch(e){ console.warn('[Supabase] loadMasters fallback(シード使用):', e.message||e); }
   rebuildDerived();
 }
 // マスタ表の1件を保存（新規=insert／既存=update）。管理者のみ（RLS）
 async function saveMaster(kind, row){
-  var table={feed:'feed_master',buyer:'buyer_master',species:'species_master'}[kind];
+  var table={feed:'feed_master',buyer:'buyer_master',species:'species_master',drug:'drug_master',live:'live_esa_master'}[kind];
   if(!table) return false;
   row.updated_at=new Date().toISOString();
   try{
@@ -3850,16 +3899,17 @@ async function saveMaster(kind, row){
     return false;
   }
 }
+function _masterArr(kind){ return {feed:FEED_MASTER,buyer:BUYER_MASTER,species:SPECIES_MASTER,drug:DRUG_MASTER,live:LIVE_MASTER}[kind]; }
 async function toggleMasterActive(kind, id, toActive){
-  var table={feed:'feed_master',buyer:'buyer_master',species:'species_master'}[kind];
+  var table={feed:'feed_master',buyer:'buyer_master',species:'species_master',drug:'drug_master',live:'live_esa_master'}[kind];
   try{ var r=await sb.from(table).update({active:toActive,updated_at:new Date().toISOString()}).eq('id',id).select('id'); if(r.error) throw r.error; return true; }
   catch(e){ alert('変更できませんでした：'+(e.message||e)); return false; }
 }
-// マスタ編集モーダルを開く（kind: feed/buyer/species、item=既存 or null=新規）
+// マスタ編集モーダルを開く（kind: feed/buyer/species/drug/live、item=既存 or null=新規）
 function openMasterEdit(kind, idx){
-  var arr = kind==='feed'?FEED_MASTER : kind==='buyer'?BUYER_MASTER : SPECIES_MASTER;
+  var arr = _masterArr(kind);
   var it = (idx!=null && idx>=0) ? arr[idx] : {};
-  var title=(idx!=null?'編集':'追加')+'：'+({feed:'餌マスタ',buyer:'取引先マスタ',species:'魚種・単価マスタ'}[kind]);
+  var title=(idx!=null?'編集':'追加')+'：'+({feed:'餌マスタ',buyer:'取引先マスタ',species:'魚種・単価マスタ',drug:'薬マスタ',live:'生餌マスタ'}[kind]);
   function fg(label,inner){ return '<div class="fg"><label>'+label+'</label>'+inner+'</div>'; }
   var html='';
   if(kind==='feed'){
@@ -3871,6 +3921,14 @@ function openMasterEdit(kind, idx){
     html+=fg('区分','<input class="fc" id="mm_category" value="'+_attr(it.category||'卸業者')+'" placeholder="卸業者 / 小売 / ホテル 等">');
     html+=fg('連絡先','<input class="fc" id="mm_contact" value="'+_attr(it.contact)+'" placeholder="電話番号など">');
     html+=fg('会計 補助コード（任意）','<input class="fc" id="mm_subcode" value="'+_attr(it.sub_code)+'" placeholder="PCA売掛金の補助コード">');
+  }else if(kind==='drug'){
+    html+=fg('薬の名前 <span style="color:#dc2626">必須</span>','<input class="fc" id="mm_name" value="'+_attr(it.name)+'" placeholder="例：オキシテトラサイクリン">');
+    html+=fg('価格','<input class="fc" id="mm_price" type="number" value="'+(it.price!=null?it.price:'')+'" placeholder="0">');
+    html+=fg('単位','<input class="fc" id="mm_unit" value="'+_attr(it.unit||'円')+'" placeholder="円 / 円/g / 円/本 など">');
+  }else if(kind==='live'){
+    html+=fg('生餌の名前 <span style="color:#dc2626">必須</span>','<input class="fc" id="mm_name" value="'+_attr(it.name)+'" placeholder="例：イワシ">');
+    html+=fg('価格','<input class="fc" id="mm_price" type="number" value="'+(it.price!=null?it.price:'')+'" placeholder="0">');
+    html+=fg('単位','<input class="fc" id="mm_unit" value="'+_attr(it.unit||'円/kg')+'" placeholder="円/kg など">');
   }else{
     html+=fg('魚種名 <span style="color:#dc2626">必須</span>','<input class="fc" id="mm_name" value="'+_attr(it.name)+'" placeholder="例：マダイ">');
     html+=fg('標準単価（円/kg）','<input class="fc" id="mm_price" type="number" value="'+(it.price!=null?it.price:'')+'" placeholder="0">');
@@ -3879,7 +3937,7 @@ function openMasterEdit(kind, idx){
   openDetail(title, html, acts);
 }
 async function submitMasterEdit(kind, idx){
-  var arr = kind==='feed'?FEED_MASTER : kind==='buyer'?BUYER_MASTER : SPECIES_MASTER;
+  var arr = _masterArr(kind);
   var existing = (idx!=null && idx>=0) ? arr[idx] : null;
   var name=(document.getElementById('mm_name')||{}).value; name=(name||'').trim();
   if(!name){ alert('名前は必須です'); return; }
@@ -3888,6 +3946,7 @@ async function submitMasterEdit(kind, idx){
   if(existing && existing.sort_order!=null) row.sort_order=existing.sort_order;
   if(kind==='feed'){ row.supplier=(document.getElementById('mm_supplier')||{}).value||null; row.price=parseInt((document.getElementById('mm_price')||{}).value)||0; }
   else if(kind==='buyer'){ row.category=(document.getElementById('mm_category')||{}).value||'卸業者'; row.contact=(document.getElementById('mm_contact')||{}).value||null; row.sub_code=(document.getElementById('mm_subcode')||{}).value||null; }
+  else if(kind==='drug'||kind==='live'){ row.price=parseInt((document.getElementById('mm_price')||{}).value)||0; row.unit=(document.getElementById('mm_unit')||{}).value||null; }
   else { row.price=parseInt((document.getElementById('mm_price')||{}).value)||0; }
   var ok=await saveMaster(kind, row);
   if(!ok) return;
@@ -3897,7 +3956,7 @@ async function submitMasterEdit(kind, idx){
   showToast('マスタを保存しました');
 }
 async function setMasterActive(kind, idx, toActive){
-  var arr = kind==='feed'?FEED_MASTER : kind==='buyer'?BUYER_MASTER : SPECIES_MASTER;
+  var arr = _masterArr(kind);
   var it=arr[idx]; if(!it) return;
   if(!it.id){ alert('この項目はまだDBに保存されていません（マスタ表の初期化が必要）'); return; }
   if(!toActive && !confirm('「'+it.name+'」を無効にします。\n新規入力の選択肢から外れますが、過去の記録は残ります。よろしいですか？')) return;
@@ -3907,7 +3966,7 @@ async function setMasterActive(kind, idx, toActive){
   renderBuyerMaster(); renderSpeciesMaster();
   showToast(toActive?'有効にしました':'無効にしました');
 }
-var DRUGS=['オキシテトラサイクリン','フロルフェニコール','スルファモノメトキシン','エンロフロキサシン','プラジクアンテル','トリクロルホン','マラカイトグリーン','ホルマリン','その他'];
+// DRUGS は薬マスタ(DRUG_MASTER)から rebuildDerived() で生成
 function _attr(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
 function _optList(arr,sel,blankLabel){
   var o = (blankLabel!=null) ? '<option value="">'+blankLabel+'</option>' : '';
