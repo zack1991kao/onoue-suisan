@@ -948,13 +948,9 @@ body.ai-mode-on .ai-element-flex{display:flex}
         <h3>🐠 魚種・単価マスタ</h3>
         <div class="tbl-wrap"><table>
           <thead><tr><th>魚種</th><th>標準単価(円/kg)</th><th></th></tr></thead>
-          <tbody>
-            <tr><td>マダイ</td><td>1,000</td><td><span class="action-link" onclick="openM('mEditSpecies')">編集</span></td></tr>
-            <tr><td>カンパチ</td><td>2,000</td><td><span class="action-link" onclick="openM('mEditSpecies')">編集</span></td></tr>
-            <tr><td>シマアジ</td><td>1,800</td><td><span class="action-link" onclick="openM('mEditSpecies')">編集</span></td></tr>
-          </tbody>
+          <tbody id="speciesMasterBody"></tbody>
         </table></div>
-        <button class="btn btn-secondary btn-sm" style="margin-top:8px">＋ 追加</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openMasterEdit('species',null)">＋ 追加</button>
       </div>
 
       <div class="settings-section" style="margin-top:22px">
@@ -963,7 +959,7 @@ body.ai-mode-on .ai-element-flex{display:flex}
           <thead><tr><th>取引先名</th><th>区分</th><th>連絡先</th><th></th></tr></thead>
           <tbody id="buyerMasterBody"></tbody>
         </table></div>
-        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openNewOrder()">＋ 追加</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openMasterEdit('buyer',null)">＋ 追加</button>
       </div>
     </div>
     <div>
@@ -976,10 +972,11 @@ body.ai-mode-on .ai-element-flex{display:flex}
       <div class="settings-section" style="margin-top:22px">
         <h3>🍚 餌マスタ（メーカー別・円/袋）</h3>
         <div class="tbl-wrap"><table>
-          <thead><tr><th>仕入先</th><th>餌の名前</th><th style="text-align:right">価格(円/袋)</th></tr></thead>
+          <thead><tr><th>仕入先</th><th>餌の名前</th><th style="text-align:right">価格(円/袋)</th><th></th></tr></thead>
           <tbody id="feedMasterBody"></tbody>
         </table></div>
-        <p style="font-size:11px;color:var(--gray);margin-top:8px">給餌入力の「餌の種類」もこの一覧に連動します（餌1袋＝20kg換算で餌代を算出）。</p>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openMasterEdit('feed',null)">＋ 追加</button>
+        <p style="font-size:11px;color:var(--gray);margin-top:8px">給餌入力の「餌の種類」もこの一覧に連動します（無効にすると選択肢から外れます。餌1袋＝20kg換算で餌代を算出）。</p>
       </div>
       <div class="settings-section" style="margin-top:22px">
         <h3>📥 データ取込（フェーズ2）</h3>
@@ -1362,8 +1359,18 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // ══════════════════════════════════════════
 // DATA
 // ══════════════════════════════════════════
-// 取引先マスタ（社長提供の実リスト。会計コードは buyerSub() で変換）
-const BUYERS=['大海水産','脇川水産','海水養殖','天草漁協（本渡）','ニチモウ','山家','オーシャンプロテック','陣内鮮魚店','よしやホテル','吉中鮮魚店','和潮','その他'];
+// ===== マスタ（起動時にDBから読込／DB未作成ならこのシードを使用）。全画面がこれを参照 =====
+var SPECIES_MASTER=[{name:'マダイ',price:1000,active:true},{name:'カンパチ',price:2000,active:true},{name:'シマアジ',price:1800,active:true}];
+var BUYER_MASTER=[
+  {name:'大海水産',category:'卸業者',active:true},{name:'脇川水産',category:'卸業者',active:true},
+  {name:'海水養殖',category:'卸業者',active:true},{name:'天草漁協（本渡）',category:'卸業者',active:true},
+  {name:'ニチモウ',category:'卸業者',active:true},{name:'山家',category:'卸業者',active:true},
+  {name:'オーシャンプロテック',category:'卸業者',active:true},{name:'陣内鮮魚店',category:'卸業者',active:true},
+  {name:'よしやホテル',category:'ホテル',active:true},{name:'吉中鮮魚店',category:'卸業者',active:true},
+  {name:'和潮',category:'卸業者',active:true}
+];
+// 有効な取引先名（受注の選択肢）。rebuildDerived()で最新化
+var BUYERS=BUYER_MASTER.map(function(b){return b.name;}).concat(['その他']);
 const POND_CONFIG=[
   // ===== 団地 (26基) =====
   {id:'団地-01', area:'団地', sh:'sq', species:'マダイ', stock:12000, bait:'ひめ桜 s7', status:'todo', feed:0, mort:0, bgrade:0},
@@ -2088,6 +2095,7 @@ function subscribeRealtime(){
 async function init(){
   var _restoredScreen = applySavedScreen();  // 最初に画面を復元＝ダッシュボードのちらつきを防ぐ
   try { await sb.auth.getSession(); } catch(e){}  // セッション復元（RLS有効化後の認証付きクエリ用）
+  await loadMasters();    // マスタ（魚種・取引先・餌）をDBから読込（未作成ならシード）
   await loadPonds();
   await loadOrders();
   await loadShipments();  // 元帳・入金管理用（管理者のみ取得可・staffは空）
@@ -3649,21 +3657,45 @@ function openLotDetail(i){
 // ══════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════
-function renderBuyerMaster(){
-  document.getElementById('buyerMasterBody').innerHTML=BUYERS.map(function(b){
-    return '<tr><td>'+b+'</td><td><span class="chip chip-gray">卸業者</span></td><td style="font-size:12px;color:var(--sub)">0969-xx-xxxx</td><td><span class="action-link">編集</span><span class="action-link" style="color:var(--red)">削除</span></td></tr>';
-  }).join('');
-  renderFeedMaster();
+function _mActBtns(kind, idx, active){
+  var toggle = active
+    ? '<span class="action-link" style="color:var(--red)" onclick="setMasterActive(\''+kind+'\','+idx+',false)">無効化</span>'
+    : '<span class="action-link" style="color:var(--green)" onclick="setMasterActive(\''+kind+'\','+idx+',true)">有効化</span>';
+  return '<span class="action-link" onclick="openMasterEdit(\''+kind+'\','+idx+')">編集</span>'+toggle;
 }
-// 餌マスタ一覧（仕入先ごとにまとめて表示）
+function _mRowStyle(active){ return active?'':' style="opacity:.45"'; }
+function renderBuyerMaster(){
+  var el=document.getElementById('buyerMasterBody'); if(!el) return;
+  el.innerHTML=BUYER_MASTER.map(function(b,i){
+    var act=b.active!==false;
+    return '<tr'+_mRowStyle(act)+'><td>'+b.name+(act?'':' <span class="chip chip-gray">無効</span>')+'</td>'
+      +'<td><span class="chip chip-gray">'+(b.category||'卸業者')+'</span></td>'
+      +'<td style="font-size:12px;color:var(--sub)">'+(b.contact||'―')+'</td>'
+      +'<td>'+_mActBtns('buyer',i,act)+'</td></tr>';
+  }).join('');
+  renderFeedMaster(); renderSpeciesMaster();
+}
+// 餌マスタ一覧（仕入先ごとにまとめて表示・編集/無効化）
 function renderFeedMaster(){
   var el=document.getElementById('feedMasterBody'); if(!el) return;
   var prev='';
-  el.innerHTML=FEED_MASTER.map(function(f){
-    var supCell = (f.supplier!==prev) ? ('<td style="font-weight:700;color:var(--blue-dk)">'+f.supplier+'</td>') : '<td></td>';
+  el.innerHTML=FEED_MASTER.map(function(f,i){
+    var act=f.active!==false;
+    var supCell = (f.supplier!==prev) ? ('<td style="font-weight:700;color:var(--blue-dk)">'+(f.supplier||'')+'</td>') : '<td></td>';
     prev=f.supplier;
     var priceStr = f.price>0 ? f.price.toLocaleString() : '<span style="color:var(--gray)">―</span>';
-    return '<tr>'+supCell+'<td>'+f.name+'</td><td style="text-align:right">'+priceStr+'</td></tr>';
+    return '<tr'+_mRowStyle(act)+'>'+supCell+'<td>'+f.name+(act?'':' <span class="chip chip-gray">無効</span>')+'</td>'
+      +'<td style="text-align:right">'+priceStr+'</td><td style="white-space:nowrap">'+_mActBtns('feed',i,act)+'</td></tr>';
+  }).join('');
+}
+// 魚種・単価マスタ一覧
+function renderSpeciesMaster(){
+  var el=document.getElementById('speciesMasterBody'); if(!el) return;
+  el.innerHTML=SPECIES_MASTER.map(function(s,i){
+    var act=s.active!==false;
+    return '<tr'+_mRowStyle(act)+'><td>'+s.name+(act?'':' <span class="chip chip-gray">無効</span>')+'</td>'
+      +'<td>'+(s.price!=null?Number(s.price).toLocaleString():'―')+'</td>'
+      +'<td>'+_mActBtns('species',i,act)+'</td></tr>';
   }).join('');
 }
 
@@ -3715,10 +3747,102 @@ var FEED_MASTER=[
   {supplier:'ヒガシマル', name:'ひめ桜50 4', price:5460},
   {supplier:'ヒガシマル', name:'ひめ桜50 5', price:5460}
 ];
-// 互換：名前→価格の辞書（餌代計算で使用）
-var FEED_PRICES=FEED_MASTER.reduce(function(o,f){o[f.name]=f.price;return o;},{});
 var BAG_KG=20; // 餌1袋の重量（kg換算）。要確認のため定数化
-var BAITS=FEED_MASTER.map(function(f){return f.name;}).concat(['その他']);
+// 互換の派生値（餌代計算=FEED_PRICES／給餌の選択肢=BAITS／受注の取引先=BUYERS）。有効(active)のみ採用
+var FEED_PRICES={}, BAITS=[];
+function rebuildDerived(){
+  BUYERS = BUYER_MASTER.filter(function(b){return b.active!==false;}).map(function(b){return b.name;}).concat(['その他']);
+  var af = FEED_MASTER.filter(function(f){return f.active!==false;});
+  FEED_PRICES = af.reduce(function(o,f){o[f.name]=f.price;return o;},{});
+  BAITS = af.map(function(f){return f.name;}).concat(['その他']);
+}
+rebuildDerived();
+// マスタをDBから読み込む（未作成/未ログイン時はシードのまま）。initApp から呼ぶ
+async function loadMasters(){
+  try{
+    var res=await Promise.all([
+      sb.from('feed_master').select('*').order('sort_order',{ascending:true}),
+      sb.from('buyer_master').select('*').order('sort_order',{ascending:true}),
+      sb.from('species_master').select('*').order('sort_order',{ascending:true})
+    ]);
+    if(!res[0].error && res[0].data && res[0].data.length) FEED_MASTER=res[0].data;
+    if(!res[1].error && res[1].data && res[1].data.length) BUYER_MASTER=res[1].data;
+    if(!res[2].error && res[2].data && res[2].data.length) SPECIES_MASTER=res[2].data;
+  }catch(e){ console.warn('[Supabase] loadMasters fallback(シード使用):', e.message||e); }
+  rebuildDerived();
+}
+// マスタ表の1件を保存（新規=insert／既存=update）。管理者のみ（RLS）
+async function saveMaster(kind, row){
+  var table={feed:'feed_master',buyer:'buyer_master',species:'species_master'}[kind];
+  if(!table) return false;
+  row.updated_at=new Date().toISOString();
+  try{
+    var q = row.id ? sb.from(table).update(row).eq('id',row.id) : sb.from(table).insert(row);
+    var r=await q.select('id');
+    if(r.error) throw r.error;
+    return true;
+  }catch(e){
+    alert('保存できませんでした。\n（マスタ表が未作成の可能性があります。管理者/Isaacにご連絡ください）\n'+(e.message||e));
+    return false;
+  }
+}
+async function toggleMasterActive(kind, id, toActive){
+  var table={feed:'feed_master',buyer:'buyer_master',species:'species_master'}[kind];
+  try{ var r=await sb.from(table).update({active:toActive,updated_at:new Date().toISOString()}).eq('id',id).select('id'); if(r.error) throw r.error; return true; }
+  catch(e){ alert('変更できませんでした：'+(e.message||e)); return false; }
+}
+// マスタ編集モーダルを開く（kind: feed/buyer/species、item=既存 or null=新規）
+function openMasterEdit(kind, idx){
+  var arr = kind==='feed'?FEED_MASTER : kind==='buyer'?BUYER_MASTER : SPECIES_MASTER;
+  var it = (idx!=null && idx>=0) ? arr[idx] : {};
+  var title=(idx!=null?'編集':'追加')+'：'+({feed:'餌マスタ',buyer:'取引先マスタ',species:'魚種・単価マスタ'}[kind]);
+  function fg(label,inner){ return '<div class="fg"><label>'+label+'</label>'+inner+'</div>'; }
+  var html='';
+  if(kind==='feed'){
+    html+=fg('仕入先','<input class="fc" id="mm_supplier" value="'+_attr(it.supplier)+'" placeholder="例：ヒガシマル">');
+    html+=fg('餌の名前 <span style="color:#dc2626">必須</span>','<input class="fc" id="mm_name" value="'+_attr(it.name)+'" placeholder="例：ひめ桜 S7">');
+    html+=fg('価格（円/袋）','<input class="fc" id="mm_price" type="number" value="'+(it.price!=null?it.price:'')+'" placeholder="0">');
+  }else if(kind==='buyer'){
+    html+=fg('取引先名 <span style="color:#dc2626">必須</span>','<input class="fc" id="mm_name" value="'+_attr(it.name)+'" placeholder="例：大海水産">');
+    html+=fg('区分','<input class="fc" id="mm_category" value="'+_attr(it.category||'卸業者')+'" placeholder="卸業者 / 小売 / ホテル 等">');
+    html+=fg('連絡先','<input class="fc" id="mm_contact" value="'+_attr(it.contact)+'" placeholder="電話番号など">');
+    html+=fg('会計 補助コード（任意）','<input class="fc" id="mm_subcode" value="'+_attr(it.sub_code)+'" placeholder="PCA売掛金の補助コード">');
+  }else{
+    html+=fg('魚種名 <span style="color:#dc2626">必須</span>','<input class="fc" id="mm_name" value="'+_attr(it.name)+'" placeholder="例：マダイ">');
+    html+=fg('標準単価（円/kg）','<input class="fc" id="mm_price" type="number" value="'+(it.price!=null?it.price:'')+'" placeholder="0">');
+  }
+  var acts='<button class="btn btn-primary" onclick="submitMasterEdit(\''+kind+'\','+(idx!=null?idx:'null')+')">保存</button>';
+  openDetail(title, html, acts);
+}
+async function submitMasterEdit(kind, idx){
+  var arr = kind==='feed'?FEED_MASTER : kind==='buyer'?BUYER_MASTER : SPECIES_MASTER;
+  var existing = (idx!=null && idx>=0) ? arr[idx] : null;
+  var name=(document.getElementById('mm_name')||{}).value; name=(name||'').trim();
+  if(!name){ alert('名前は必須です'); return; }
+  var row={ name:name, active: existing? (existing.active!==false):true };
+  if(existing && existing.id) row.id=existing.id;
+  if(existing && existing.sort_order!=null) row.sort_order=existing.sort_order;
+  if(kind==='feed'){ row.supplier=(document.getElementById('mm_supplier')||{}).value||null; row.price=parseInt((document.getElementById('mm_price')||{}).value)||0; }
+  else if(kind==='buyer'){ row.category=(document.getElementById('mm_category')||{}).value||'卸業者'; row.contact=(document.getElementById('mm_contact')||{}).value||null; row.sub_code=(document.getElementById('mm_subcode')||{}).value||null; }
+  else { row.price=parseInt((document.getElementById('mm_price')||{}).value)||0; }
+  var ok=await saveMaster(kind, row);
+  if(!ok) return;
+  closeM('mDetail');
+  await loadMasters();
+  renderBuyerMaster(); renderSpeciesMaster();
+  showToast('マスタを保存しました');
+}
+async function setMasterActive(kind, idx, toActive){
+  var arr = kind==='feed'?FEED_MASTER : kind==='buyer'?BUYER_MASTER : SPECIES_MASTER;
+  var it=arr[idx]; if(!it) return;
+  if(!it.id){ alert('この項目はまだDBに保存されていません（マスタ表の初期化が必要）'); return; }
+  if(!toActive && !confirm('「'+it.name+'」を無効にします。\n新規入力の選択肢から外れますが、過去の記録は残ります。よろしいですか？')) return;
+  var ok=await toggleMasterActive(kind, it.id, toActive);
+  if(!ok) return;
+  await loadMasters();
+  renderBuyerMaster(); renderSpeciesMaster();
+  showToast(toActive?'有効にしました':'無効にしました');
+}
 var DRUGS=['オキシテトラサイクリン','フロルフェニコール','スルファモノメトキシン','エンロフロキサシン','プラジクアンテル','トリクロルホン','マラカイトグリーン','ホルマリン','その他'];
 function _attr(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
 function _optList(arr,sel,blankLabel){
