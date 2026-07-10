@@ -979,6 +979,18 @@ body.ai-mode-on .ai-element-flex{display:flex}
         <p style="font-size:11px;color:var(--gray);margin-top:8px">給餌入力の「餌の種類」もこの一覧に連動します（無効にすると選択肢から外れます。餌1袋＝20kg換算で餌代を算出）。</p>
       </div>
       <div class="settings-section" style="margin-top:22px">
+        <h3>💾 バックアップ・復元</h3>
+        <div style="border:1px solid var(--border);border-radius:6px;padding:14px">
+          <p style="font-size:12.5px;color:var(--sub);margin-bottom:10px">毎晩0時に自動でバックアップを取ります。日付を選べばその時点に戻せます（在庫・記録・受注・マスタなど全データ）。</p>
+          <button class="btn btn-primary btn-sm" onclick="backupNow()">＋ 今すぐバックアップ</button>
+          <div class="tbl-wrap" style="margin-top:12px"><table>
+            <thead><tr><th>日時</th><th>種別</th><th style="text-align:right">サイズ</th><th></th></tr></thead>
+            <tbody id="backupsBody"><tr><td colspan="4" style="text-align:center;color:var(--gray);padding:14px">読み込み中…</td></tr></tbody>
+          </table></div>
+          <p style="font-size:11px;color:var(--red);margin-top:8px">⚠ 復元すると、選んだ日時の状態に全データが置き換わります（それ以降の記録は消えます）。実行前に「今すぐバックアップ」を取ると安心です。</p>
+        </div>
+      </div>
+      <div class="settings-section" style="margin-top:22px">
         <h3>📥 データ取込（フェーズ2）</h3>
         <div style="border:1px solid var(--border);border-radius:6px;padding:14px">
           <p style="font-size:13px;color:var(--sub);margin-bottom:12px">AI給餌器からのCSVインポート（実装予定）</p>
@@ -3697,6 +3709,57 @@ function renderSpeciesMaster(){
       +'<td>'+(s.price!=null?Number(s.price).toLocaleString():'―')+'</td>'
       +'<td>'+_mActBtns('species',i,act)+'</td></tr>';
   }).join('');
+  loadBackups();
+}
+
+// ===== バックアップ・復元 =====
+function _fmtBytes(n){ n=Number(n)||0; return n>=1048576?(n/1048576).toFixed(1)+'MB':n>=1024?Math.round(n/1024)+'KB':n+'B'; }
+function _fmtDT(iso){ try{ var d=new Date(iso); return d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return iso||''; } }
+async function loadBackups(){
+  var el=document.getElementById('backupsBody'); if(!el) return;
+  try{
+    var r=await sb.from('backups').select('id,taken_at,label,size_bytes').order('taken_at',{ascending:false}).limit(60);
+    if(r.error) throw r.error;
+    var rows=r.data||[];
+    if(!rows.length){ el.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--gray);padding:14px">まだバックアップがありません</td></tr>'; return; }
+    el.innerHTML=rows.map(function(b){
+      return '<tr><td>'+_fmtDT(b.taken_at)+'</td>'
+        +'<td><span class="chip chip-gray">'+(b.label||'auto')+'</span></td>'
+        +'<td style="text-align:right;font-size:12px;color:var(--sub)">'+_fmtBytes(b.size_bytes)+'</td>'
+        +'<td><span class="action-link" style="color:var(--red)" onclick="restoreBackup('+b.id+',\''+_fmtDT(b.taken_at)+'\')">この日に復元</span></td></tr>';
+    }).join('');
+  }catch(e){
+    el.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--gray);padding:14px">バックアップ機能は準備中です（DBの初期化が必要）</td></tr>';
+  }
+}
+async function backupNow(){
+  try{
+    var r=await sb.rpc('create_daily_backup',{p_label:'手動'});
+    if(r.error) throw r.error;
+    showToast('バックアップを作成しました');
+    loadBackups();
+  }catch(e){
+    alert('バックアップに失敗しました。\n（DBの初期化が未完了か、権限をご確認ください）\n'+(e.message||e));
+  }
+}
+async function restoreBackup(id, dateStr){
+  if(!confirm('【復元の確認】\n'+dateStr+' の状態に、すべてのデータを戻します。\nそれ以降の記録（給餌・移動・受注など）は消えます。\n\n本当に復元しますか？')) return;
+  if(!confirm('最終確認です。この操作は取り消せません。\n'+dateStr+' に復元してよろしいですか？')) return;
+  try{
+    var r=await sb.rpc('restore_backup',{p_id:id});
+    if(r.error) throw r.error;
+    // 全データを再読込して画面を更新
+    await loadMasters(); await loadPonds(); await loadOrders();
+    if(typeof loadShipments==='function') await loadShipments();
+    if(typeof loadPayments==='function') await loadPayments();
+    refreshDashboard(); if(typeof renderInv==='function'){ renderInv(); renderInvSummary(); }
+    if(typeof redrawAllFishMaps==='function') redrawAllFishMaps();
+    if(typeof renderLotTable==='function'){ renderLotTable(); renderLotSummary(); }
+    renderBuyerMaster();
+    alert('✅ '+dateStr+' の状態に復元しました。');
+  }catch(e){
+    alert('復元に失敗しました（データは変更されていません）。\n'+(e.message||e));
+  }
 }
 
 // ══════════════════════════════════════════
