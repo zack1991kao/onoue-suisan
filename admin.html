@@ -1656,11 +1656,12 @@ async function applyDailyFeedStatus(){
   var today = feedTodayStr();
   var lastFed = {};
   try {
-    var r = await sb.from('feed_logs').select('pond_id,log_date');
+    var r = await sb.from('feed_logs').select('pond_id,log_date,feed_kg');
     if (!r.error && r.data) {
       r.data.forEach(function(row){
         var pid=row.pond_id, d=row.log_date;
         if(!pid || !d) return;
+        if(!(Number(row.feed_kg)>0)) return;   // 給餌(feed_kg>0)のみ「給餌済み」とみなす
         if(!lastFed[pid] || d > lastFed[pid]) lastFed[pid] = d;
       });
     }

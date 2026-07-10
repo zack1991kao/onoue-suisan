@@ -1582,28 +1582,26 @@ body.ai-mode-on .ai-home-banner{display:flex}
     </div>
 
     <div class="rec-field">
-      <div class="rec-label">給餌量 (kg)</div>
-      <input class="rec-input" type="number" id="recFeed" inputmode="decimal" placeholder="0.0">
+      <div class="rec-label">合計 給餌量 (kg)</div>
+      <input class="rec-input" id="recTotalFeed" readonly value="0" style="background:#eef2f6;font-weight:700;font-size:20px;color:#0f172a;">
     </div>
     <div class="rec-field">
-      <div class="rec-label">餌の種類</div>
-      <select class="rec-select" id="recBait"></select>
-    </div>
-    <div class="rec-field" id="recBait2Wrap" style="display:none;">
-      <div class="rec-label">配合餌</div>
-      <select class="rec-select" id="recBait2"></select>
-    </div>
-    <button class="rec-add-bait2-btn" id="recAddBait2Btn" onclick="toggleBait2Field()">＋ 配合餌を追加</button>
-    <div class="rec-field" id="recBait3Wrap" style="display:none;">
-      <div class="rec-label">生エサ（カンパチ用）</div>
+      <div class="rec-label">メイン餌</div>
       <div class="rec-row">
-        <select class="rec-select" id="recBait3" style="flex:1.3"></select>
-        <div class="rec-field" style="flex:1;margin:0">
-          <input class="rec-input" type="number" id="recBait3Kg" inputmode="decimal" placeholder="kg">
-        </div>
+        <select class="rec-select" id="recBait" style="flex:1.4"></select>
+        <div style="flex:1"><input class="rec-input feed-kg" type="number" id="recFeed" inputmode="decimal" placeholder="kg" oninput="recalcFeedTotal()"></div>
       </div>
     </div>
-    <button class="rec-add-bait2-btn" id="recAddBait3Btn" onclick="toggleBait3Field()">＋ 生エサを追加</button>
+    <div class="rec-field">
+      <div class="rec-label">配合餌</div>
+      <div id="blendRows"></div>
+      <button type="button" class="rec-add-bait2-btn" onclick="addFeedRow('blend')">＋ 配合餌を追加</button>
+    </div>
+    <div class="rec-field">
+      <div class="rec-label">生餌</div>
+      <div id="liveRows"></div>
+      <button type="button" class="rec-add-bait2-btn" onclick="addFeedRow('live')">＋ 生餌を追加</button>
+    </div>
     <div class="rec-row">
       <div class="rec-field" style="flex:1">
         <div class="rec-label">死魚数 (尾)</div>
@@ -1641,7 +1639,8 @@ body.ai-mode-on .ai-home-banner{display:flex}
     </div>
 
     <button class="rec-save" onclick="saveRecord()">保存する</button>
-    <button class="sheet-cancel" onclick="closeRecordPanelDirect()">キャンセル</button>
+    <button id="recCancelFeedBtn" onclick="cancelFeedRecord()" style="display:none;width:100%;height:48px;margin-top:8px;background:#fff;border:1.5px solid #fca5a5;border-radius:10px;color:#b91c1c;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;">🗑 本日の給餌を取り消す</button>
+    <button class="sheet-cancel" onclick="closeRecordPanelDirect()">閉じる</button>
   </div>
 </div>
 
@@ -2226,6 +2225,57 @@ function homeSelectPond(id) {
   openRecordPanel(id);
 }
 
+// ===== 給餌の複数行（配合餌・生餌）＋合計 =====
+function _feedRowHtml(kind, sel, kg){
+  var list = (kind==='blend') ? BAITS : NAMA_ESA;
+  var opts = list.map(function(b){ return '<option'+(b===sel?' selected':'')+'>'+b+'</option>'; }).join('');
+  return '<div class="rec-row feed-comp-row" style="margin-bottom:8px;align-items:stretch">'
+    +'<select class="rec-select" style="flex:1.4">'+opts+'</select>'
+    +'<div style="flex:1"><input class="rec-input feed-kg" type="number" inputmode="decimal" placeholder="kg" value="'+(kg!=null?kg:'')+'" oninput="recalcFeedTotal()"></div>'
+    +'<button type="button" onclick="this.closest(\'.feed-comp-row\').remove();recalcFeedTotal()" style="flex:0 0 46px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:18px;color:#94a3b8;cursor:pointer">✕</button>'
+    +'</div>';
+}
+function addFeedRow(kind, sel, kg){
+  var wrap = document.getElementById(kind==='blend'?'blendRows':'liveRows');
+  if(!wrap) return;
+  wrap.insertAdjacentHTML('beforeend', _feedRowHtml(kind, sel, kg));
+  recalcFeedTotal();
+}
+function recalcFeedTotal(){
+  var t = parseFloat((document.getElementById('recFeed')||{}).value) || 0;
+  document.querySelectorAll('#blendRows .feed-kg, #liveRows .feed-kg').forEach(function(inp){ t += parseFloat(inp.value)||0; });
+  var el = document.getElementById('recTotalFeed');
+  if(el) el.value = String(Math.round(t*10)/10);
+  return t;
+}
+function collectFeedComponents(){
+  var comps=[];
+  var mb=(document.getElementById('recBait')||{}).value, mk=parseFloat((document.getElementById('recFeed')||{}).value)||0;
+  if(mk>0) comps.push({kind:'メイン', name:mb, kg:mk});
+  [['blend','配合'],['live','生餌']].forEach(function(pair){
+    document.querySelectorAll('#'+(pair[0]==='blend'?'blendRows':'liveRows')+' .feed-comp-row').forEach(function(row){
+      var name=row.querySelector('select').value, kg=parseFloat(row.querySelector('.feed-kg').value)||0;
+      if(kg>0) comps.push({kind:pair[1], name:name, kg:kg});
+    });
+  });
+  return comps;
+}
+// 本日の給餌を取り消す（赤＝未給餌に戻す）。斃死等の記録は残す
+async function cancelFeedRecord(){
+  var p = getPond(state.sheetIkesu); if(!p) return;
+  if(!confirm('このいけすの「本日の給餌」を取り消して、未給餌（赤）に戻します。よろしいですか？')) return;
+  var today = feedTodayStr();
+  p.feedKg = 0; p.feed = 0; p.status = 'todo';
+  var ok = await dbUpdatePond(p.id, { feed_kg:0, status:'todo', updated_at:new Date().toISOString() });
+  if(!ok) return;
+  // 本日の「給餌」ログ（feed_kg>0）だけ削除。斃死のみの記録は残す
+  try { await sb.from('feed_logs').delete().eq('pond_id', p.id).eq('log_date', today).gt('feed_kg', 0); }
+  catch(e){ console.warn('[Supabase] cancel feed_logs delete skipped:', e.message||e); }
+  closeRecordPanelDirect();
+  showToast('本日の給餌を取り消しました');
+  scheduleReload();
+}
+
 // ===== RECORD PANEL =====
 function openRecordPanel(id) {
   var p = getPond(id);
@@ -2237,36 +2287,15 @@ function openRecordPanel(id) {
   var stEl = document.getElementById('recStock');
   if (stEl) stEl.textContent = '現在の尾数：' + (Number(p.stock)||0).toLocaleString() + ' 尾';
 
-  // 餌セレクト構築
+  // メイン餌セレクト構築
   var baitSel = document.getElementById('recBait');
   baitSel.innerHTML = BAITS.map(function(b) {
     return '<option value="' + b + '"' + (b === p.bait ? ' selected' : '') + '>' + b + '</option>';
   }).join('');
 
-  // 配合餌セレクト構築
-  var bait2El = document.getElementById('recBait2');
-  bait2El.innerHTML = '<option value="">なし</option>' + BAITS.map(function(b) {
-    return '<option value="' + b + '">' + b + '</option>';
-  }).join('');
-  bait2El.value = p.bait2 || '';
-  var bait2Wrap = document.getElementById('recBait2Wrap');
-  var addBtn = document.getElementById('recAddBait2Btn');
-  if (p.bait2) {
-    bait2Wrap.style.display = 'block';
-    addBtn.textContent = '－ 配合餌を削除';
-  } else {
-    bait2Wrap.style.display = 'none';
-    addBtn.textContent = '＋ 配合餌を追加';
-  }
-
-  // 生エサ（カンパチ用）セレクト構築。毎回イベント入力なので開くたびに空から
-  var bait3El = document.getElementById('recBait3');
-  bait3El.innerHTML = NAMA_ESA.map(function(b) {
-    return '<option value="' + b + '">' + b + '</option>';
-  }).join('');
-  document.getElementById('recBait3Kg').value = '';
-  document.getElementById('recBait3Wrap').style.display = 'none';
-  document.getElementById('recAddBait3Btn').textContent = '＋ 生エサを追加';
+  // 配合餌・生餌の行はリセット（複数行対応。開くたびに空から）
+  document.getElementById('blendRows').innerHTML = '';
+  document.getElementById('liveRows').innerHTML = '';
 
   // 薬品セレクト構築
   var drugSel = document.getElementById('recDrugSelect');
@@ -2274,8 +2303,13 @@ function openRecordPanel(id) {
     return '<option value="' + d + '">' + d + '</option>';
   }).join('');
 
-  // 既存値セット
-  document.getElementById('recFeed').value = p.feed || '';
+  // 既存値セット（本日給餌済みなら合計をメイン餌kgに表示＝修正しやすく）
+  var fedToday = (p.status === 'done' || p.status === 'alert') && (p.feedKg > 0);
+  document.getElementById('recFeed').value = fedToday ? p.feedKg : '';
+  recalcFeedTotal();
+  // 本日給餌済みのいけすでは「取り消し」ボタンを表示
+  var cf = document.getElementById('recCancelFeedBtn');
+  if (cf) cf.style.display = fedToday ? 'block' : 'none';
   // 斃死数は「今回新たに死んだ数」を入れるイベント入力。前回値を残すと保存のたびに
   // 在庫から二重で引かれてしまうため、毎回ゼロ（空）から入力する。
   document.getElementById('recMort').value = '';
@@ -2323,22 +2357,9 @@ function closeRecordPanel(e) {
 function closeRecordPanelDirect() {
   document.getElementById('recordPanel').classList.add('hidden');
 }
-function toggleBait2Field() {
-  var wrap = document.getElementById('recBait2Wrap');
-  var btn = document.getElementById('recAddBait2Btn');
-  var visible = wrap.style.display !== 'none';
-  wrap.style.display = visible ? 'none' : 'block';
-  btn.textContent = visible ? '＋ 配合餌を追加' : '－ 配合餌を削除';
-  if (visible) document.getElementById('recBait2').value = '';
-}
-function toggleBait3Field() {
-  var wrap = document.getElementById('recBait3Wrap');
-  var btn = document.getElementById('recAddBait3Btn');
-  var visible = wrap.style.display !== 'none';
-  wrap.style.display = visible ? 'none' : 'block';
-  btn.textContent = visible ? '＋ 生エサを追加' : '－ 生エサを削除';
-  if (visible) document.getElementById('recBait3Kg').value = '';
-}
+// 旧・単一配合餌/生エサのトグルは複数行方式(addFeedRow)に置き換え済み（互換のため空関数を残す）
+function toggleBait2Field(){ addFeedRow('blend'); }
+function toggleBait3Field(){ addFeedRow('live'); }
 function toggleRecordDrug() {
   var row = document.getElementById('recDrugRow');
   var on = row.classList.toggle('on');
@@ -2356,24 +2377,24 @@ async function saveRecord() {
   var id = state.sheetIkesu;
   var p = getPond(id);
   if (!p) return;
-  var feed = parseFloat(document.getElementById('recFeed').value) || 0;
+  var comps = collectFeedComponents();               // メイン＋配合餌＋生餌（各 種類・kg）
+  var feed = comps.reduce(function(s,c){ return s + (c.kg||0); }, 0);  // 合計給餌量
   var mort = parseInt(document.getElementById('recMort').value) || 0;
   var bgrade = parseInt(document.getElementById('recBgrade').value) || 0;
   var bait = document.getElementById('recBait').value;
-  var bait2 = document.getElementById('recBait2').value;
+  var mainComp = comps.filter(function(c){return c.kind==='メイン';})[0];
+  if (mainComp) bait = mainComp.name;
+  var bait2 = comps.filter(function(c){return c.kind==='配合';}).map(function(c){return c.name;}).join('・'); // 配合餌名（複数は・区切り）
   var drugOn = document.getElementById('recDrugRow').classList.contains('on');
   var drug = drugOn ? document.getElementById('recDrugSelect').value : '';
   var drugAmt = drugOn ? (parseFloat(document.getElementById('recDrugAmt').value) || 0) : 0;
   var flagOn = document.getElementById('recFlagRow').classList.contains('on');
   var memo = document.getElementById('recMemo').value.trim();
-  // 生エサ（カンパチ用）：入力があればmemoに必ず記録（履歴で確実に見える）＋feed_logsにも構造化
-  var bait3 = '', bait3Kg = 0;
-  if (document.getElementById('recBait3Wrap').style.display !== 'none') {
-    bait3 = document.getElementById('recBait3').value || '';
-    bait3Kg = parseFloat(document.getElementById('recBait3Kg').value) || 0;
-  }
-  if (bait3 && bait3Kg > 0) {
-    memo = '【生エサ】' + bait3 + ' ' + bait3Kg + 'kg' + (memo ? ' / ' + memo : '');
+  // 給餌の内訳（種類・kg）を必ず履歴に残す：配合餌・生餌が複数でも全部記録
+  var extra = comps.filter(function(c){return c.kind!=='メイン';});
+  if (extra.length) {
+    var breakdown = extra.map(function(c){ return '【'+c.kind+'】'+c.name+' '+c.kg+'kg'; }).join(' / ');
+    memo = breakdown + (memo ? ' / ' + memo : '');
   }
 
   // メモリ更新（既存ロジック）
@@ -3182,12 +3203,12 @@ async function applyDailyFeedStatus(){
   var today = feedTodayStr();
   var lastFed = {};
   try {
-    var r = await sb.from('feed_logs').select('pond_id,log_date');
+    var r = await sb.from('feed_logs').select('pond_id,log_date,feed_kg');
     if (!r.error && r.data) {
       r.data.forEach(function(row){
         var pid=row.pond_id, d=row.log_date;
         if(!pid || !d) return;
-        // YYYY-MM-DD は文字列比較=日付比較。各いけすの最大(最新)日を採用
+        if(!(Number(row.feed_kg)>0)) return;   // 給餌(feed_kg>0)のログのみ「給餌済み」とみなす（斃死のみ・取消は緑にしない）
         if(!lastFed[pid] || d > lastFed[pid]) lastFed[pid] = d;
       });
     }
