@@ -974,6 +974,14 @@ body.ai-mode-on .ai-element-flex{display:flex}
         <div class="toggle-row"><div><div style="font-size:13px;font-weight:600">水温異常アラート</div><div style="font-size:12px;color:var(--sub)">27℃以上または15℃以下で通知</div></div><label class="tgl"><input type="checkbox" checked><span class="tgl-slider"></span></label></div>
       </div>
       <div class="settings-section" style="margin-top:22px">
+        <h3>🍚 餌マスタ（メーカー別・円/袋）</h3>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>仕入先</th><th>餌の名前</th><th style="text-align:right">価格(円/袋)</th></tr></thead>
+          <tbody id="feedMasterBody"></tbody>
+        </table></div>
+        <p style="font-size:11px;color:var(--gray);margin-top:8px">給餌入力の「餌の種類」もこの一覧に連動します（餌1袋＝20kg換算で餌代を算出）。</p>
+      </div>
+      <div class="settings-section" style="margin-top:22px">
         <h3>📥 データ取込（フェーズ2）</h3>
         <div style="border:1px solid var(--border);border-radius:6px;padding:14px">
           <p style="font-size:13px;color:var(--sub);margin-bottom:12px">AI給餌器からのCSVインポート（実装予定）</p>
@@ -1323,8 +1331,14 @@ body.ai-mode-on .ai-element-flex{display:flex}
     <div class="mhd"><h3 id="mInvEditTitle">在庫修正</h3><button class="mclose" onclick="closeM('mInvEdit')">✕</button></div>
     <div class="mbody">
       <div class="fg"><label>在庫尾数</label><input type="number" class="fc" id="mInvEditCount"></div>
+      <div class="fg"><label>魚種</label>
+        <select class="fc" id="mInvEditSpecies"><option value="">（未設定）</option><option>マダイ</option><option>カンパチ</option><option>シマアジ</option></select>
+      </div>
+      <div class="fg"><label>年魚（学年）</label>
+        <select class="fc" id="mInvEditYr"><option value="">（未設定）</option><option value="1">1年魚</option><option value="2">2年魚</option><option value="3">3年魚</option><option value="4">4年魚</option></select>
+      </div>
       <div class="fg"><label>修正理由</label>
-        <select class="fc" id="mInvEditReason"><option>棚卸</option><option>間引き反映</option><option>死亡更新</option><option>その他</option></select>
+        <select class="fc" id="mInvEditReason"><option>棚卸</option><option>年魚・魚種の設定/訂正</option><option>入力ミスの訂正</option><option>間引き反映</option><option>死亡更新</option><option>その他</option></select>
       </div>
       <div class="fg"><label>備考</label><textarea class="fc" id="mInvEditMemo" rows="2"></textarea></div>
     </div>
@@ -2559,6 +2573,8 @@ function tankActInvEdit(id){
   closeM('mDetail'); openM('mInvEdit');
   document.getElementById('mInvEditTitle').textContent='在庫修正 — '+id;
   document.getElementById('mInvEditCount').value=(p.stock||0);
+  document.getElementById('mInvEditSpecies').value=p.species||'';
+  document.getElementById('mInvEditYr').value=(getPondYr(p)||'');
 }
 function tankActInventory(id){
   var p=POND_CONFIG.find(function(x){return x.id===id;}); if(!p)return;
@@ -2721,11 +2737,20 @@ async function saveInvEdit(){
   var beforeQty=p.stock||0;
   var reason=(document.getElementById('mInvEditReason')||{}).value||'';
   var memo=(document.getElementById('mInvEditMemo')||{}).value||'';
+  var newSp=(document.getElementById('mInvEditSpecies')||{}).value||'';
+  var newYr=parseInt((document.getElementById('mInvEditYr')||{}).value)||null;
+  // 在庫0なら空き(skip)、在庫ありで魚種があるなら稼働(todoは維持/skipから復帰)
+  var newStatus=p.status;
+  if(newCount<=0) newStatus='skip';
+  else if(p.status==='skip') newStatus='todo';
 
   // DB更新（.select('id')で0件更新＝権限不足を検知）
   try{
     var res=await sb.from('ponds').update({
       stock:newCount,
+      species:newSp,
+      yr:newYr,
+      status:newStatus,
       updated_at:new Date().toISOString()
     }).eq('id',id).select('id');
     if(res.error)throw res.error;
@@ -2750,13 +2775,15 @@ async function saveInvEdit(){
   }catch(e){ console.warn('[Supabase] inventory_adjustments skipped:', e); }
 
   // メモリ更新＋再描画
-  p.stock=newCount;
+  p.stock=newCount; p.species=newSp; p.yr=newYr; p.status=newStatus;
   closeM('mInvEdit');
-  showToast('在庫を更新しました');
+  showToast('いけす情報を更新しました');
   refreshDashboard();
   renderInv();
   renderInvSummary();
-  // 詳細パネルを開いている場合は在庫尾数表示も更新
+  if(typeof redrawAllFishMaps==='function') redrawAllFishMaps();
+  if(typeof renderLotTable==='function'){ renderLotTable(); renderLotSummary(); }
+  // 詳細パネルを開いている場合は表示も更新
   openTankDetail(p);
 }
 
@@ -3626,6 +3653,18 @@ function renderBuyerMaster(){
   document.getElementById('buyerMasterBody').innerHTML=BUYERS.map(function(b){
     return '<tr><td>'+b+'</td><td><span class="chip chip-gray">卸業者</span></td><td style="font-size:12px;color:var(--sub)">0969-xx-xxxx</td><td><span class="action-link">編集</span><span class="action-link" style="color:var(--red)">削除</span></td></tr>';
   }).join('');
+  renderFeedMaster();
+}
+// 餌マスタ一覧（仕入先ごとにまとめて表示）
+function renderFeedMaster(){
+  var el=document.getElementById('feedMasterBody'); if(!el) return;
+  var prev='';
+  el.innerHTML=FEED_MASTER.map(function(f){
+    var supCell = (f.supplier!==prev) ? ('<td style="font-weight:700;color:var(--blue-dk)">'+f.supplier+'</td>') : '<td></td>';
+    prev=f.supplier;
+    var priceStr = f.price>0 ? f.price.toLocaleString() : '<span style="color:var(--gray)">―</span>';
+    return '<tr>'+supCell+'<td>'+f.name+'</td><td style="text-align:right">'+priceStr+'</td></tr>';
+  }).join('');
 }
 
 // ══════════════════════════════════════════
@@ -3655,15 +3694,31 @@ function cellFilled(inp){
   td.classList.add('filled');
 }
 
-// 餌マスタ（社長提供：メーカー別・価格は円/袋）。BAITS=給餌入力の選択肢
-var FEED_PRICES={
-  'マダイチェリー P9':5050,'マダイチェリー P8':5050,'マダイペレット P7':5530,'ゴールドパワー':4690,
-  '紅40 P6':4780,'紅40 P8':4780,'PBP':0,'インフィニティ':0,
-  'Nまだいさくら 6P':5160,'Nまだいさくら 8P':5160,'Nまだいさくら 10P':5160,'Nしまあじ 6P':5760,'NKMS マッシュ':5030,
-  'ひめ桜 S6':6320,'ひめ桜 S7':6320,'ひめ桜50 3':5460,'ひめ桜50 4':5460,'ひめ桜50 5':5460
-};
+// 餌マスタ（社長提供：メーカー別・価格は円/袋）。設定画面に一覧表示し、BAITS=給餌入力の選択肢に連動
+var FEED_MASTER=[
+  {supplier:'坂本飼料', name:'マダイチェリー P9', price:5050},
+  {supplier:'坂本飼料', name:'マダイチェリー P8', price:5050},
+  {supplier:'坂本飼料', name:'マダイペレット P7', price:5530},
+  {supplier:'坂本飼料', name:'ゴールドパワー', price:4690},
+  {supplier:'伊藤忠飼料', name:'紅40 P6', price:4780},
+  {supplier:'伊藤忠飼料', name:'紅40 P8', price:4780},
+  {supplier:'伊藤忠飼料', name:'PBP', price:0},
+  {supplier:'伊藤忠飼料', name:'インフィニティ', price:0},
+  {supplier:'ノーサン', name:'Nまだいさくら 6P', price:5160},
+  {supplier:'ノーサン', name:'Nまだいさくら 8P', price:5160},
+  {supplier:'ノーサン', name:'Nまだいさくら 10P', price:5160},
+  {supplier:'ノーサン', name:'Nしまあじ 6P', price:5760},
+  {supplier:'ノーサン', name:'NKMS マッシュ', price:5030},
+  {supplier:'ヒガシマル', name:'ひめ桜 S6', price:6320},
+  {supplier:'ヒガシマル', name:'ひめ桜 S7', price:6320},
+  {supplier:'ヒガシマル', name:'ひめ桜50 3', price:5460},
+  {supplier:'ヒガシマル', name:'ひめ桜50 4', price:5460},
+  {supplier:'ヒガシマル', name:'ひめ桜50 5', price:5460}
+];
+// 互換：名前→価格の辞書（餌代計算で使用）
+var FEED_PRICES=FEED_MASTER.reduce(function(o,f){o[f.name]=f.price;return o;},{});
 var BAG_KG=20; // 餌1袋の重量（kg換算）。要確認のため定数化
-var BAITS=Object.keys(FEED_PRICES).concat(['その他']);
+var BAITS=FEED_MASTER.map(function(f){return f.name;}).concat(['その他']);
 var DRUGS=['オキシテトラサイクリン','フロルフェニコール','スルファモノメトキシン','エンロフロキサシン','プラジクアンテル','トリクロルホン','マラカイトグリーン','ホルマリン','その他'];
 function _attr(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
 function _optList(arr,sel,blankLabel){
