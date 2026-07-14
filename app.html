@@ -1581,6 +1581,11 @@ body.ai-mode-on .ai-home-banner{display:flex}
       <button class="rec-nav-btn" onclick="recNavGo('move')">↔ 移動画面へ</button>
     </div>
 
+    <div id="recFedBanner" style="display:none;background:#ecfdf5;border:1.5px solid #6ee7b7;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+      <div style="font-size:14px;font-weight:700;color:#065f46;margin-bottom:8px;">✅ このいけすは本日 給餌済みです</div>
+      <div style="font-size:12.5px;color:#047857;margin-bottom:10px;">修正：下の数字を打ち直して「保存する」／取り消し：↓のボタン</div>
+      <button type="button" onclick="cancelFeedRecord()" style="width:100%;height:46px;background:#fff;border:1.5px solid #fca5a5;border-radius:10px;color:#b91c1c;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;">🗑 本日の給餌を取り消す</button>
+    </div>
     <div class="rec-field">
       <div class="rec-label">合計 給餌量 (kg)</div>
       <input class="rec-input" id="recTotalFeed" readonly value="0" style="background:#eef2f6;font-weight:700;font-size:20px;color:#0f172a;">
@@ -1639,7 +1644,6 @@ body.ai-mode-on .ai-home-banner{display:flex}
     </div>
 
     <button class="rec-save" onclick="saveRecord()">保存する</button>
-    <button id="recCancelFeedBtn" onclick="cancelFeedRecord()" style="display:none;width:100%;height:48px;margin-top:8px;background:#fff;border:1.5px solid #fca5a5;border-radius:10px;color:#b91c1c;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;">🗑 本日の給餌を取り消す</button>
     <button class="sheet-cancel" onclick="closeRecordPanelDirect()">閉じる</button>
   </div>
 </div>
@@ -2316,13 +2320,12 @@ function openRecordPanel(id) {
     return '<option value="' + d + '">' + d + '</option>';
   }).join('');
 
-  // 既存値セット（本日給餌済みなら合計をメイン餌kgに表示＝修正しやすく）
-  var fedToday = (p.status === 'done' || p.status === 'alert') && (p.feedKg > 0);
-  document.getElementById('recFeed').value = fedToday ? p.feedKg : '';
+  // 既存値セット（本日給餌済み＝緑/オレンジのいけすは、量を出して修正しやすく＋取り消し案内を表示）
+  var fedToday = (p.status === 'done' || p.status === 'alert');
+  document.getElementById('recFeed').value = (fedToday && p.feedKg > 0) ? p.feedKg : '';
   recalcFeedTotal();
-  // 本日給餌済みのいけすでは「取り消し」ボタンを表示
-  var cf = document.getElementById('recCancelFeedBtn');
-  if (cf) cf.style.display = fedToday ? 'block' : 'none';
+  var banner = document.getElementById('recFedBanner');
+  if (banner) banner.style.display = fedToday ? 'block' : 'none';
   // 斃死数は「今回新たに死んだ数」を入れるイベント入力。前回値を残すと保存のたびに
   // 在庫から二重で引かれてしまうため、毎回ゼロ（空）から入力する。
   document.getElementById('recMort').value = '';
