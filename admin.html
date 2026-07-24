@@ -3691,9 +3691,26 @@ function openLotDetail(i){
 // ══════════════════════════════════════════
 function _mActBtns(kind, idx, active){
   var toggle = active
-    ? '<span class="action-link" style="color:var(--red)" onclick="setMasterActive(\''+kind+'\','+idx+',false)">無効化</span>'
+    ? '<span class="action-link" style="color:var(--orange)" onclick="setMasterActive(\''+kind+'\','+idx+',false)">無効化</span>'
     : '<span class="action-link" style="color:var(--green)" onclick="setMasterActive(\''+kind+'\','+idx+',true)">有効化</span>';
-  return '<span class="action-link" onclick="openMasterEdit(\''+kind+'\','+idx+')">編集</span>'+toggle;
+  var del = '<span class="action-link" style="color:var(--red)" onclick="deleteMaster(\''+kind+'\','+idx+')">削除</span>';
+  return '<span class="action-link" onclick="openMasterEdit(\''+kind+'\','+idx+')">編集</span>'+toggle+del;
+}
+// マスタを完全削除（過去の記録は名前が文字で残るため壊れない）。強めの確認つき
+async function deleteMaster(kind, idx){
+  var arr = _masterArr(kind); var it = arr[idx]; if(!it) return;
+  var table={feed:'feed_master',buyer:'buyer_master',species:'species_master',drug:'drug_master',live:'live_esa_master'}[kind];
+  if(!it.id){ // まだDB未保存（シード表示）の項目
+    alert('この項目はまだ保存されていません。マスタ表の初期化（SQL）が必要です。'); return;
+  }
+  if(!confirm('「'+it.name+'」を一覧から完全に削除します。\n（過去の記録に残っている名前は消えません）\n\n※もう使わないだけなら「無効化」を推奨します。\n本当に削除しますか？')) return;
+  try{
+    var r=await sb.from(table).delete().eq('id',it.id).select('id');
+    if(r.error) throw r.error;
+  }catch(e){ alert('削除できませんでした：'+(e.message||e)); return; }
+  await loadMasters();
+  renderBuyerMaster(); renderSpeciesMaster();
+  showToast('削除しました');
 }
 function _mRowStyle(active){ return active?'':' style="opacity:.45"'; }
 function renderBuyerMaster(){
