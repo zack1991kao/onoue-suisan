@@ -3217,15 +3217,15 @@ function feedDaysBetween(fromStr, toStr){     // YYYY-MM-DD（暦日）の差。
 // 色はDBの固定フラグでなく毎回ここで計算 → 日付が変われば自動で赤(todo)に戻る（リセット処理不要）。
 async function applyDailyFeedStatus(){
   var today = feedTodayStr();
-  var lastFed = {};
+  var lastFed = {}, alertToday = {};
   try {
-    var r = await sb.from('feed_logs').select('pond_id,log_date,feed_kg');
+    var r = await sb.from('feed_logs').select('pond_id,log_date,feed_kg,mort,flag');
     if (!r.error && r.data) {
       r.data.forEach(function(row){
         var pid=row.pond_id, d=row.log_date;
         if(!pid || !d) return;
-        if(!(Number(row.feed_kg)>0)) return;   // 給餌(feed_kg>0)のログのみ「給餌済み」とみなす（斃死のみ・取消は緑にしない）
-        if(!lastFed[pid] || d > lastFed[pid]) lastFed[pid] = d;
+        if(Number(row.feed_kg)>0){ if(!lastFed[pid] || d > lastFed[pid]) lastFed[pid] = d; }  // 給餌(feed_kg>0)のみ「給餌済み」
+        if(d===today && (Number(row.mort)>0 || row.flag===true)) alertToday[pid]=true;          // 今日 斃死/異常あり＝オレンジ
       });
     }
   } catch(e) { console.warn('[Supabase] feed_logs load skipped:', e.message); }
@@ -3236,15 +3236,10 @@ async function applyDailyFeedStatus(){
     }
     var lf = lastFed[p.id] || null;
     p.lastFed = lf;
-    if(lf === today){
-      // 今日すでに給餌済み → 緑。異常フラグ(alert)が立っていれば尊重
-      if(p.status !== 'alert') p.status = 'done';
-      p.daysSince = 0;
-    } else {
-      // 今日まだ → 赤に戻す（日次リセット）。最終給餌からの経過日数を持たせる
-      p.status = 'todo';
-      p.daysSince = lf ? feedDaysBetween(lf, today) : null;   // null = 給餌記録なし
-    }
+    if(alertToday[p.id]){ p.status='alert'; }        // 今日 斃死/異常 → オレンジ（給餌の有無に関わらず）
+    else if(lf === today){ p.status='done'; }        // 今日 給餌済み → 緑
+    else { p.status='todo'; }                        // 今日まだ → 赤
+    p.daysSince = (lf===today) ? 0 : (lf ? feedDaysBetween(lf, today) : null);
   });
 }
 

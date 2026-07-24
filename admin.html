@@ -1672,15 +1672,15 @@ function feedDaysBetween(fromStr, toStr){
 // 各いけすの最終給餌日を feed_logs から求め、status を当日基準で再計算（日付が変われば自動で赤に戻る）
 async function applyDailyFeedStatus(){
   var today = feedTodayStr();
-  var lastFed = {};
+  var lastFed = {}, alertToday = {};
   try {
-    var r = await sb.from('feed_logs').select('pond_id,log_date,feed_kg');
+    var r = await sb.from('feed_logs').select('pond_id,log_date,feed_kg,mort,flag');
     if (!r.error && r.data) {
       r.data.forEach(function(row){
         var pid=row.pond_id, d=row.log_date;
         if(!pid || !d) return;
-        if(!(Number(row.feed_kg)>0)) return;   // 給餌(feed_kg>0)のみ「給餌済み」とみなす
-        if(!lastFed[pid] || d > lastFed[pid]) lastFed[pid] = d;
+        if(Number(row.feed_kg)>0){ if(!lastFed[pid] || d > lastFed[pid]) lastFed[pid] = d; }
+        if(d===today && (Number(row.mort)>0 || row.flag===true)) alertToday[pid]=true;   // 今日 斃死/異常あり＝オレンジ
       });
     }
   } catch(e) { console.warn('[Supabase] feed_logs load skipped:', e.message); }
@@ -1691,8 +1691,9 @@ async function applyDailyFeedStatus(){
     }
     var lf = lastFed[p.id] || null;
     p.lastFed = lf;
-    if(lf === today){
-      if(p.status !== 'alert') p.status = 'done';
+    if(alertToday[p.id]){ p.status='alert'; p.daysSince=(lf===today)?0:(lf?feedDaysBetween(lf,today):null); }
+    else if(lf === today){
+      p.status = 'done';
       p.daysSince = 0;
     } else {
       p.status = 'todo';
