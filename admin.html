@@ -1835,31 +1835,31 @@ async function loadOrders() {
 // ══════════════════════════════════════════
 var shipmentsCache = [];
 var paymentsCache  = [];
+// 出荷・入金は 売上／未回収／会計CSV の元データ。件数上限で黙って切られると
+// 売上と仕訳がそのまま過少になるため、上限を設けず全件ページングで取得する。
 async function loadShipments(){
   try{
-    var res = await sb.from('shipments')
-      .select('id,ship_date,buyer,species,qty,net,price,amount,lot,paid,paid_amount')
-      .order('ship_date',{ascending:false}).limit(500);
-    if(res.error) throw res.error;
-    shipmentsCache = res.data || [];
+    var rows = await sbSelectAll('shipments','id,ship_date,buyer,species,qty,net,price,amount,lot,paid,paid_amount','id');
+    rows.sort(function(a,b){ return String(b.ship_date||'').localeCompare(String(a.ship_date||'')); });
+    shipmentsCache = rows;
   }catch(e){
     console.warn('[Supabase] loadShipments failed:', e.message);
     shipmentsCache = [];
   }
 }
 async function loadPayments(){
+  var cols='id,shipment_id,pay_date,buyer,amount,method,memo,bank';
   try{
-    // bank列を含めて取得。未追加(04 SQL前)ならエラーになるので列なしで再取得
-    var res = await sb.from('payments')
-      .select('id,shipment_id,pay_date,buyer,amount,method,memo,bank')
-      .order('pay_date',{ascending:false}).limit(500);
-    if(res.error){
-      res = await sb.from('payments')
-        .select('id,shipment_id,pay_date,buyer,amount,method,memo')
-        .order('pay_date',{ascending:false}).limit(500);
+    var rows;
+    try{
+      rows = await sbSelectAll('payments',cols,'id');
+    }catch(e1){
+      // 04_payment_bank.sql 未適用の環境では bank 列が無いので列なしで再取得
+      console.warn('[Supabase] payments.bank 無しで再取得します:', e1.message);
+      rows = await sbSelectAll('payments','id,shipment_id,pay_date,buyer,amount,method,memo','id');
     }
-    if(res.error) throw res.error;
-    paymentsCache = res.data || [];
+    rows.sort(function(a,b){ return String(b.pay_date||'').localeCompare(String(a.pay_date||'')); });
+    paymentsCache = rows;
   }catch(e){
     console.warn('[Supabase] loadPayments failed:', e.message);
     paymentsCache = [];

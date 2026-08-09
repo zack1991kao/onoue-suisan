@@ -1844,9 +1844,11 @@ var dbOrders = [];
 function orderKey(o){ return (o.date||'')+'|'+(o.buyer||'')+'|'+(o.fish||'')+'|'+(o.spec||''); }
 async function loadAppOrders() {
   try {
-    var res = await sb.from('orders').select('id,order_date,buyer,species,size,qty,status,memo').order('order_date',{ascending:false}).limit(300);
-    if (res.error) throw res.error;
-    dbOrders = (res.data||[]).map(function(r){
+    // 受注はカレンダーの元データ。PC版が全件表示なのにスマホだけ上限で切ると
+    // 「PC↔スマホでカレンダーが食い違う」ため、こちらも全件ページングで取得する。
+    var rows = await sbSelectAll('orders','id,order_date,buyer,species,size,qty,status,memo','id');
+    rows.sort(function(a,b){ return String(b.order_date||'').localeCompare(String(a.order_date||'')); });
+    dbOrders = rows.map(function(r){
       return {
         id: r.id,
         date: r.order_date,
@@ -2529,6 +2531,16 @@ async function saveRecord() {
   //   死魚だけは「今回新たに死んだ数」なので、既存の記録に足し込む。
   var todayRec = TODAY_LOG[p.id] || null;
   var baseRow  = (todayRec && todayRec.feedRow) || null;
+  // 別の端末が先に同じいけすを記録していると手元のキャッシュが古く、重複行を作ってしまう。
+  // 書き込む直前にDBの最新を確認して、あれば上書き対象にする。
+  if (feed > 0 && !baseRow) {
+    try {
+      var fresh = await sbSelectAll('feed_logs', 'id,mort', 'id', function(q){
+        return q.eq('pond_id', p.id).eq('log_date', logDate).gt('feed_kg', 0);
+      });
+      if (fresh.length) baseRow = fresh[fresh.length - 1];
+    } catch(e) { /* 確認できなければ従来どおり新規追加（記録を落とさない方を優先） */ }
+  }
   var payload = {
     pond_id:  p.id,
     log_date: logDate,
@@ -3551,16 +3563,23 @@ function subscribeNotifications() {
         loadAppOrders().then(function(){ renderCalendar(); }).catch(function(){});
       })
       .subscribe();
-    // E2: 異常フラグ（feed_logs で flag=true の insert）→ 表示
+    // E2: 異常・斃死（feed_logs）→ 表示
+    // 同じ日の記録は上書き(UPDATE)する方式にしたため、INSERTだけを見ていると
+    // 「給餌済みのいけすに後から斃死を入力した」ときに通知が飛ばない。UPDATEも拾う。
+    // ただし同じ内容の再通知を避けるため、いけす＋死魚数＋異常フラグで重複を除く。
+    var _alertSeen = {};
     sb.channel('app-alert-notif')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'feed_logs' }, function(payload) {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feed_logs' }, function(payload) {
+        if (payload.eventType === 'DELETE') return;
         var f = payload.new || {};
-        if (f.flag === true || (f.mort && f.mort > 0)) {
-          var msg = f.flag === true
-            ? ('⚠ 異常が記録されました：' + (f.pond_id||'') + (f.mort>0?('（死魚 '+f.mort+'尾）'):''))
-            : ('🐟 斃死が記録されました：' + (f.pond_id||'') + '（死魚 ' + f.mort + '尾）');
-          showNotifBanner(msg, '#b91c1c');
-        }
+        if (!(f.flag === true || (f.mort && f.mort > 0))) return;
+        var key = (f.pond_id||'') + '|' + (f.mort||0) + '|' + (f.flag===true?1:0);
+        if (_alertSeen[key]) return;
+        _alertSeen[key] = true;
+        var msg = f.flag === true
+          ? ('⚠ 異常が記録されました：' + (f.pond_id||'') + (f.mort>0?('（死魚 '+f.mort+'尾）'):''))
+          : ('🐟 斃死が記録されました：' + (f.pond_id||'') + '（死魚 ' + f.mort + '尾）');
+        showNotifBanner(msg, '#b91c1c');
       })
       .subscribe();
   } catch (e) {
