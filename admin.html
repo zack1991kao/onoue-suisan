@@ -392,6 +392,8 @@ body.ai-mode-on .ai-element-flex{display:flex}
 <script src="https://cdn.jsdelivr.net/npm/encoding-japanese@2.0.0/encoding.min.js"></script>
 </head>
 <body>
+<!-- データ取得に失敗したことを必ず知らせる帯（黙って「全部未給餌＝赤」にしないため） -->
+<div id="dataWarnBanner" onclick="this.style.display='none'" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99998;background:#b45309;color:#fff;padding:10px 16px;font-size:13px;font-weight:700;line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,.25);cursor:pointer;"></div>
 <!-- 簡易ログインゲート（暫定・UX層。真のアクセス制限はSupabase Auth+RLSで実施） -->
 <div id="loginGate" style="position:fixed;inset:0;background:#0f2437;z-index:99999;display:none;align-items:center;justify-content:center;padding:20px;">
   <div style="background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
@@ -1660,6 +1662,39 @@ function setAiMode(on, save) {
 // ══════════════════════════════════════════
 // SUPABASE LOAD
 // ══════════════════════════════════════════
+// ── DB取得の共通ヘルパー（取りこぼし防止）────────────────────────────
+// Supabaseは1リクエストあたり最大1000行で「黙って」打ち切られる（max-rows=1000）。
+// 打ち切られるのは新しい記録側なので、件数が増えるほど「今日入力したのに色が戻る」
+// 「餌代・グラフ・月別集計が実際より少なく出る」といった不具合になる。
+// 1000件ずつページングして必ず全件取る。取得失敗は握り潰さず例外にする。
+var SB_PAGE = 1000;
+async function sbSelectAll(table, columns, orderCol, build){
+  var out = [], from = 0;
+  for (var guard = 0; guard < 200; guard++) {           // 上限20万件（暴走防止）
+    var q = sb.from(table).select(columns);
+    if (build) q = build(q);                             // 絞り込み → 並び順 → 範囲 の順で組む
+    var res = await q.order(orderCol, { ascending: true }).range(from, from + SB_PAGE - 1);
+    if (res.error) throw res.error;
+    var rows = res.data || [];
+    for (var i = 0; i < rows.length; i++) out.push(rows[i]);
+    if (rows.length < SB_PAGE) return out;              // 最終ページ
+    from += SB_PAGE;
+  }
+  console.error('[sbSelectAll] ' + table + ' が20万件を超えました。集計方式の見直しが必要です。');
+  return out;
+}
+// ── データ取得失敗を必ず見せる（黙って全部赤にしない）──
+function showDataWarn(msg){
+  var el = document.getElementById('dataWarnBanner');
+  if (!el) return;
+  el.textContent = '⚠ ' + msg;
+  el.style.display = 'block';
+}
+function hideDataWarn(){
+  var el = document.getElementById('dataWarnBanner');
+  if (el) el.style.display = 'none';
+}
+
 // ── 日次リセット用ヘルパー（給餌は「毎日やる作業」＝今日やったかで色が決まる）──
 function feedTodayStr(){
   var d=new Date();
@@ -1669,36 +1704,77 @@ function feedDaysBetween(fromStr, toStr){
   var a=new Date(fromStr+'T00:00:00'), b=new Date(toStr+'T00:00:00');
   return Math.round((b-a)/86400000);
 }
+function feedShiftDays(dateStr, n){           // YYYY-MM-DD を n日ずらす
+  var d=new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+// 本日の記録（いけすID -> {rows, feedSum, mortSum, bgradeSum, feedRow}）
+var TODAY_LOG = {};
+
+// いけす情報をDBから読めたか。読めていない＝画面はコード内の初期値（デモ値）を表示している状態。
+// そのまま保存すると誤った在庫でDBを上書きしてしまうため、書き込みを止める安全弁。
+var PONDS_FROM_DB = false;
+function ensurePondsLoaded(){
+  if (PONDS_FROM_DB) return true;
+  alert('⚠ いけすのデータをまだ読み込めていません。\n\n通信状況を確認し、画面を更新してから記録してください。\nこのまま保存すると在庫が正しく計算されません。');
+  return false;
+}
 // 各いけすの最終給餌日を feed_logs から求め、status を当日基準で再計算（日付が変われば自動で赤に戻る）
 async function applyDailyFeedStatus(){
   var today = feedTodayStr();
-  var lastFed = {}, alertToday = {};
+  var todayRows, pastRows;
   try {
-    var r = await sb.from('feed_logs').select('pond_id,log_date,feed_kg,mort,flag');
-    if (!r.error && r.data) {
-      r.data.forEach(function(row){
-        var pid=row.pond_id, d=row.log_date;
-        if(!pid || !d) return;
-        if(Number(row.feed_kg)>0){ if(!lastFed[pid] || d > lastFed[pid]) lastFed[pid] = d; }
-        if(d===today && (Number(row.mort)>0 || row.flag===true)) alertToday[pid]=true;   // 今日 斃死/異常あり＝オレンジ
-      });
-    }
-  } catch(e) { console.warn('[Supabase] feed_logs load skipped:', e.message); }
+    // ① 本日分だけを取る（約100件）。色の確定とパネル表示に使う。
+    todayRows = await sbSelectAll('feed_logs', '*', 'id', function(q){
+      return q.eq('log_date', today);
+    });
+    // ② 直近60日の給餌履歴（赤いけすの「○日給餌していません」表示用）
+    pastRows = await sbSelectAll('feed_logs', 'pond_id,log_date', 'id', function(q){
+      return q.gt('feed_kg', 0).gte('log_date', feedShiftDays(today, -60)).lt('log_date', today);
+    });
+  } catch(e) {
+    // 取れなかったのか本当に未給餌なのかは区別できない。勝手に赤くせず、前回の色を保つ。
+    console.error('[給餌ステータス] 取得に失敗したため色を更新しません:', (e && e.message) || e);
+    showDataWarn('データを取得できませんでした。通信を確認して画面を更新してください（色は前回のままです）');
+    return;
+  }
+  hideDataWarn();
+
+  TODAY_LOG = {};
+  todayRows.forEach(function(row){
+    var pid = row.pond_id; if(!pid) return;
+    var t = TODAY_LOG[pid];
+    if(!t){ t = TODAY_LOG[pid] = { rows:[], feedSum:0, mortSum:0, bgradeSum:0, feedRow:null, flag:false }; }
+    t.rows.push(row);
+    t.feedSum   += Number(row.feed_kg) || 0;
+    t.mortSum   += Number(row.mort)    || 0;
+    t.bgradeSum += Number(row.bgrade)  || 0;
+    if(row.flag === true) t.flag = true;
+    if((Number(row.feed_kg)||0) > 0) t.feedRow = row;
+  });
+
+  var lastFed = {};
+  pastRows.forEach(function(row){
+    var pid = row.pond_id, d = row.log_date;
+    if(!pid || !d) return;
+    if(!lastFed[pid] || d > lastFed[pid]) lastFed[pid] = d;
+  });
+
   POND_CONFIG.forEach(function(p){
     // 在庫0のいけすは経路を問わず自動でグレー(skip)化（斃死・出荷・移動で0になっても色が変わるように）
     if(p.status === 'skip' || (Number(p.stock)||0) <= 0){
       p.status='skip'; p.lastFed=null; p.daysSince=null; return;
     }
-    var lf = lastFed[p.id] || null;
+    var t = TODAY_LOG[p.id];
+    var fedToday   = !!(t && t.feedSum > 0);
+    var alertToday = !!(t && (t.mortSum > 0 || t.flag));
+    var lf = fedToday ? today : (lastFed[p.id] || null);
     p.lastFed = lf;
-    if(alertToday[p.id]){ p.status='alert'; p.daysSince=(lf===today)?0:(lf?feedDaysBetween(lf,today):null); }
-    else if(lf === today){
-      p.status = 'done';
-      p.daysSince = 0;
-    } else {
-      p.status = 'todo';
-      p.daysSince = lf ? feedDaysBetween(lf, today) : null;
-    }
+    if(alertToday){ p.status='alert'; }
+    else if(fedToday){ p.status='done'; }
+    else { p.status='todo'; }
+    p.daysSince = (lf===today) ? 0 : (lf ? feedDaysBetween(lf, today) : null);
   });
 }
 
@@ -1718,6 +1794,7 @@ async function loadPonds() {
       });
       POND_CONFIG.length = 0;
       rows.forEach(function(row) { POND_CONFIG.push(row); });
+      PONDS_FROM_DB = true;        // DBの実データに置き換わった＝記録してよい状態
       var d=new Date();
       var ts=d.getFullYear()+'/'+(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getDate().toString().padStart(2,'0')
         +' '+d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
@@ -1734,11 +1811,12 @@ async function loadPonds() {
 
 async function loadOrders() {
   try {
-    var res = await sb.from('orders').select('*').order('order_date', { ascending: false });
-    if (res.error) throw res.error;
+    // 1000件上限で受注が抜けないよう全件ページングで取得し、表示順は取得後に並べ替える
+    var rows = await sbSelectAll('orders', '*', 'id');
+    rows.sort(function(a, b) { return String(b.order_date || '').localeCompare(String(a.order_date || '')); });
     // DBの内容で常に置き換え（0件なら空＝スマホ版と同じ実データ表示）
     orders.length = 0;
-    (res.data || []).forEach(function(row) {
+    rows.forEach(function(row) {
       orders.push({
         id: row.id,                  // 編集/削除のためDBの注文IDを保持
         date: mdShort(row.order_date), buyer: row.buyer, species: row.species,
@@ -2439,10 +2517,12 @@ async function loadFeedCost(){
     var ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
     var nx=new Date(d.getFullYear(), d.getMonth()+1, 1);  // 翌月1日（月末の無効日付を避ける）
     var nxStr=nx.getFullYear()+'-'+String(nx.getMonth()+1).padStart(2,'0')+'-01';
-    var res=await sb.from('feed_logs').select('feed_kg,bait,log_date').gte('log_date',ym+'-01').lt('log_date',nxStr);
-    if(res.error) throw res.error;
+    // 1000件上限で切られると餌代が過少に出るため、全件ページングで取得する
+    var rows=await sbSelectAll('feed_logs','feed_kg,bait,log_date','id',function(q){
+      return q.gte('log_date',ym+'-01').lt('log_date',nxStr);
+    });
     var total=0, unknown=0, kgSum=0;
-    (res.data||[]).forEach(function(r){
+    rows.forEach(function(r){
       var kg=parseFloat(r.feed_kg)||0; if(kg<=0) return; kgSum+=kg;
       var bag=FEED_PRICES[r.bait];
       if(bag!=null && bag>0) total += kg*(bag/BAG_KG);
@@ -2490,10 +2570,12 @@ async function loadDashTrends(){
   try{
     var today=new Date();
     var start=new Date(today.getFullYear(),today.getMonth(),today.getDate()-29);
-    var res=await sb.from('feed_logs').select('log_date,feed_kg,mort').gte('log_date',key(start));
-    if(res.error) throw res.error;
+    // 1000件上限で切られるとグラフが実際より低く出るため、全件ページングで取得する
+    var rows=await sbSelectAll('feed_logs','log_date,feed_kg,mort','id',function(q){
+      return q.gte('log_date',key(start));
+    });
     var feedByDay={}, mortByDay={};
-    (res.data||[]).forEach(function(r){
+    rows.forEach(function(r){
       var k=String(r.log_date).slice(0,10);
       feedByDay[k]=(feedByDay[k]||0)+(parseFloat(r.feed_kg)||0);
       mortByDay[k]=(mortByDay[k]||0)+(parseInt(r.mort)||0);
@@ -2520,7 +2602,8 @@ async function loadDashTrends(){
 function openTankDetail(p){
   if(!p)return;
   var si=pondStatusInfo(p.status);
-  var shapeStr=p.sh==='ci'?'● 円形':'■ 四角';
+  var _cmShape=CAGE_MAP[p.id];
+  var shapeStr=(((_cmShape&&_cmShape.sh)||p.sh)==='ci')?'● 円形':'■ 四角';   // 形状はCAGE_MAPを正とする
   var isSkip=p.status==='skip';
   var yr=getPondYr(p);
   // 空きいけすは魚種・年齢・餌を出さない（前の魚の情報が残って見えないように）
@@ -2531,11 +2614,21 @@ function openTankDetail(p){
   // PCでもこの画面から直接「給餌・斃死」を記録できるクイック入力（スマホと同じ感覚）
   var baitOpts=BAITS.map(function(b){return '<option value="'+b+'"'+(b===p.bait?' selected':'')+'>'+b+'</option>';}).join('');
   if(p.bait && BAITS.indexOf(p.bait)<0) baitOpts='<option value="'+p.bait+'" selected>'+p.bait+'</option>'+baitOpts;
+  // 本日すでに入力済みなら、その内容を見せて修正できるようにする（DBの実データを表示）
+  var tq=TODAY_LOG[p.id]||null;
+  var tqHasToday=!!(tq && tq.rows.length);
+  var tqSumHtml=tqHasToday
+    ? ('<div style="font-size:12.5px;font-weight:700;color:#065f46;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px;padding:8px 10px;margin-bottom:10px">'
+       +'本日の記録：給餌 '+(Math.round(tq.feedSum*10)/10)+' kg ／ 死魚 '+tq.mortSum+' 尾 ／ B品 '+tq.bgradeSum+' 尾'
+       +'<div style="font-weight:400;color:#047857;margin-top:4px">給餌量を打ち直して保存すると本日の記録を上書きします（二重に足されません）。死魚は今回増えた分を入力してください。</div></div>')
+    : '';
+  var tqFeedVal=(tq && tq.feedRow)?(Number(tq.feedRow.feed_kg)||''):'';
   var quickHtml=isSkip?'':(
     '<div style="margin:4px 0 18px;padding:14px;background:var(--blue-bg);border:1px solid #bfdbfe;border-radius:8px">'
     +'<div style="font-size:13px;font-weight:700;color:var(--blue-dk);margin-bottom:10px">🍚 このいけすを記録（給餌・斃死）</div>'
+    +tqSumHtml
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-    +'<div><div style="font-size:12px;color:var(--sub);margin-bottom:4px">給餌量 (kg)</div><input id="tqFeed" type="number" inputmode="decimal" placeholder="0.0" style="width:100%;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:16px;font-family:inherit"></div>'
+    +'<div><div style="font-size:12px;color:var(--sub);margin-bottom:4px">給餌量 (kg)</div><input id="tqFeed" type="number" inputmode="decimal" placeholder="0.0" value="'+tqFeedVal+'" style="width:100%;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:16px;font-family:inherit"></div>'
     +'<div><div style="font-size:12px;color:var(--sub);margin-bottom:4px">死魚数 (尾)</div><input id="tqMort" type="number" inputmode="numeric" placeholder="0" style="width:100%;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:16px;font-family:inherit"></div>'
     +'</div>'
     +'<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--sub);margin-bottom:4px">餌の種類</div><select id="tqBait" style="width:100%;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:0 10px;font-size:15px;font-family:inherit">'+baitOpts+'</select></div>'
@@ -2572,6 +2665,7 @@ function openTankDetail(p){
 
 // いけす詳細画面からの直接記録（給餌・斃死）。スマホの個別記録と同じ挙動。
 async function saveTankQuick(pid){
+  if(!ensurePondsLoaded()) return;
   var p=POND_CONFIG.find(function(x){return x.id===pid;});
   if(!p){ return; }
   var feed=parseFloat((document.getElementById('tqFeed')||{}).value)||0;
@@ -2592,10 +2686,26 @@ async function saveTankQuick(pid){
   p.mort=mort; p.bait=bait;
   if(newStock!=null){ p.stock=newStock; if(newStock<=0) p.status='skip'; }
   // ② 給餌ログ（斃死・給餌の記録＝履歴と通知に反映）
+  //   本日すでに給餌記録があるいけすは上書き（重複計上を防ぐ）。死魚は今回分を加算。
   try{
-    var r=await sb.from('feed_logs').insert({ pond_id:pid, log_date:logDate, feed_kg:feed, bait:bait, bait2:p.bait2||'', mort:mort, bgrade:0, drug:null, drug_amt:null, flag:false, memo:'' });
+    var baseRow=(TODAY_LOG[pid]&&TODAY_LOG[pid].feedRow)||null;
+    var payload={ pond_id:pid, log_date:logDate, feed_kg:feed, bait:bait, bait2:p.bait2||'', mort:mort, bgrade:0, drug:null, drug_amt:null, flag:false, memo:'' };
+    var r;
+    if(feed>0 && baseRow && baseRow.id!=null && logDate===feedTodayStr()){
+      payload.mort=(Number(baseRow.mort)||0)+mort;
+      payload.bgrade=Number(baseRow.bgrade)||0;
+      payload.memo=baseRow.memo||'';
+      r=await sb.from('feed_logs').update(payload).eq('id',baseRow.id).select('id');
+      if(!r.error && (!r.data || !r.data.length)){
+        console.warn('[Supabase] feed_logs update が0件。insert にフォールバックします');
+        payload.mort=mort; payload.bgrade=0; payload.memo='';
+        r=await sb.from('feed_logs').insert(payload).select('id');
+      }
+    }else{
+      r=await sb.from('feed_logs').insert(payload).select('id');
+    }
     if(r.error) throw r.error;
-  }catch(e){ console.warn('[Supabase] feed_logs insert skipped:', e.message||e); }
+  }catch(e){ console.warn('[Supabase] feed_logs 保存に失敗:', e.message||e); }
   showToast('記録しました（'+(feed>0?('給餌'+feed+'kg'):'')+(feed>0&&mort>0?'・':'')+(mort>0?('斃死'+mort+'尾'):'')+'）');
   redrawAllFishMaps(); refreshDashboard();
   if(typeof renderInv==='function'){ renderInv(); if(typeof renderInvSummary==='function') renderInvSummary(); }
@@ -2768,6 +2878,7 @@ async function loadHistory(){
 // ══════════════════════════════════════════
 var invEditPondId=null;
 async function saveInvEdit(){
+  if(!ensurePondsLoaded()) return;
   var id=invEditPondId;
   if(!id){closeM('mInvEdit');return;}
   var newCount=parseInt(document.getElementById('mInvEditCount').value);
@@ -2991,6 +3102,7 @@ async function saveOrder(){
   }
 }
 async function saveShipment(){
+  if(!ensurePondsLoaded()) return;
   var shipDate=document.getElementById('shipDate').value;
   var buyer=document.getElementById('shipBuyerSel').value;
   var rows=shipRows.filter(function(r){return (r.qty>0)||(r.gross>0);});
@@ -3243,7 +3355,10 @@ function drawAdminFishMap(svgId,opts){
     var t=st==='done'?'#166534':st==='alert'?'#7c2d12':st==='skip'?'#8a94a3':'#991b1b';
     var tap=clickable?(' onclick="adminTankClick(\''+p.id+'\')" style="cursor:pointer"'):'';
     var op=(dimFn && dimFn(p))?' opacity="0.18"':'';  // 検索/絞り込みの非該当は淡色化
-    if(p.sh==='ci'){
+    // 形状は漁場図レイアウト(CAGE_MAP)を正とする。スマホ版は CAGE_MAP、PC版はDBのsh列を見ていたため
+    // 団地-01 が「スマホは円・PCは四角」とズレていた。参照元を揃える。
+    var shp=(cm && cm.sh) ? cm.sh : p.sh;
+    if(shp==='ci'){
       parts.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"'+tap+op+'/>');
     }else{
       parts.push('<rect x="'+(cm.x*SC)+'" y="'+(cm.y*SC)+'" width="'+SZ+'" height="'+SZ+'" rx="3" fill="'+f+'" stroke="'+k+'" stroke-width="1.5"'+tap+op+'/>');
@@ -3524,6 +3639,7 @@ function openMoveModal(fromId){
   openM('mMove');
 }
 async function saveMove(){
+  if(!ensurePondsLoaded()) return;
   var date=document.getElementById('moveDate').value;
   var from=document.getElementById('moveFrom').value;
   var to=document.getElementById('moveTo').value;
@@ -4055,6 +4171,7 @@ function markAllFilled(){
 
 // 日別マトリクスをDB保存（スマホ版 saveFeedList と同じ書込：ponds update + feed_logs insert）
 async function saveDailyMatrix(){
+  if(!ensurePondsLoaded()) return;
   var date=(document.getElementById('diaryDate')||{}).value;
   if(!date){ alert('記録日を指定してください'); return; }
   var trs=[].slice.call(document.querySelectorAll('#dailyMatrix tr[data-pid]'));
@@ -4089,16 +4206,33 @@ async function saveDailyMatrix(){
   var okOnes=results.filter(function(x){return x.ok;});
   var fail=results.length-okOnes.length;
   if(!okOnes.length){ alert('⚠ 保存できませんでした（書き込み権限をご確認ください）'); return; }
-  // ② feed_logs バルクinsert（成功した行のみ・best-effort）
+  // ② feed_logs 保存（成功した行のみ・best-effort）
+  //   同じ日・同じいけすに既に給餌記録があれば上書き。毎回insertすると同じ日の給餌が
+  //   積み上がり、餌代・グラフ・月別集計が過大になる。
   try{
-    await sb.from('feed_logs').insert(okOnes.map(function(x){ var c=x.c; return {
-      pond_id:c.pid, log_date:date, feed_kg:c.feed, bait:c.bait||'', bait2:c.bait2||'',
-      mort:c.mort, bgrade:c.bgrade,
-      drug:(c.drug&&c.drug!=='')?c.drug:null,
-      drug_amt:(c.drugAmt!==''&&c.drugAmt!=null)?(parseFloat(c.drugAmt)||null):null,
-      flag:c.flag, memo:c.memo||''
-    };}));
-  }catch(e){ console.warn('[Supabase] feed_logs bulk insert skipped:', e.message); }
+    var pondIds=okOnes.map(function(x){ return x.c.pid; });
+    var existing={};
+    var exRows=await sbSelectAll('feed_logs','id,pond_id','id',function(q){
+      return q.eq('log_date',date).in('pond_id',pondIds).gt('feed_kg',0);
+    });
+    exRows.forEach(function(r){ existing[r.pond_id]=r; });   // id昇順＝最新が残る
+    var insRows=[], updOps=[];
+    okOnes.forEach(function(x){
+      var c=x.c;
+      var row={
+        pond_id:c.pid, log_date:date, feed_kg:c.feed, bait:c.bait||'', bait2:c.bait2||'',
+        mort:c.mort, bgrade:c.bgrade,
+        drug:(c.drug&&c.drug!=='')?c.drug:null,
+        drug_amt:(c.drugAmt!==''&&c.drugAmt!=null)?(parseFloat(c.drugAmt)||null):null,
+        flag:c.flag, memo:c.memo||''
+      };
+      var base=(c.feed>0)?existing[c.pid]:null;
+      if(base && base.id!=null) updOps.push(sb.from('feed_logs').update(row).eq('id',base.id).select('id'));
+      else insRows.push(row);
+    });
+    if(updOps.length) await Promise.all(updOps);
+    if(insRows.length){ var ri=await sb.from('feed_logs').insert(insRows); if(ri.error) throw ri.error; }
+  }catch(e){ console.warn('[Supabase] feed_logs 保存に失敗:', e.message); }
   // ③ メモリ反映＋再描画
   okOnes.forEach(function(x){ var c=x.c; var p=POND_CONFIG.find(function(y){return y.id===c.pid;});
     if(p){ p.status=c.pondStatus; p.feedKg=c.feed; p.feed_kg=c.feed; p.mort=c.mort; p.bgrade=c.bgrade; p.bait=c.bait; p.bait2=c.bait2; p.drug=c.drug; p.drug_amt=c.drugAmt; p.memo=c.memo; if(c.newStock!=null) p.stock=c.newStock; }
@@ -4158,15 +4292,16 @@ async function renderMonthlyMatrix(){
   var map={};
   try{
     var nx=new Date(y, mo, 1); var nxStr=nx.getFullYear()+'-'+String(nx.getMonth()+1).padStart(2,'0')+'-01';
-    var res=await sb.from('feed_logs').select('pond_id,log_date,feed_kg,mort,bgrade').gte('log_date',ym+'-01').lt('log_date',nxStr);
-    if(!res.error){
-      (res.data||[]).forEach(function(r){
-        var day=parseInt(String(r.log_date).slice(8,10)); if(!day) return;
-        var v=parseFloat(r[field])||0; if(!v) return;
-        if(!map[r.pond_id]) map[r.pond_id]={};
-        map[r.pond_id][day]=(map[r.pond_id][day]||0)+v;
-      });
-    }
+    // 1000件上限で切られるとマス目が抜けるため、全件ページングで取得する
+    var rows=await sbSelectAll('feed_logs','pond_id,log_date,feed_kg,mort,bgrade','id',function(q){
+      return q.gte('log_date',ym+'-01').lt('log_date',nxStr);
+    });
+    rows.forEach(function(r){
+      var day=parseInt(String(r.log_date).slice(8,10)); if(!day) return;
+      var v=parseFloat(r[field])||0; if(!v) return;
+      if(!map[r.pond_id]) map[r.pond_id]={};
+      map[r.pond_id][day]=(map[r.pond_id][day]||0)+v;
+    });
   }catch(e){ console.warn('[月別] 集計スキップ:', e.message); }
   var fmt=function(v){ return v?(field==='feed_kg'?(Math.round(v*10)/10):v):''; };
   var head='<thead><tr><th class="row-head">いけす名</th>';
@@ -4313,7 +4448,10 @@ async function doLogin(){
     if(res.error)throw res.error;
     if(!(await enforceManagementOnly())) return;   // スタッフはここで弾いてアプリへ
     document.getElementById('loginGate').style.display='none';
-    await applyRole();
+    // 起動時の init() は「未ログイン状態」で走っており、RLSによりDBから何も読めていない。
+    // ゲートを閉じるだけだと固定の初期値のまま表示されるため、ログイン直後に必ず読み直す。
+    location.reload();
+    return;
   }catch(e){
     console.warn('[Auth] login failed:', e.message);
     document.getElementById('lgErr').style.display='block';
