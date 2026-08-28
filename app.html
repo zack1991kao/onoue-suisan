@@ -1586,7 +1586,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
     <div id="recFedBanner" style="display:none;background:#ecfdf5;border:1.5px solid #6ee7b7;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
       <div id="recFedBannerTitle" style="font-size:14px;font-weight:700;color:#065f46;margin-bottom:6px;">✅ このいけすは本日 給餌済みです</div>
       <div id="recFedBannerSum" style="font-size:13px;font-weight:700;color:#065f46;background:#fff;border-radius:8px;padding:8px 10px;margin-bottom:8px;"></div>
-      <div style="font-size:12.5px;color:#047857;margin-bottom:10px;">修正：下の数字を打ち直して「保存する」＝本日の記録を上書きします（二重に足されません）。死魚だけは今回増えた分を入力してください。</div>
+      <div style="font-size:12.5px;color:#047857;margin-bottom:10px;">修正：下の数字を打ち直して「保存する」＝本日の記録を上書きします（二重に足されません）。死魚も本日の合計が出ているので、直せばそのぶん在庫が調整されます。</div>
       <button type="button" onclick="cancelFeedRecord()" style="width:100%;height:46px;background:#fff;border:1.5px solid #fca5a5;border-radius:10px;color:#b91c1c;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;">🗑 本日の給餌を取り消す</button>
     </div>
     <div class="rec-field">
@@ -2261,7 +2261,13 @@ function _feedRowHtml(kind, sel, kg){
     +'<button type="button" onclick="this.closest(\'.feed-comp-row\').remove();recalcFeedTotal()" style="flex:0 0 46px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:18px;color:#94a3b8;cursor:pointer">✕</button>'
     +'</div>';
 }
+// 「前回このいけすで使った種類」を返す（無ければ空＝先頭が選ばれる）
+function lastCompName(kind){
+  var e = LAST_COMP[state.sheetIkesu];
+  return (e && e[kind]) ? e[kind] : '';
+}
 function addFeedRow(kind, sel, kg){
+  if (sel == null || sel === '') sel = lastCompName(kind);   // ＋追加は前回の種類から始める
   var wrap = document.getElementById(kind==='blend'?'blendRows':'liveRows');
   if(!wrap) return;
   wrap.insertAdjacentHTML('beforeend', _feedRowHtml(kind, sel, kg));
@@ -2309,15 +2315,20 @@ async function cancelFeedRecord(){
   // 斃死・異常が同じ記録に入っている場合は行ごと消さず給餌量を0にする（死んだ事実は残す）。
   // 給餌しか入っていない記録は行ごと削除する。
   try {
-    var rows = await sbSelectAll('feed_logs', 'id,mort,flag', 'id', function(q){
+    var rows = await sbSelectAll('feed_logs', 'id,mort,flag,memo', 'id', function(q){
       return q.eq('pond_id', p.id).eq('log_date', today).gt('feed_kg', 0);
     });
-    var keepIds = [], dropIds = [];
+    var keepOps = [], dropIds = [];
     rows.forEach(function(r){
-      if ((Number(r.mort) || 0) > 0 || r.flag === true) keepIds.push(r.id);
-      else dropIds.push(r.id);
+      if ((Number(r.mort) || 0) > 0 || r.flag === true) {
+        // 給餌は0にするが、内訳メモ（【生餌】イワシ 525kg 等）と配合餌名も一緒に消す。
+        // 残すと「給餌0kgなのに生餌525kg」という食い違った記録になるため。
+        keepOps.push(sb.from('feed_logs').update({
+          feed_kg: 0, bait2: '', memo: parseFeedMemo(r.memo).note
+        }).eq('id', r.id));
+      } else dropIds.push(r.id);
     });
-    if (keepIds.length) await sb.from('feed_logs').update({ feed_kg: 0 }).in('id', keepIds);
+    if (keepOps.length) await Promise.all(keepOps);
     if (dropIds.length) await sb.from('feed_logs').delete().in('id', dropIds);
   }
   catch(e){ console.warn('[Supabase] 給餌の取り消しに失敗:', e.message||e); }
@@ -2386,7 +2397,9 @@ function openRecordPanel(id) {
 
   // 斃死数は「今回新たに死んだ数」を入れるイベント入力。前回値を残すと保存のたびに
   // 在庫から二重で引かれてしまうため、毎回ゼロ（空）から入力する（累計は上のバナーで確認できる）。
-  document.getElementById('recMort').value = '';
+  // 死魚は「本日の合計」を表示して、打ち直せば修正できる方式。
+  // 保存時は（新しい合計 − 保存前の合計）だけ在庫を動かすので、二重に引かれない。
+  document.getElementById('recMort').value = (t && t.mortSum > 0) ? t.mortSum : '';
   document.getElementById('recBgrade').value = (t && t.bgradeSum > 0) ? t.bgradeSum : '';
   document.getElementById('recDrugAmt').value = (fr && fr.drug_amt != null) ? fr.drug_amt : '';
   document.getElementById('recMemo').value = parsed.note || '';
@@ -2451,7 +2464,12 @@ async function saveRecord() {
   if (!p) return;
   var comps = collectFeedComponents();               // メイン＋配合餌＋生餌（各 種類・kg）
   var feed = comps.reduce(function(s,c){ return s + (c.kg||0); }, 0);  // 合計給餌量
-  var mort = parseInt(document.getElementById('recMort').value) || 0;
+  // 死魚は「本日の合計」を入力する方式。保存前の合計との差だけ在庫を動かす。
+  var mortTotal = parseInt(document.getElementById('recMort').value) || 0;
+  var todayRec  = TODAY_LOG[id] || null;
+  var mortBefore = todayRec ? (Number(todayRec.mortSum) || 0) : 0;
+  var mortDelta  = mortTotal - mortBefore;
+  var mort = mortTotal;                       // 以降の表示・判定は「合計」で扱う
   var bgrade = parseInt(document.getElementById('recBgrade').value) || 0;
   var bait = document.getElementById('recBait').value;
   var mainComp = comps.filter(function(c){return c.kind==='メイン';})[0];
@@ -2493,7 +2511,7 @@ async function saveRecord() {
   var tCache = TODAY_LOG[p.id];
   if (!tCache) { tCache = TODAY_LOG[p.id] = { rows:[], feedSum:0, mortSum:0, bgradeSum:0, feedRow:null, flag:false }; }
   tCache.feedSum   = feed;
-  tCache.mortSum   = (Number(tCache.mortSum) || 0) + mort;
+  tCache.mortSum   = mortTotal;
   tCache.bgradeSum = bgrade;
   tCache.flag      = flagOn;
 
@@ -2516,9 +2534,10 @@ async function saveRecord() {
     bait2:      p.bait2 || '',
     updated_at: new Date().toISOString()
   };
-  if (mort > 0) {
-    p.stock = Math.max(0, (p.stock || 0) - mort);
-    fields.stock = p.stock;   // 在庫を減算してDBにも反映
+  if (mortDelta !== 0) {
+    // 5尾→3尾に直したら2尾戻す。同じ数で保存し直しても在庫は動かない。
+    p.stock = Math.max(0, (p.stock || 0) - mortDelta);
+    fields.stock = p.stock;
   }
   // ① 在庫・状態の更新を最優先（ログ保存が失敗してもここは守る）
   var ok = await dbUpdatePond(p.id, fields);
@@ -2528,15 +2547,14 @@ async function saveRecord() {
   //   同じ日・同じいけすに既に給餌記録があるときは insert ではなく update＝「上書き」する。
   //   毎回insertすると、打ち間違いを直すたびに同じ日の給餌が二重・三重に積み上がり、
   //   餌代・推移グラフ・月別マトリクスが実際より多く出てしまう（本番で41件発生していた）。
-  //   死魚だけは「今回新たに死んだ数」なので、既存の記録に足し込む。
-  var todayRec = TODAY_LOG[p.id] || null;
-  var baseRow  = (todayRec && todayRec.feedRow) || null;
+  //   死魚も「本日の合計」で上書きする（在庫は差分だけ動かしてある）。
+  var baseRow = (todayRec && (todayRec.feedRow || todayRec.rows[todayRec.rows.length - 1])) || null;
   // 別の端末が先に同じいけすを記録していると手元のキャッシュが古く、重複行を作ってしまう。
   // 書き込む直前にDBの最新を確認して、あれば上書き対象にする。
-  if (feed > 0 && !baseRow) {
+  if (!baseRow) {
     try {
-      var fresh = await sbSelectAll('feed_logs', 'id,mort', 'id', function(q){
-        return q.eq('pond_id', p.id).eq('log_date', logDate).gt('feed_kg', 0);
+      var fresh = await sbSelectAll('feed_logs', 'id,mort,feed_kg,bait,bait2,memo', 'id', function(q){
+        return q.eq('pond_id', p.id).eq('log_date', logDate);
       });
       if (fresh.length) baseRow = fresh[fresh.length - 1];
     } catch(e) { /* 確認できなければ従来どおり新規追加（記録を落とさない方を優先） */ }
@@ -2556,17 +2574,27 @@ async function saveRecord() {
   };
   try {
     var r2;
-    if (feed > 0 && baseRow && baseRow.id != null) {
-      payload.mort = (Number(baseRow.mort) || 0) + mort;          // 死魚は加算
+    if (baseRow && baseRow.id != null) {
+      // 同じ日に別の行（斃死だけの記録など）があるぶんを差し引いて、
+      // その日の死魚の「合計」が入力どおりになるように書く。
+      var otherMort = Math.max(0, mortBefore - (Number(baseRow.mort) || 0));
+      payload.mort = Math.max(0, mortTotal - otherMort);
+      if (feed <= 0) {
+        // 給餌には触れず死魚だけ直したケース。その日の給餌記録を消さない。
+        payload.feed_kg = Number(baseRow.feed_kg) || 0;
+        payload.bait    = baseRow.bait || p.bait;
+        payload.bait2   = baseRow.bait2 || '';
+        payload.memo    = baseRow.memo || memo;
+      }
       r2 = await sb.from('feed_logs').update(payload).eq('id', baseRow.id).select('id');
       if (!r2.error && (!r2.data || !r2.data.length)) {
         // 権限等で0件更新だった場合は、記録を失わないよう追加で残す
         console.warn('[Supabase] feed_logs update が0件。insert にフォールバックします');
-        payload.mort = mort;
+        payload.mort = Math.max(0, mortDelta);
         r2 = await sb.from('feed_logs').insert(payload).select('id');
       }
     } else {
-      r2 = await sb.from('feed_logs').insert(payload).select('id');
+      r2 = await sb.from('feed_logs').insert(payload).select('id');   // 本日初回＝入力値がそのまま合計
     }
     if (r2.error) throw r2.error;
   } catch (e) {
@@ -3383,6 +3411,9 @@ function feedShiftDays(dateStr, n){           // YYYY-MM-DD を n日ずらす
 // 本日の記録（いけすID -> {rows, feedSum, mortSum, bgradeSum, feedRow}）。
 // 「開き直したとき前回入力を見せる」「保存時に上書きする」の両方でこれを使う。
 var TODAY_LOG = {};
+// いけすID -> { blend:'前回の配合餌名', live:'前回の生餌名' }
+// 「＋配合餌を追加／＋生餌を追加」を押したときの初期選択に使う。
+var LAST_COMP = {};
 
 // いけす情報をDBから読めたか。読めていない＝画面はコード内の初期値（デモ値）を表示している状態。
 // そのまま保存すると誤った在庫でDBを上書きしてしまうため、書き込みを止める安全弁。
@@ -3396,7 +3427,7 @@ function ensurePondsLoaded(){
 // 色はDBの固定フラグでなく毎回ここで計算 → 日付が変われば自動で赤(todo)に戻る（リセット処理不要）。
 async function applyDailyFeedStatus(){
   var today = feedTodayStr();
-  var todayRows, pastRows;
+  var todayRows, pastRows, memoRows;
   try {
     // ① 本日分だけを取る（約100件）。色の確定と、記録パネルの前回値表示に使う。
     //    ここを全件取得にすると1000件上限に当たり、新しい記録から見えなくなる。
@@ -3406,6 +3437,12 @@ async function applyDailyFeedStatus(){
     // ② 直近60日の給餌履歴（赤いけすの「○日給餌していません」表示用。pond_idと日付だけ）
     pastRows = await sbSelectAll('feed_logs', 'pond_id,log_date', 'id', function(q){
       return q.gt('feed_kg', 0).gte('log_date', feedShiftDays(today, -60)).lt('log_date', today);
+    });
+    // ③ 内訳メモが入っている記録だけ（＝配合餌・生餌を使った記録）。
+    //    メイン餌は ponds.bait に前回の種類が残るが、配合餌・生餌にはその置き場が無いため、
+    //    ここから「そのいけすで前回使った種類」を復元して初期選択に使う。
+    memoRows = await sbSelectAll('feed_logs', 'pond_id,memo', 'id', function(q){
+      return q.neq('memo', '').gte('log_date', feedShiftDays(today, -120));
     });
   } catch(e) {
     // 取れなかったのか本当に未給餌なのかは区別できない。勝手に赤くせず、前回の色を保つ。
@@ -3427,6 +3464,16 @@ async function applyDailyFeedStatus(){
     t.bgradeSum += Number(row.bgrade)  || 0;
     if(row.flag === true) t.flag = true;
     if((Number(row.feed_kg)||0) > 0) t.feedRow = row;   // 同日に複数あれば最新（id昇順の最後）
+  });
+
+  // そのいけすで前回使った 配合餌／生餌 の種類（id昇順なので後の行ほど新しい＝最後が残る）
+  LAST_COMP = {};
+  memoRows.forEach(function(row){
+    if(!row.pond_id) return;
+    parseFeedMemo(row.memo).comps.forEach(function(c){
+      var e = LAST_COMP[row.pond_id]; if(!e) e = LAST_COMP[row.pond_id] = {};
+      e[c.kind] = c.name;   // kind は 'blend' / 'live'
+    });
   });
 
   // 直近の最終給餌日（本日を除く）

@@ -1809,6 +1809,23 @@ async function loadPonds() {
   await applyDailyFeedStatus();   // 当日基準で色を再計算（毎日リセット）
 }
 
+// 書き込み後の再読込（PC版には未定義のまま呼ばれていて、保存の最後で例外になっていた）。
+// 連続保存でも1回にまとめる。
+var _pondReloadTimer=null;
+function scheduleReload(){
+  if(_pondReloadTimer) clearTimeout(_pondReloadTimer);
+  _pondReloadTimer=setTimeout(async function(){
+    _pondReloadTimer=null;
+    try{
+      await loadPonds();
+      if(typeof redrawAllFishMaps==='function') redrawAllFishMaps();
+      if(typeof refreshDashboard==='function') refreshDashboard();
+      if(typeof renderInv==='function'){ renderInv(); if(typeof renderInvSummary==='function') renderInvSummary(); }
+      if(typeof renderLotTable==='function'){ renderLotTable(); if(typeof renderLotSummary==='function') renderLotSummary(); }
+    }catch(e){ console.warn('[再読込] スキップ:', e.message||e); }
+  },250);
+}
+
 async function loadOrders() {
   try {
     // 1000件上限で受注が抜けないよう全件ページングで取得し、表示順は取得後に並べ替える
@@ -2625,16 +2642,17 @@ function openTankDetail(p){
   var tqSumHtml=tqHasToday
     ? ('<div style="font-size:12.5px;font-weight:700;color:#065f46;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px;padding:8px 10px;margin-bottom:10px">'
        +'本日の記録：給餌 '+(Math.round(tq.feedSum*10)/10)+' kg ／ 死魚 '+tq.mortSum+' 尾 ／ B品 '+tq.bgradeSum+' 尾'
-       +'<div style="font-weight:400;color:#047857;margin-top:4px">給餌量を打ち直して保存すると本日の記録を上書きします（二重に足されません）。死魚は今回増えた分を入力してください。</div></div>')
+       +'<div style="font-weight:400;color:#047857;margin-top:4px">給餌量・死魚を打ち直して保存すると本日の記録を上書きします（二重に足されません）。死魚は差分だけ在庫が調整されます。</div></div>')
     : '';
   var tqFeedVal=(tq && tq.feedRow)?(Number(tq.feedRow.feed_kg)||''):'';
+  var tqMortVal=(tq && tq.mortSum>0)?tq.mortSum:'';
   var quickHtml=isSkip?'':(
     '<div style="margin:4px 0 18px;padding:14px;background:var(--blue-bg);border:1px solid #bfdbfe;border-radius:8px">'
     +'<div style="font-size:13px;font-weight:700;color:var(--blue-dk);margin-bottom:10px">🍚 このいけすを記録（給餌・斃死）</div>'
     +tqSumHtml
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
     +'<div><div style="font-size:12px;color:var(--sub);margin-bottom:4px">給餌量 (kg)</div><input id="tqFeed" type="number" inputmode="decimal" placeholder="0.0" value="'+tqFeedVal+'" style="width:100%;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:16px;font-family:inherit"></div>'
-    +'<div><div style="font-size:12px;color:var(--sub);margin-bottom:4px">死魚数 (尾)</div><input id="tqMort" type="number" inputmode="numeric" placeholder="0" style="width:100%;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:16px;font-family:inherit"></div>'
+    +'<div><div style="font-size:12px;color:var(--sub);margin-bottom:4px">死魚数 (尾)</div><input id="tqMort" type="number" inputmode="numeric" placeholder="0" value="'+tqMortVal+'" style="width:100%;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:16px;font-family:inherit"></div>'
     +'</div>'
     +'<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--sub);margin-bottom:4px">餌の種類</div><select id="tqBait" style="width:100%;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:0 10px;font-size:15px;font-family:inherit">'+baitOpts+'</select></div>'
     +'<button class="btn btn-primary" style="width:100%;height:46px" onclick="saveTankQuick(\''+p.id+'\')">この内容で記録を保存</button>'
@@ -2679,7 +2697,11 @@ async function saveTankQuick(pid){
   if(feed<=0 && mort<=0){ alert('給餌量または死魚数を入力してください'); return; }
   var nowIso=new Date().toISOString();
   var logDate=feedTodayStr();
-  var newStock=(mort>0)?Math.max(0,(p.stock||0)-mort):null;
+  // 死魚は「本日の合計」入力。保存前の合計との差だけ在庫を動かす（同じ数なら在庫は不変）
+  var tqRec=TODAY_LOG[pid]||null;
+  var mortBefore=tqRec?(Number(tqRec.mortSum)||0):0;
+  var mortDelta=mort-mortBefore;
+  var newStock=(mortDelta!==0)?Math.max(0,(p.stock||0)-mortDelta):null;
   var fields={ feed_kg:feed, mort:mort, bait:bait, updated_at:nowIso };
   if(feed>0) fields.status='done';                 // 給餌したら緑
   if(newStock!=null) fields.stock=newStock;         // 斃死分を在庫減算
@@ -2693,17 +2715,20 @@ async function saveTankQuick(pid){
   // ② 給餌ログ（斃死・給餌の記録＝履歴と通知に反映）
   //   本日すでに給餌記録があるいけすは上書き（重複計上を防ぐ）。死魚は今回分を加算。
   try{
-    var baseRow=(TODAY_LOG[pid]&&TODAY_LOG[pid].feedRow)||null;
+    var baseRow=(tqRec&&(tqRec.feedRow||tqRec.rows[tqRec.rows.length-1]))||null;
     var payload={ pond_id:pid, log_date:logDate, feed_kg:feed, bait:bait, bait2:p.bait2||'', mort:mort, bgrade:0, drug:null, drug_amt:null, flag:false, memo:'' };
     var r;
-    if(feed>0 && baseRow && baseRow.id!=null && logDate===feedTodayStr()){
-      payload.mort=(Number(baseRow.mort)||0)+mort;
+    if(baseRow && baseRow.id!=null && logDate===feedTodayStr()){
+      // 同じ日の別の行のぶんを差し引いて、その日の死魚の合計が入力どおりになるように書く
+      var otherMort=Math.max(0, mortBefore-(Number(baseRow.mort)||0));
+      payload.mort=Math.max(0, mort-otherMort);
       payload.bgrade=Number(baseRow.bgrade)||0;
       payload.memo=baseRow.memo||'';
+      if(feed<=0){ payload.feed_kg=Number(baseRow.feed_kg)||0; payload.bait=baseRow.bait||bait; payload.bait2=baseRow.bait2||''; }
       r=await sb.from('feed_logs').update(payload).eq('id',baseRow.id).select('id');
       if(!r.error && (!r.data || !r.data.length)){
         console.warn('[Supabase] feed_logs update が0件。insert にフォールバックします');
-        payload.mort=mort; payload.bgrade=0; payload.memo='';
+        payload.mort=Math.max(0,mortDelta); payload.bgrade=0; payload.memo='';
         r=await sb.from('feed_logs').insert(payload).select('id');
       }
     }else{
@@ -4119,12 +4144,19 @@ function _optList(arr,sel,blankLabel){
 // これまで ponds の現在値（しかもDBに無い項目名）を読んでいたため、
 // 日付を選んでも「その日すでに何を入力したか」が画面に出ていなかった。
 var DIARY_LOG = {};
+// いけすID -> その日の合計（死魚・B品・給餌）。死魚は合計で入力・上書きするために使う。
+var DIARY_SUM = {};
 async function loadDiaryLogs(date){
-  DIARY_LOG = {};
+  DIARY_LOG = {}; DIARY_SUM = {};
   if(!date) return;
   try{
     var rows = await sbSelectAll('feed_logs','*','id',function(q){ return q.eq('log_date', date); });
-    rows.forEach(function(r){ if(r.pond_id) DIARY_LOG[r.pond_id]=r; });   // id昇順＝最新が残る
+    rows.forEach(function(r){
+      if(!r.pond_id) return;
+      DIARY_LOG[r.pond_id]=r;                                   // id昇順＝最新が残る（代表行）
+      var t=DIARY_SUM[r.pond_id]; if(!t) t=DIARY_SUM[r.pond_id]={mort:0,bgrade:0,feed:0};
+      t.mort += Number(r.mort)||0; t.bgrade += Number(r.bgrade)||0; t.feed += Number(r.feed_kg)||0;
+    });
   }catch(e){ console.warn('[養殖日誌] 当日記録の取得に失敗:', e.message||e); }
 }
 async function renderDailyMatrix(){
@@ -4156,23 +4188,25 @@ async function renderDailyMatrix(){
     body+='<tr class="m-area-sep"><td colspan="'+COLS+'">▌ '+area+'エリア（'+ponds.length+'基）</td></tr>';
     ponds.forEach(function(p){
       // その日の記録があればそれを表示（無ければ空欄）。ponds の現在値は使わない。
+      // 同じ日に複数行あることがあるため、数値は合計(DIARY_SUM)を正とする。
       var dl=DIARY_LOG[p.id]||null;
+      var dsum=DIARY_SUM[p.id]||null;
       var uc=dl?'filled':'unfilled';
-      var feedVal=(dl && Number(dl.feed_kg)>0)?dl.feed_kg:'';
+      var feedVal=(dsum && dsum.feed>0)?(Math.round(dsum.feed*10)/10):'';
       var yr=getPondYr(p);
       var yrLabel=yr?'<span style="font-size:10px;color:#94a3b8;margin-left:4px;">'+yr+'年魚</span>':'';
       var opts=['正常','給餌済','異常あり','絶食'];
-      var selIdx=dl?((dl.flag===true||Number(dl.mort)>0)?2:(Number(dl.feed_kg)>0?1:0)):0;
+      var selIdx=dl?(((dl.flag===true)||(dsum&&dsum.mort>0))?2:((dsum&&dsum.feed>0)?1:0)):0;
       var statusSel='<select data-field="status" style="'+selStyle+'">';
       opts.forEach(function(o,i){statusSel+='<option'+(i===selIdx?' selected':'')+'>'+o+'</option>';});
       statusSel+='</select>';
       body+='<tr data-pid="'+p.id+'">';
       body+='<td class="row-label">'+p.id+yrLabel+'</td>';
       body+='<td class="'+uc+'"><input type="number" step="0.1" data-field="feed_kg" value="'+feedVal+'" placeholder="—" onchange="cellFilled(this)"></td>';
-      body+='<td style="padding:2px 4px"><select data-field="bait" style="'+selStyle+'">'+_optList(BAITS,(dl&&dl.bait)||p.bait,'—')+'</select></td>';
-      body+='<td style="padding:2px 4px"><select data-field="bait2" style="'+selStyle+'">'+_optList(BAITS,(dl&&dl.bait2)||p.bait2,'なし')+'</select></td>';
-      body+='<td class="'+uc+'"><input type="number" data-field="mort" value="" placeholder="'+((dl&&Number(dl.mort)>0)?('記録済 '+dl.mort):'0')+'" onchange="cellFilled(this)" title="今回新たに死んだ数（保存すると在庫から引かれます）。既に記録済みの数はプレースホルダに表示しています"></td>';
-      body+='<td class="'+uc+'"><input type="number" data-field="bgrade" value="'+((dl&&Number(dl.bgrade)>0)?dl.bgrade:'')+'" placeholder="0" onchange="cellFilled(this)"></td>';
+      body+='<td style="padding:2px 4px"><select data-field="bait" style="'+selStyle+'">'+_optList(BAITS,(dl?(dl.bait||''):(p.bait||'')),'—')+'</select></td>';
+      body+='<td style="padding:2px 4px"><select data-field="bait2" style="'+selStyle+'">'+_optList(BAITS,(dl?(dl.bait2||''):(p.bait2||'')),'なし')+'</select></td>';
+      body+='<td class="'+uc+'"><input type="number" data-field="mort" value="'+((dsum&&dsum.mort>0)?dsum.mort:'')+'" placeholder="0" onchange="cellFilled(this)" title="その日の死魚の合計。打ち直すと差分だけ在庫が調整されます"></td>';
+      body+='<td class="'+uc+'"><input type="number" data-field="bgrade" value="'+((dsum&&dsum.bgrade>0)?dsum.bgrade:'')+'" placeholder="0" onchange="cellFilled(this)"></td>';
       body+='<td style="padding:2px 4px"><select data-field="drug" style="'+selStyle+'">'+_optList(DRUGS,(dl&&dl.drug)||'','なし')+'</select></td>';
       body+='<td style="padding:2px 4px"><input type="text" data-field="drug_amt" value="'+_attr(dl?dl.drug_amt:'')+'" placeholder="—" style="'+txtStyle+'"></td>';
       body+='<td style="padding:2px 4px">'+statusSel+'</td>';
@@ -4204,14 +4238,29 @@ async function saveDailyMatrix(){
     function v(f){ var el=tr.querySelector('[data-field="'+f+'"]'); return el?el.value:''; }
     var feed=parseFloat(v('feed_kg'))||0, mort=parseInt(v('mort'))||0, bgrade=parseInt(v('bgrade'))||0;
     var bait=v('bait'), bait2=v('bait2'), drug=v('drug'), drugAmt=v('drug_amt'), status=v('status'), memo=(v('memo')||'').trim();
-    // 入力が一切ない行はスキップ（給餌0/斃死0/B品0/餌なし/薬なし/メモなし）
-    var hasInput = feed>0||mort>0||bgrade>0||(bait&&bait!=='')||(drug&&drug!=='')||memo!=='';
-    if(!hasInput) return;
+    // 各欄には「その日すでに記録されている値」が最初から入っている。
+    // そのまま保存を押しても全行を書き換えないよう、画面で実際に変えた行だけを対象にする。
+    var _dl=DIARY_LOG[pid]||null, _sum=DIARY_SUM[pid]||null;
+    var _fBefore=(_sum&&_sum.feed)||0, _mBefore=(_sum&&_sum.mort)||0, _bBefore=(_sum&&_sum.bgrade)||0;
+    if(!_dl){
+      // その日まだ記録がない行 → 何か入力されたときだけ保存
+      if(!(feed>0||mort>0||bgrade>0||(drug&&drug!=='')||memo!=='')) return;
+    }else{
+      var _statusB=['正常','給餌済','異常あり'][((_dl.flag===true)||_mBefore>0)?2:(_fBefore>0?1:0)];
+      var _changed = feed!==_fBefore || mort!==_mBefore || bgrade!==_bBefore
+        || bait!==(_dl.bait||'') || bait2!==(_dl.bait2||'')
+        || drug!==(_dl.drug||'') || String(drugAmt||'')!==((_dl.drug_amt!=null)?String(_dl.drug_amt):'')
+        || memo!==((_dl.memo||'').trim()) || status!==_statusB;
+      if(!_changed) return;
+    }
     // 斃死があれば在庫尾数から差し引く（今回入力分のみ）
     var pondNow=POND_CONFIG.find(function(x){return x.id===pid;});
     var curStock=pondNow?(pondNow.stock||0):0;
-    var newStock=(mort>0)?Math.max(0,curStock-mort):null;
-    collected.push({pid:pid,feed:feed,mort:mort,bgrade:bgrade,bait:bait,bait2:bait2,drug:drug,drugAmt:drugAmt,memo:memo,
+    // 死魚は「その日の合計」入力。保存前の合計との差だけ在庫を動かす。
+    var mBefore=(DIARY_SUM[pid]&&DIARY_SUM[pid].mort)||0;
+    var mDelta=mort-mBefore;
+    var newStock=(mDelta!==0)?Math.max(0,curStock-mDelta):null;
+    collected.push({pid:pid,feed:feed,mort:mort,mBefore:mBefore,mDelta:mDelta,bgrade:bgrade,bait:bait,bait2:bait2,drug:drug,drugAmt:drugAmt,memo:memo,
       pondStatus:(status==='異常あり')?'alert':'done', flag:(status==='異常あり'), newStock:newStock});
   });
   if(!collected.length){ alert('入力された行がありません'); return; }
@@ -4235,8 +4284,8 @@ async function saveDailyMatrix(){
   try{
     var pondIds=okOnes.map(function(x){ return x.c.pid; });
     var existing={};
-    var exRows=await sbSelectAll('feed_logs','id,pond_id','id',function(q){
-      return q.eq('log_date',date).in('pond_id',pondIds).gt('feed_kg',0);
+    var exRows=await sbSelectAll('feed_logs','id,pond_id,mort','id',function(q){
+      return q.eq('log_date',date).in('pond_id',pondIds);
     });
     exRows.forEach(function(r){ existing[r.pond_id]=r; });   // id昇順＝最新が残る
     var insRows=[], updOps=[];
@@ -4249,7 +4298,9 @@ async function saveDailyMatrix(){
         drug_amt:(c.drugAmt!==''&&c.drugAmt!=null)?(parseFloat(c.drugAmt)||null):null,
         flag:c.flag, memo:c.memo||''
       };
-      var base=(c.feed>0)?existing[c.pid]:null;
+      var otherMort=Math.max(0,(c.mBefore||0)-(Number((existing[c.pid]||{}).mort)||0));
+      row.mort=Math.max(0,(c.mort||0)-otherMort);
+      var base=existing[c.pid]||null;
       if(base && base.id!=null) updOps.push(sb.from('feed_logs').update(row).eq('id',base.id).select('id'));
       else insRows.push(row);
     });
