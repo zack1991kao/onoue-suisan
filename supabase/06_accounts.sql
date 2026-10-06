@@ -2,6 +2,7 @@
 -- 6/26 社長要望：ログインは「ID（番号）＋4桁PIN」。内部変換は
 --   ID「1」→ メール staff1@onoue.local ／ PIN「1234」→ パスワード onoue1234
 --
+-- ※公開リポジトリのため、実際のPINは書かない。'____' を各自のPINに置き換えて SQL Editor で実行し、保存はしないこと（2026-10-06）
 -- ★編集するのは下の「values(...)」の表だけ★ 番号・PIN・氏名・管理者かを人数分並べる。
 -- 既に作成済みのアカウントは自動スキップ（何度実行してもOK）。
 
@@ -19,11 +20,11 @@ begin
   for rec in
     select * from (values
       --  番号 ,  PIN  ,  氏名（メモ）   , 管理者か
-      ( 1 , '1221' , '尾上 洸一朗' , true  ),
-      ( 2 , '0002' , 'スタッフ2'   , false ),
-      ( 3 , '0003' , 'スタッフ3'   , false ),
-      ( 4 , '0004' , 'スタッフ4'   , false ),
-      ( 5 , '0005' , 'スタッフ5'   , false )
+      ( 1 , '____' , '尾上 洸一朗' , true  ),
+      ( 2 , '____' , 'スタッフ2'   , false ),
+      ( 3 , '____' , 'スタッフ3'   , false ),
+      ( 4 , '____' , 'スタッフ4'   , false ),
+      ( 5 , '____' , 'スタッフ5'   , false )
       -- ↑ 行を増やす／番号・PIN・氏名・管理者(true/false)を変えるだけ
     ) as t(no, pin, name, is_admin)
   loop
@@ -66,7 +67,7 @@ notify pgrst, 'reload schema';
 select email, name, role, active from public.profiles order by email;
 
 -- ───────────────────────────────────────────────
--- 【ログイン方法】アプリの画面で：ID=番号（例「1」）／PIN=4桁（例「1221」）
+-- 【ログイン方法】アプリの画面で：ID=番号（例「1」）／PIN=4桁（各自に配った番号）
 -- 【もしエラーが出たら】Supabaseの版差で auth.users/identities の列が違う場合があります。
 --   その時は Dashboard → Authentication → Add user で
 --   Email: staff1@onoue.local ／ Password: onoue1221 ／ Auto Confirm User: ON
