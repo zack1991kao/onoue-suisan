@@ -1,3 +1,8 @@
+-- 【廃止】06_accounts.sql（2026-10-06）
+-- 古い形式（staff1@…）でアカウントを作るSQL。今のアプリは staff01 / kanri01 形式のため使わない。
+-- PINの変更・氏名の設定は 07_accounts_fix.sql を使う。誤って実行しても、下の1行目で止まり何も変わらない。
+do $$ begin raise exception '06_accounts.sql は廃止です。07_accounts_fix.sql を使ってください'; end $$;
+
 -- 06_accounts.sql  （Supabase SQL Editor に全文貼り付け→Run）
 -- 6/26 社長要望：ログインは「ID（番号）＋4桁PIN」。内部変換は
 --   ID「1」→ メール staff1@onoue.local ／ PIN「1234」→ パスワード onoue1234
@@ -21,7 +26,7 @@ begin
   for rec in
     select * from (values
       --  番号 ,  PIN  ,  氏名（メモ）   , 管理者か
-      ( 1 , '____' , '尾上 洸一朗' , true  ),
+      ( 1 , '____' , '管理者1' , true  ),
       ( 2 , '____' , 'スタッフ2'   , false ),
       ( 3 , '____' , 'スタッフ3'   , false ),
       ( 4 , '____' , 'スタッフ4'   , false ),
@@ -57,7 +62,8 @@ begin
       );
     else
       -- 既にあるアカウントのPINは、このSQLでは変えない（PINの変更は 07_accounts_fix.sql で行う）
-      raise notice '% は既にあるため、PINは変更していません（変えるなら 07_accounts_fix.sql）', 'staff'||rec.no||'@onoue.local';
+      raise notice '% は既にあるため、何も変更していません（変えるなら 07_accounts_fix.sql）', 'staff'||rec.no||'@onoue.local';
+      continue;   -- 既存アカウントの氏名・権限・有効/無効は上書きしない
     end if;
     -- profiles（トリガで自動作成済み）の氏名・権限・有効を設定
     update public.profiles
