@@ -28,6 +28,10 @@ begin
       -- ↑ 行を増やす／番号・PIN・氏名・管理者(true/false)を変えるだけ
     ) as t(no, pin, name, is_admin)
   loop
+    -- '____' のまま・数字以外・4桁未満なら、全体を取り消して止める（全員が同じ推測しやすいパスワードになるのを防ぐ）
+    if rec.pin is null or rec.pin !~ '^[0-9]{4,}$' then
+      raise exception 'PINが未設定か不正です（%）。''____'' を数字4桁以上に置き換えてください', rec.no;
+    end if;
     select id into v_id from auth.users where email = 'staff'||rec.no||'@onoue.local';
     if v_id is null then
       v_id := gen_random_uuid();

@@ -36,6 +36,10 @@ begin
       -- ↑ PIN・氏名を実際の値に変えるだけ
     ) as t(acct, pin, name)
   loop
+    -- '____' のまま・数字以外・4桁未満なら、全体を取り消して止める（全員が同じ推測しやすいパスワードになるのを防ぐ）
+    if rec.pin is null or rec.pin !~ '^[0-9]{4,}$' then
+      raise exception 'PINが未設定か不正です（%）。''____'' を数字4桁以上に置き換えてください', rec.acct;
+    end if;
     update auth.users
        set encrypted_password = crypt('onoue'||rec.pin, gen_salt('bf')),
            updated_at = now()
