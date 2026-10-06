@@ -3292,9 +3292,10 @@ async function moveSave() {
       to_pond:   state.mv.to,
       count:     cnt,
       reason:    state.mv.reason,
-      external:  !!state.mv.external
+      external:  !!state.mv.external,
+      client_uid: outboxUid()   // 再送で二重にしないための一意ID（08_entered_by_move_uid.sql）
     };
-    var r1 = await sb.from('move_logs').insert(moveRow).select('id');
+    var r1 = await moveInsert(moveRow);
     if (r1.error) throw r1.error;
     if (!r1.data || !r1.data.length) throw new Error('move_logs の追加が0件');
   } catch (e) {
@@ -3412,6 +3413,19 @@ function localYmd(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padS
 var OUTBOX_KEY = 'onoue_outbox_v1', OUTBOX_HOLD_KEY = 'onoue_outbox_hold_v1', OUTBOX_MAX_TRIES = 10;
 function outboxLoad(key){ try { var a = JSON.parse(localStorage.getItem(key || OUTBOX_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch(e){ return []; } }
 function outboxSave(a, key){ try { localStorage.setItem(key || OUTBOX_KEY, JSON.stringify(a)); return true; } catch(e){ return false; } }
+// DBにまだ列が無い時（08 SQL 未適用）のエラーか
+function isMissingCol(err, col){
+  return !!err && (err.code === 'PGRST204' || err.code === '42703' || /column/i.test(err.message || '')) && String(err.message || '').indexOf(col) >= 0;
+}
+// 移動の記録を追加。client_uid 列が無いDBでは、その項目を外して入れ直す
+async function moveInsert(row){
+  var r = await sb.from('move_logs').insert(row).select('id');
+  if (r.error && row.client_uid && isMissingCol(r.error, 'client_uid')) {
+    var r2 = Object.assign({}, row); delete r2.client_uid;
+    r = await sb.from('move_logs').insert(r2).select('id');
+  }
+  return r;
+}
 function outboxUid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 // 同じ種類・同じいけす・同じ日の未送信は「最新の1件」だけ残す（古い記録で上書きしない）
 function outboxKey(op, pondId, logDate){ return op + '|' + pondId + '|' + logDate; }
@@ -3497,13 +3511,27 @@ function outboxPick(row, fields, withId){
 async function outboxSendOne(it){
   var r, row = it.row || {};
   if (it.t === 'move_logs' && it.op === 'insert') {
+    // 一意IDがあれば、それで「既に入っているか」を確かめる（同じ内容の移動を2回しても区別できる）
+    if (row.client_uid) {
+      var byUid = await sb.from('move_logs').select('id').eq('client_uid', row.client_uid).limit(1);
+      if (!byUid.error) {
+        if (byUid.data && byUid.data.length) return 'sent';
+        r = await moveInsert(row);
+        if (r.error && r.error.code === '23505') return 'sent';   // 同じIDが既にある＝送信済み
+        if (r.error) throw r.error;
+        if (!r.data || !r.data.length) throw new Error('書き込めませんでした（権限の可能性）');
+        return 'sent';
+      }
+      if (!isMissingCol(byUid.error, 'client_uid')) throw byUid.error;
+      // 列がまだ無いDB：下の従来の照合へ
+    }
     // 応答だけ失われて実は入っていた場合に二重にしない
     var q = sb.from('move_logs').select('id').eq('log_date', row.log_date).eq('to_pond', row.to_pond).eq('count', row.count).eq('reason', row.reason);
     q = row.from_pond ? q.eq('from_pond', row.from_pond) : q.is('from_pond', null);
     var dup = await q.limit(1);
     if (dup.error) throw dup.error;
     if (dup.data && dup.data.length) { it.reason = '同じ内容の移動が既にあります（二重か、同じ移動を2回したか確認）'; return 'hold'; }
-    r = await sb.from('move_logs').insert(row).select('id');
+    r = await moveInsert(row);
   } else if (it.op === 'feedSet') {
     // 1基の記録。保存した時点の行（base）から変わっていなければ上書き。変わっていれば人に確かめてもらう
     var ex1 = await sb.from('feed_logs').select('*').eq('pond_id', row.pond_id).eq('log_date', row.log_date)
