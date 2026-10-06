@@ -2522,7 +2522,7 @@ async function saveRecord() {
 
   // DB write（楽観的UI: 画面更新後に書き込み）
   var d = new Date();
-  var logDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  var logDate = localYmd(d);
 
   // 斃死があれば在庫尾数から差し引く（死亡＝在庫減。今回入力分のみ）
   var fields = {
@@ -2767,7 +2767,7 @@ async function saveFeedList() {
 
   // DB write（楽観的UI: 完了画面表示後に書き込み）
   var d = new Date();
-  var logDate = feedDateVal || (d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+  var logDate = feedDateVal || (localYmd(d));
 
   // ① 状態・給餌量の更新を最優先（ログ保存が失敗しても守る）
   var nowIso = new Date().toISOString();
@@ -2985,7 +2985,7 @@ function renderCalendar() {
   var firstDay = new Date(yr, mo-1, 1).getDay();
   var daysInMonth = new Date(yr, mo, 0).getDate();
   var today = new Date();
-  var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  var todayStr = localYmd(today);
   var allOrd = getAllOrders();
   var orderMap = {};
   allOrd.forEach(function(o) {
@@ -3275,7 +3275,7 @@ async function moveSave() {
 
   // DB write
   var d = new Date();
-  var logDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  var logDate = localYmd(d);
 
   // ① 在庫の更新を最優先（移動の本体。ここを必ず守る）
   var ok = true;
@@ -3407,7 +3407,10 @@ function showToast(msg){
 }
 
 // ── 日本時間の YYYY-MM-DD（toISOString は UTC のため、朝9時前は前日になる）──
-function localYmd(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function localYmd(d){
+  try { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(d); }   // 端末の時刻設定に関係なく日本時間
+  catch(e){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+}
 // ── 未送信の記録：電波が弱く保存に失敗した記録を端末に残し、つながったら自動で送り直す ──
 //   いけすの在庫・状態（ponds）は値の上書きのため対象外（失敗時はその場で知らせて押し直してもらう）。
 var OUTBOX_KEY = 'onoue_outbox_v1', OUTBOX_HOLD_KEY = 'onoue_outbox_hold_v1', OUTBOX_MAX_TRIES = 10;
@@ -3428,16 +3431,19 @@ async function moveInsert(row){
 }
 function outboxUid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 // 同じ種類・同じいけす・同じ日の未送信は「最新の1件」だけ残す（古い記録で上書きしない）
-function outboxKey(op, pondId, logDate){ return op + '|' + pondId + '|' + logDate; }
-function itemKey(it){ return (it.row && it.row.pond_id && it.row.log_date) ? outboxKey(it.op, it.row.pond_id, it.row.log_date) : null; }
+function outboxKey(op, pondId, logDate, by){ return (by || '?') + '|' + op + '|' + pondId + '|' + logDate; }
+function itemKey(it){ return (it.row && it.row.pond_id && it.row.log_date) ? outboxKey(it.op, it.row.pond_id, it.row.log_date, it.by) : null; }
+// 今ログインしている人の記録か（入れた人が分からない記録は誰のものでもない）
+function outboxMine(it){ return !!it.by && it.by === window._outboxUser; }
 function outboxDrop(op, pondId, logDate){
-  var k = outboxKey(op, pondId, logDate), a = outboxLoad();
+  var k = outboxKey(op, pondId, logDate, window._outboxUser), a = outboxLoad();
   var b = a.filter(function(it){ return itemKey(it) !== k; });
   if (b.length !== a.length) { outboxSave(b); outboxBadge(); }
 }
 function outboxAdd(items){
   var a = outboxLoad(), now = new Date().toISOString();
   items.forEach(function(it){
+    it.by = window._outboxUser || null;
     var k = itemKey(it);
     if (k) a = a.filter(function(x){ return itemKey(x) !== k; });
     it.uid = outboxUid(); it.at = now; it.tries = 0; a.push(it);
@@ -3456,7 +3462,7 @@ function outboxHold(items){
 function outboxBadge(){
   var el = document.getElementById('outboxBadge');
   if (!el) return;
-  var n = outboxLoad().length, m = outboxLoad(OUTBOX_HOLD_KEY).length, t = [];
+  var n = outboxLoad().filter(outboxMine).length, m = outboxLoad(OUTBOX_HOLD_KEY).filter(outboxMine).length, t = [];
   if (n) t.push('未送信 ' + n + '件');
   if (m) t.push('要確認 ' + m + '件');
   el.textContent = t.join('・') + '（押す）';
@@ -3471,7 +3477,8 @@ async function outboxTap(){
   // ログインしていない人には中身を見せない・消させない
   try { var ses = await sb.auth.getSession(); if (!ses || !ses.data || !ses.data.session) { showToast('ログインすると確認できます'); return; } }
   catch(e){ return; }
-  var h = outboxLoad(OUTBOX_HOLD_KEY);
+  window._outboxUser = (ses.data.session.user && ses.data.session.user.email) || window._outboxUser;
+  var h = outboxLoad(OUTBOX_HOLD_KEY).filter(outboxMine);   // 自分が入れた分だけ見せる・消す
   if (h.length) {
     var shown = {}; h.forEach(function(x){ shown[x.uid] = 1; });
     alert('要確認の記録 ' + h.length + '件\n\n' + h.map(outboxDesc).join('\n') +
@@ -3582,7 +3589,23 @@ async function outboxFlush(manual){
   try {
     var ses = await sb.auth.getSession();
     if (!ses || !ses.data || !ses.data.session) { if (manual) showToast('ログインし直すと、未送信の記録を送ります'); return; }
+    var me = (ses.data.session.user && ses.data.session.user.email) || null;
+    window._outboxUser = me;
   } catch(e){ return; }
+  // 別の人が入れた未送信は、その人がログインしている時だけ送る（入力した人の記録を取り違えない）
+  var all = a;
+  // 先に「誰の記録か」で分ける（入れた人が分からない記録は送らない）
+  var unknown = all.filter(function(x){ return !x.by; });
+  var others = all.filter(function(x){ return x.by && x.by !== me; });
+  a = all.filter(function(x){ return x.by && x.by === me; });
+  if (unknown.length) {   // 入れた人が分からない記録は自動で送らず、見つけた人の要確認へ移す
+    var held0 = unknown.map(function(x){ return Object.assign({}, x, { reason: '入力した人が分かりません', by: me }); });
+    if (outboxHold(held0)) {
+      var uu = {}; unknown.forEach(function(x){ uu[x.uid] = 1; });
+      outboxSave(outboxLoad().filter(function(x){ return !uu[x.uid]; }));
+    }
+  }
+  if (!a.length) { if (manual && others.length) showToast('別の方が入れた未送信が ' + others.length + '件あります。その方がログインすると送ります'); outboxBadge(); return; }
   _outboxBusy = true;
   var done = {}, failed = {}, held = [], dead = [], sent = 0;
   try {
@@ -3621,6 +3644,7 @@ async function outboxFlush(manual){
 }
 function outboxInit(){
   outboxBadge();
+  try { sb.auth.getSession().then(function(s){ window._outboxUser = (s && s.data && s.data.session && s.data.session.user && s.data.session.user.email) || null; }); } catch(e){}
   window.addEventListener('online', function(){ outboxFlush(false); });
   document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') outboxFlush(false); });
   setInterval(function(){ outboxFlush(false); }, 60000);
@@ -3641,7 +3665,7 @@ function hideDataWarn(){
 // ── 日次リセット用ヘルパー（給餌は「毎日やる作業」＝今日やったかで色が決まる）──
 function feedTodayStr(){
   var d=new Date();
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return localYmd(d);
 }
 function feedDaysBetween(fromStr, toStr){     // YYYY-MM-DD（暦日）の差。0時境界
   var a=new Date(fromStr+'T00:00:00'), b=new Date(toStr+'T00:00:00');
@@ -3650,7 +3674,7 @@ function feedDaysBetween(fromStr, toStr){     // YYYY-MM-DD（暦日）の差。
 function feedShiftDays(dateStr, n){           // YYYY-MM-DD を n日ずらす
   var d=new Date(dateStr+'T00:00:00');
   d.setDate(d.getDate()+n);
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return localYmd(d);
 }
 // 本日の記録（いけすID -> {rows, feedSum, mortSum, bgradeSum, feedRow}）。
 // 「開き直したとき前回入力を見せる」「保存時に上書きする」の両方でこれを使う。
