@@ -1301,6 +1301,7 @@ body.ai-mode-on .ai-home-banner{display:flex}
 </head>
 <body>
 <!-- アプリ内通知バナー（受注・異常などをリアルタイム表示） -->
+<div id="outboxBadge" onclick="outboxTap()" role="button" style="display:none;position:fixed;right:10px;top:calc(env(safe-area-inset-top) + 64px);z-index:9990;background:#b45309;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.3);cursor:pointer;min-height:36px;"></div>
 <div id="appToast" style="display:none;position:fixed;left:50%;bottom:88px;transform:translateX(-50%);z-index:10002;background:rgba(15,36,55,.95);color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:700;max-width:88%;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>
 <div id="dataWarnBanner" onclick="this.style.display='none'" style="display:none;position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:10001;background:#b45309;color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;font-size:13px;font-weight:700;line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,.3);cursor:pointer;"></div>
 <div id="notifBanner" onclick="this.style.display='none'" style="display:none;position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:10000;background:#1b3a5c;color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;font-size:14px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.3);cursor:pointer;display:none;align-items:center;gap:8px;"></div>
@@ -2553,7 +2554,7 @@ async function saveRecord() {
   // 書き込む直前にDBの最新を確認して、あれば上書き対象にする。
   if (!baseRow) {
     try {
-      var fresh = await sbSelectAll('feed_logs', 'id,mort,feed_kg,bait,bait2,memo', 'id', function(q){
+      var fresh = await sbSelectAll('feed_logs', '*', 'id', function(q){
         return q.eq('pond_id', p.id).eq('log_date', logDate);
       });
       if (fresh.length) baseRow = fresh[fresh.length - 1];
@@ -2597,9 +2598,11 @@ async function saveRecord() {
       r2 = await sb.from('feed_logs').insert(payload).select('id');   // 本日初回＝入力値がそのまま合計
     }
     if (r2.error) throw r2.error;
+    outboxDrop('feedSet', p.id, logDate);
   } catch (e) {
-    console.warn('[Supabase] feed_logs 保存に失敗（在庫は保存済み）:', e);
-    showToast('⚠ 記録の保存に失敗しました。通信を確認してもう一度お試しください');
+    console.warn('[Supabase] feed_logs 保存に失敗（在庫は保存済み）→ 端末に残して後で送る:', e);
+    outboxAdd([{ t: 'feed_logs', op: 'feedSet', row: payload,
+      base: (baseRow && baseRow.id != null) ? outboxPick(baseRow, FEED_SET_FIELDS, true) : null }]);
   }
   // feed_logsコミット後に確実な再読込（当日基準の色を最終確定。給餌直後の赤戻り競合を防ぐ）
   scheduleReload();
@@ -2781,7 +2784,8 @@ async function saveFeedList() {
   var silentFail = results.some(function(r) { return !r.error && (!r.data || r.data.length === 0); });
   if (hardErr || silentFail) {
     console.error('[Supabase] saveFeedList ponds update failed:', hardErr || '0 rows (権限/RLS)');
-    alert('⚠ DBに保存できませんでした\n（Supabaseの書き込み権限をご確認ください）\n※画面の表示は保持されています');
+    if (hardErr) alert('⚠ 通信できず保存できませんでした\n電波の良い所で、もう一度「保存」を押してください\n※画面の表示は保持されています');
+    else alert('⚠ DBに保存できませんでした\n（Supabaseの書き込み権限をご確認ください）\n※画面の表示は保持されています');
     return;
   }
 
@@ -2792,7 +2796,7 @@ async function saveFeedList() {
   try {
     var pondIds = savedPonds.map(function(item) { return item.p.id; });
     var existing = {};
-    var exRows = await sbSelectAll('feed_logs', 'id,pond_id', 'id', function(q) {
+    var exRows = await sbSelectAll('feed_logs', 'id,pond_id,feed_kg,bait,bait2', 'id', function(q) {
       return q.eq('log_date', logDate).in('pond_id', pondIds).gt('feed_kg', 0);
     });
     exRows.forEach(function(r) { existing[r.pond_id] = r; });   // id昇順＝最新が残る
@@ -2820,13 +2824,28 @@ async function saveFeedList() {
         });
       }
     });
-    if (updateOps.length) await Promise.all(updateOps);
-    if (logRows.length) {
-      var r1 = await sb.from('feed_logs').insert(logRows);
-      if (r1.error) throw r1.error;
+    if (updateOps.length) {
+      var ur = await Promise.all(updateOps);
+      var ue = ur.find(function(r) { return r.error; });
+      if (ue) throw ue.error;
+      // エラーが無くても0件なら書けていない（権限など）。後送りに回す
+      if (ur.some(function(r) { return !r.data || !r.data.length; })) throw new Error('feed_logs の更新が0件');
     }
+    if (logRows.length) {
+      var r1 = await sb.from('feed_logs').insert(logRows).select('id');
+      if (r1.error) throw r1.error;
+      if (!r1.data || r1.data.length !== logRows.length) throw new Error('feed_logs の追加が一部0件');
+    }
+    savedPonds.forEach(function(item) { outboxDrop('feedUpsert', item.p.id, logDate); });
   } catch (e) {
-    console.warn('[Supabase] feed_logs 保存に失敗（在庫は保存済み）:', e);
+    // 以前は黙って捨てていた。端末に残し、つながったら同じ日・同じいけすの記録に上書きして送る
+    console.warn('[Supabase] feed_logs 保存に失敗（在庫は保存済み）→ 端末に残して後で送る:', e);
+    outboxAdd(savedPonds.map(function(item) {
+      var b0 = existing[item.p.id];
+      return { t: 'feed_logs', op: 'feedUpsert', base: b0 ? outboxPick(b0, FEED_UPSERT_FIELDS, true) : null, row: {
+        pond_id: item.p.id, log_date: logDate, feed_kg: item.kg, bait: item.p.bait, bait2: item.p.bait2 || '',
+        mort: 0, bgrade: 0, drug: null, drug_amt: null, flag: false, memo: '' } };
+    }));
   }
   // feed_logsコミット後に確実な再読込（当日基準の色を最終確定）
   scheduleReload();
@@ -3026,7 +3045,7 @@ var orderPanelStatus = 'confirmed';
 function openOrderPanel(dateStr) {
   document.getElementById('orderPanelOverlay').classList.add('open');
   document.getElementById('orderDate').value =
-    dateStr || new Date().toISOString().slice(0,10);
+    dateStr || localYmd(new Date());
   document.getElementById('orderBuyer').value = '';
   var ob = document.getElementById('orderBuyerOther');
   if (ob) { ob.value = ''; ob.style.display = 'none'; }
@@ -3267,17 +3286,20 @@ async function moveSave() {
 
   // ② 移動ログ（補助的。失敗しても在庫保存は成立済み）
   try {
-    var r1 = await sb.from('move_logs').insert({
+    var moveRow = {
       log_date:  logDate,
       from_pond: state.mv.external ? null : state.mv.from,
       to_pond:   state.mv.to,
       count:     cnt,
       reason:    state.mv.reason,
       external:  !!state.mv.external
-    });
+    };
+    var r1 = await sb.from('move_logs').insert(moveRow).select('id');
     if (r1.error) throw r1.error;
+    if (!r1.data || !r1.data.length) throw new Error('move_logs の追加が0件');
   } catch (e) {
-    console.warn('[Supabase] move_logs insert failed (在庫は保存済み):', e);
+    console.warn('[Supabase] move_logs insert failed (在庫は保存済み)→ 端末に残して後で送る:', e);
+    if (moveRow) outboxAdd([{ t: 'move_logs', op: 'insert', row: moveRow }]);
   }
 
   // ③ DBを正として再取得し、グリッド・漁場図を確実に最新化
@@ -3381,6 +3403,200 @@ function showToast(msg){
   el.style.display = 'block';
   if (_toastTimer) clearTimeout(_toastTimer);
   _toastTimer = setTimeout(function(){ el.style.display = 'none'; }, 3000);
+}
+
+// ── 日本時間の YYYY-MM-DD（toISOString は UTC のため、朝9時前は前日になる）──
+function localYmd(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+// ── 未送信の記録：電波が弱く保存に失敗した記録を端末に残し、つながったら自動で送り直す ──
+//   いけすの在庫・状態（ponds）は値の上書きのため対象外（失敗時はその場で知らせて押し直してもらう）。
+var OUTBOX_KEY = 'onoue_outbox_v1', OUTBOX_HOLD_KEY = 'onoue_outbox_hold_v1', OUTBOX_MAX_TRIES = 10;
+function outboxLoad(key){ try { var a = JSON.parse(localStorage.getItem(key || OUTBOX_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch(e){ return []; } }
+function outboxSave(a, key){ try { localStorage.setItem(key || OUTBOX_KEY, JSON.stringify(a)); return true; } catch(e){ return false; } }
+function outboxUid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+// 同じ種類・同じいけす・同じ日の未送信は「最新の1件」だけ残す（古い記録で上書きしない）
+function outboxKey(op, pondId, logDate){ return op + '|' + pondId + '|' + logDate; }
+function itemKey(it){ return (it.row && it.row.pond_id && it.row.log_date) ? outboxKey(it.op, it.row.pond_id, it.row.log_date) : null; }
+function outboxDrop(op, pondId, logDate){
+  var k = outboxKey(op, pondId, logDate), a = outboxLoad();
+  var b = a.filter(function(it){ return itemKey(it) !== k; });
+  if (b.length !== a.length) { outboxSave(b); outboxBadge(); }
+}
+function outboxAdd(items){
+  var a = outboxLoad(), now = new Date().toISOString();
+  items.forEach(function(it){
+    var k = itemKey(it);
+    if (k) a = a.filter(function(x){ return itemKey(x) !== k; });
+    it.uid = outboxUid(); it.at = now; it.tries = 0; a.push(it);
+  });
+  var ok = outboxSave(a);
+  outboxBadge();
+  showToast(ok ? '通信が弱いため、この端末に記録を残しました。つながったら自動で送ります'
+               : '⚠ 記録を残せませんでした。電波の良い所でもう一度保存してください');
+}
+// 自動では送らずに人に確かめてもらう記録（新しい記録を消すおそれがある・何度送っても通らない）
+function outboxHold(items){
+  if (!items.length) return true;
+  var h = outboxLoad(OUTBOX_HOLD_KEY);
+  return outboxSave(h.concat(items), OUTBOX_HOLD_KEY);   // 保存できたかを返す（できなければ通常の未送信に残す）
+}
+function outboxBadge(){
+  var el = document.getElementById('outboxBadge');
+  if (!el) return;
+  var n = outboxLoad().length, m = outboxLoad(OUTBOX_HOLD_KEY).length, t = [];
+  if (n) t.push('未送信 ' + n + '件');
+  if (m) t.push('要確認 ' + m + '件');
+  el.textContent = t.join('・') + '（押す）';
+  el.style.display = (n || m) ? 'block' : 'none';
+}
+function outboxDesc(it){
+  var r = it.row || {};
+  if (it.t === 'move_logs') return '移動 ' + (r.from_pond || '外から') + '→' + r.to_pond + ' ' + r.count + '尾（' + r.log_date + '）';
+  return (r.log_date || '') + ' ' + (r.pond_id || '') + ' 給餌' + (r.feed_kg || 0) + 'kg' + (r.mort != null ? ' 死魚' + r.mort : '') + (it.reason ? '［' + it.reason + '］' : '');
+}
+async function outboxTap(){
+  // ログインしていない人には中身を見せない・消させない
+  try { var ses = await sb.auth.getSession(); if (!ses || !ses.data || !ses.data.session) { showToast('ログインすると確認できます'); return; } }
+  catch(e){ return; }
+  var h = outboxLoad(OUTBOX_HOLD_KEY);
+  if (h.length) {
+    var shown = {}; h.forEach(function(x){ shown[x.uid] = 1; });
+    alert('要確認の記録 ' + h.length + '件\n\n' + h.map(outboxDesc).join('\n') +
+      '\n\n新しい記録を消さないよう、自動では送っていません。' +
+      '\n※在庫はすでに反映済みです。二重に減らさないよう、同じ記録を入力し直さず、kaoiriにご連絡ください（記録だけを直します）。');
+    if (confirm('kaoiriに連絡しましたか？「OK」で、いま表示した ' + h.length + '件を一覧から消します')) {
+      outboxSave(outboxLoad(OUTBOX_HOLD_KEY).filter(function(x){ return !shown[x.uid]; }), OUTBOX_HOLD_KEY);
+    }
+  }
+  outboxBadge();
+  await outboxFlush(true);
+}
+// 上書きする項目すべてで比べる（給餌量と死魚だけでは、餌の種類・薬・メモの変更を見落とす）
+var FEED_SET_FIELDS = ['feed_kg','mort','bgrade','bait','bait2','drug','drug_amt','flag','memo'];
+var FEED_UPSERT_FIELDS = ['feed_kg','bait','bait2'];
+function outboxNorm(v){
+  if (v === undefined || v === null || v === '') return '';
+  if (typeof v === 'boolean') return v ? 'true' : '';
+  if (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)))) return String(Number(v));
+  return String(v).trim();
+}
+function outboxSame(a, b, fields){ return fields.every(function(f){ return outboxNorm(a[f]) === outboxNorm(b[f]); }); }
+// 「今の値がまだ cur のままなら」だけ更新する（比較と更新を1回で行い、間に入った他端末の変更を消さない）
+function outboxCasUpdate(table, cur, fields, values){
+  var q = sb.from(table).update(values).eq('id', cur.id);
+  fields.forEach(function(f){
+    var v = cur[f];
+    q = (v === null || v === undefined) ? q.is(f, null) : q.eq(f, v);
+  });
+  return q.select('id');
+}
+function outboxPick(row, fields, withId){
+  var o = {}; fields.forEach(function(f){ o[f] = (row[f] === undefined ? null : row[f]); });
+  if (withId) o.id = row.id; return o;
+}
+// 戻り値：'sent'（送った・既に入っていた）／'hold'（人に確かめてもらう）。通信の失敗は例外
+async function outboxSendOne(it){
+  var r, row = it.row || {};
+  if (it.t === 'move_logs' && it.op === 'insert') {
+    // 応答だけ失われて実は入っていた場合に二重にしない
+    var q = sb.from('move_logs').select('id').eq('log_date', row.log_date).eq('to_pond', row.to_pond).eq('count', row.count).eq('reason', row.reason);
+    q = row.from_pond ? q.eq('from_pond', row.from_pond) : q.is('from_pond', null);
+    var dup = await q.limit(1);
+    if (dup.error) throw dup.error;
+    if (dup.data && dup.data.length) { it.reason = '同じ内容の移動が既にあります（二重か、同じ移動を2回したか確認）'; return 'hold'; }
+    r = await sb.from('move_logs').insert(row).select('id');
+  } else if (it.op === 'feedSet') {
+    // 1基の記録。保存した時点の行（base）から変わっていなければ上書き。変わっていれば人に確かめてもらう
+    var ex1 = await sb.from('feed_logs').select('*').eq('pond_id', row.pond_id).eq('log_date', row.log_date)
+      .order('id', { ascending: false }).limit(1);
+    if (ex1.error) throw ex1.error;
+    var cur = ex1.data && ex1.data[0];
+    if (cur && outboxSame(cur, row, FEED_SET_FIELDS)) return 'sent';   // 既に全項目が同じ内容
+    if (!cur) {
+      if (it.base) { it.reason = '元の記録が見つかりません'; return 'hold'; }
+      r = await sb.from('feed_logs').insert(row).select('id');
+    } else {
+      var b = it.base;
+      var unchanged = b && b.id === cur.id && outboxSame(b, cur, FEED_SET_FIELDS);
+      if (!unchanged) { it.reason = '後から別の記録が入っています'; return 'hold'; }
+      r = await outboxCasUpdate('feed_logs', cur, FEED_SET_FIELDS, row);
+      if (!r.error && (!r.data || !r.data.length)) { it.reason = '送る直前に別の記録が入りました'; return 'hold'; }
+    }
+  } else if (it.op === 'feedUpsert') {
+    // まとめ入力。給餌量だけを扱う。保存した時点から変わっていなければ上書き
+    var ex = await sb.from('feed_logs').select('id,feed_kg,bait,bait2').eq('pond_id', row.pond_id).eq('log_date', row.log_date)
+      .gt('feed_kg', 0).order('id', { ascending: false }).limit(1);
+    if (ex.error) throw ex.error;
+    var c2 = ex.data && ex.data[0];
+    if (!c2) {
+      r = await sb.from('feed_logs').insert(row).select('id');
+    } else if (outboxSame(c2, row, FEED_UPSERT_FIELDS)) {
+      return 'sent';
+    } else if (it.base && it.base.id === c2.id && outboxSame(it.base, c2, FEED_UPSERT_FIELDS)) {
+      r = await outboxCasUpdate('feed_logs', c2, FEED_UPSERT_FIELDS, { feed_kg: row.feed_kg, bait: row.bait, bait2: row.bait2 });
+      if (!r.error && (!r.data || !r.data.length)) { it.reason = '送る直前に別の記録が入りました'; return 'hold'; }
+    } else {
+      it.reason = '後から別の記録が入っています'; return 'hold';
+    }
+  } else {
+    return 'sent';  // 知らない形式は送らずに捨てる
+  }
+  if (r.error) throw r.error;
+  if (!r.data || !r.data.length) throw new Error('書き込めませんでした（権限の可能性）');
+  return 'sent';
+}
+var _outboxBusy = false;
+async function outboxFlush(manual){
+  if (_outboxBusy) return;
+  var a = outboxLoad();
+  if (!a.length) { outboxBadge(); return; }
+  if (navigator.onLine === false) { if (manual) showToast('まだ通信できません。電波の良い所で押してください'); return; }
+  // ログインが切れている間は送らない（失敗回数にも数えない）。ログインし直すと再読込で送り直す
+  try {
+    var ses = await sb.auth.getSession();
+    if (!ses || !ses.data || !ses.data.session) { if (manual) showToast('ログインし直すと、未送信の記録を送ります'); return; }
+  } catch(e){ return; }
+  _outboxBusy = true;
+  var done = {}, failed = {}, held = [], dead = [], sent = 0;
+  try {
+    for (var i = 0; i < a.length; i++) {
+      try {
+        var res = await outboxSendOne(a[i]);
+        if (res === 'hold') held.push(a[i]); else sent++;
+        done[a[i].uid] = 1;
+      } catch(e){ failed[a[i].uid] = 1; console.warn('[outbox] 送信できず。次の機会に再送:', e); }
+    }
+  } finally {
+    // 送信中に追加・置き換えされた分を落とさないよう、終わった時点のキューを uid で突き合わせる
+    var next = [];
+    outboxLoad().forEach(function(x){
+      if (done[x.uid]) return;
+      if (failed[x.uid]) {
+        x.tries = (x.tries || 0) + 1;
+        if (x.tries >= OUTBOX_MAX_TRIES && navigator.onLine !== false) { x.reason = '何度送っても届きません'; dead.push(x); return; }
+      }
+      next.push(x);
+    });
+    // 要確認へ移す分は、先に要確認側へ保存できた時だけ通常の未送信から外す（両方から消さない）
+    var toHold = held.concat(dead);
+    if (!outboxHold(toHold)) {
+      next = next.concat(toHold);
+      showToast('⚠ 端末の保存領域がいっぱいです。kaoiriにご連絡ください');
+    }
+    outboxSave(next);
+    _outboxBusy = false;
+  }
+  outboxBadge();
+  if (held.length || dead.length) showToast('⚠ 確かめが必要な記録が ' + (held.length + dead.length) + '件あります。右上の表示を押してください');
+  else if (sent) showToast('未送信だった記録 ' + sent + '件を送りました');
+  else if (manual) showToast('まだ送れませんでした。電波の良い所でもう一度押してください');
+  if (sent) scheduleReload();
+}
+function outboxInit(){
+  outboxBadge();
+  window.addEventListener('online', function(){ outboxFlush(false); });
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') outboxFlush(false); });
+  setInterval(function(){ outboxFlush(false); }, 60000);
+  outboxFlush(false);
 }
 // ── データ取得失敗を必ず見せる（黙って全部赤にしない）──
 function showDataWarn(msg){
@@ -3669,6 +3885,7 @@ async function initApp() {
   subscribeRealtime();
   subscribeNotifications();
   requestNotifyPermission();
+  outboxInit();   // 未送信の記録があれば送り直す
   // リロード前に開いていたタブを復元（毎回ホームに戻らないように）
   var savedTab; try{ savedTab=localStorage.getItem('onoue_app_tab'); }catch(e){}
   if(savedTab && ['home','feed','calendar','move'].indexOf(savedTab)>=0 && savedTab!=='home'){ switchTab(savedTab); }
