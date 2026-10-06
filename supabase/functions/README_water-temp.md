@@ -37,4 +37,4 @@ curl "https://ssrbmvbcrqrvvgytpirv.supabase.co/functions/v1/water-temp?loc=yokos
 
 ## 補足
 - 30分毎更新のデータ。カードはダッシュボード表示時に取得（必要なら定期更新も追加可）。
-- テレメーターのパスワード(1221)は当CSV取得には不要だった（ページ閲覧用途と思われる）。
+- テレメーターのパスワードは当CSV取得には不要だった（ページ閲覧用途と思われる）。

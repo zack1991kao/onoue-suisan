@@ -70,6 +70,6 @@ select email, name, role, active from public.profiles order by email;
 -- 【ログイン方法】アプリの画面で：ID=番号（例「1」）／PIN=4桁（各自に配った番号）
 -- 【もしエラーが出たら】Supabaseの版差で auth.users/identities の列が違う場合があります。
 --   その時は Dashboard → Authentication → Add user で
---   Email: staff1@onoue.local ／ Password: onoue1221 ／ Auto Confirm User: ON
+--   Email: staff1@onoue.local ／ Password: onoue＋各自のPIN ／ Auto Confirm User: ON
 --   を人数分作成し、上の do$$ ブロックを飛ばして alter/select だけ実行してください。
 -- ───────────────────────────────────────────────
