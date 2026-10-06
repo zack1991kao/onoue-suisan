@@ -3,6 +3,7 @@
 --   ID「1」→ メール staff1@onoue.local ／ PIN「1234」→ パスワード onoue1234
 --
 -- ※公開リポジトリのため、実際のPINは書かない。'____' を各自のPINに置き換えて SQL Editor で実行し、保存はしないこと（2026-10-06）
+-- ※このSQLは「新しいアカウントを作る」ためのもの。既にあるアカウントのPINは変わらない。PINの変更は 07_accounts_fix.sql。
 -- ★編集するのは下の「values(...)」の表だけ★ 番号・PIN・氏名・管理者かを人数分並べる。
 -- 既に作成済みのアカウントは自動スキップ（何度実行してもOK）。
 
@@ -28,9 +29,9 @@ begin
       -- ↑ 行を増やす／番号・PIN・氏名・管理者(true/false)を変えるだけ
     ) as t(no, pin, name, is_admin)
   loop
-    -- '____' のまま・数字以外・4桁未満なら、全体を取り消して止める（全員が同じ推測しやすいパスワードになるのを防ぐ）
-    if rec.pin is null or rec.pin !~ '^[0-9]{4,}$' then
-      raise exception 'PINが未設定か不正です（%）。''____'' を数字4桁以上に置き換えてください', rec.no;
+    -- '____' のまま・数字以外・4桁でないなら、全体を取り消して止める（全員が同じ推測しやすいパスワードになるのを防ぐ）
+    if rec.pin is null or rec.pin !~ '^[0-9]{4}$' then
+      raise exception 'PINが未設定か不正です（%）。''____'' を数字ちょうど4桁に置き換えてください（アプリは4桁だけ受け付けます）', rec.no;
     end if;
     select id into v_id from auth.users where email = 'staff'||rec.no||'@onoue.local';
     if v_id is null then
@@ -54,6 +55,9 @@ begin
         json_build_object('sub', v_id::text, 'email', 'staff'||rec.no||'@onoue.local', 'email_verified', true),
         'email', now(), now(), now()
       );
+    else
+      -- 既にあるアカウントのPINは、このSQLでは変えない（PINの変更は 07_accounts_fix.sql で行う）
+      raise notice '% は既にあるため、PINは変更していません（変えるなら 07_accounts_fix.sql）', 'staff'||rec.no||'@onoue.local';
     end if;
     -- profiles（トリガで自動作成済み）の氏名・権限・有効を設定
     update public.profiles
