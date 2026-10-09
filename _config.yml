@@ -1,0 +1,6 @@
+# GitHub Pages（Jekyll）で配らないもの。2026-10-09 緊急点検：DB設定・手順書を公開しない
+exclude:
+  - supabase
+  - "*.md"
+  - .gitignore
+  - .vercelignore
