@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f2437">
+<title>尾上水産</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png">
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+         background: #0f2437; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif; text-align: center; padding: 16px; box-sizing: border-box; }
+  a { color: #9fd3ff; font-size: 18px; }
+  p { font-size: 18px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div>
+  <p id="msg">アプリの場所が新しくなりました。自動で開きます…</p>
+  <p><a id="go" href="https://onoue-suisan.vercel.app/">開かない時はここを押してください</a></p>
+</div>
+<script>
+// 旧アドレス（GitHub Pages）→ 新アドレス（Vercel）へ移すだけのページ（2026-10-20）
+// この端末に未送信の記録が残っている時は自動で移らず、記録はそのまま残して kaoiri への連絡をお願いする
+// （記録をアドレスに入れて運ぶ方法は、細工したリンクで偽の記録を入れられるため使わない）
+(function(){
+  var BASE = 'https://onoue-suisan.vercel.app/';
+  var PAGES = ['index.html', 'app.html', 'admin.html', 'staff.html'];
+  var page = location.pathname.split('/').pop() || 'index.html';
+  if (PAGES.indexOf(page) < 0) page = 'index.html';
+  var url = BASE + page;
+  var go = document.getElementById('go'), msg = document.getElementById('msg');
+  go.href = url;
+  var n = 0;
+  try {
+    ['onoue_outbox_v1', 'onoue_outbox_hold_v1'].forEach(function(k){
+      var a = JSON.parse(localStorage.getItem(k) || '[]');
+      if (Array.isArray(a)) n += a.length;
+    });
+  } catch(e){}
+  if (n) {
+    msg.textContent = 'この端末に、まだ送れていない記録が ' + n + '件あります。消えないようにこのまま残しています。お手数ですが kaoiri にご連絡ください。';
+    go.textContent = '新しいアプリを開く';
+    return;
+  }
+  var move = function(){ location.replace(url); };
+  // 古いアプリの仕組み（Service Worker）を外してから移る。外せなくても1秒で移る
+  var t = setTimeout(move, 1000);
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      navigator.serviceWorker.getRegistrations().then(function(rs){
+        return Promise.all(rs.map(function(r){ return r.unregister(); }));
+      }).then(function(){ clearTimeout(t); move(); }, function(){});
+    }
+  } catch(e){}
+})();
+</script>
+</body>
+</html>
