@@ -32,25 +32,32 @@
   var url = BASE + page;
   var go = document.getElementById('go'), msg = document.getElementById('msg');
   go.href = url;
-  var n = 0;
-  try {
-    ['onoue_outbox_v1', 'onoue_outbox_hold_v1'].forEach(function(k){
-      var a = JSON.parse(localStorage.getItem(k) || '[]');
+  // キーごとに確かめる。読めない・形が違う時は「残っているかもしれない」として自動で移らない
+  var n = 0, unknown = false;
+  ['onoue_outbox_v1', 'onoue_outbox_hold_v1'].forEach(function(k){
+    try {
+      var s = localStorage.getItem(k);
+      if (s === null || s === '') return;
+      var a = JSON.parse(s);
       if (Array.isArray(a)) n += a.length;
-    });
-  } catch(e){}
-  if (n) {
-    msg.textContent = 'この端末に、まだ送れていない記録が ' + n + '件あります。消えないようにこのまま残しています。お手数ですが kaoiri にご連絡ください。';
+      else unknown = true;
+    } catch(e){ unknown = true; }
+  });
+  if (n || unknown) {
+    msg.textContent = n
+      ? 'この端末に、まだ送れていない記録が ' + n + '件あります。消えないようにこのまま残しています。お手数ですが kaoiri にご連絡ください。'
+      : 'この端末に、まだ送れていない記録が残っているかもしれません。消えないようにこのまま残しています。お手数ですが kaoiri にご連絡ください。';
     go.textContent = '新しいアプリを開く';
     return;
   }
   var move = function(){ location.replace(url); };
-  // 古いアプリの仕組み（Service Worker）を外してから移る。外せなくても1秒で移る
+  // 古いアプリの仕組み（Service Worker）を外してから移る。外すのはこのアプリの範囲（/onoue-suisan/）だけ。外せなくても1秒で移る
   var t = setTimeout(move, 1000);
   try {
     if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
       navigator.serviceWorker.getRegistrations().then(function(rs){
-        return Promise.all(rs.map(function(r){ return r.unregister(); }));
+        return Promise.all(rs.filter(function(r){ return r.scope.indexOf('/onoue-suisan/') >= 0; })
+                             .map(function(r){ return r.unregister(); }));
       }).then(function(){ clearTimeout(t); move(); }, function(){});
     }
   } catch(e){}
